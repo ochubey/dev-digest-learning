@@ -56,7 +56,12 @@ export function ReviewRunAccordion({
   }, [targetRunId, targetNonce, review.run_id]);
   const del = useDeleteReview(prId);
   const findings = review.findings;
-  const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
+  // Header/banner counts reflect the active severity filter (from
+  // SeverityCountBadges) so they stay consistent with what FindingsPanel
+  // actually shows below — otherwise "2 findings" in the header next to a
+  // single visible card reads as a bug.
+  const visibleFindings = severityFilter ? findings.filter((f) => f.severity === severityFilter) : findings;
+  const blockers = visibleFindings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
   const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
 
   return (
@@ -97,7 +102,7 @@ export function ReviewRunAccordion({
           </Badge>
         )}
         <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-          {findings.length} finding{findings.length === 1 ? "" : "s"}
+          {visibleFindings.length} finding{visibleFindings.length === 1 ? "" : "s"}
           {blockers > 0 ? ` · ${blockers} blocker${blockers === 1 ? "" : "s"}` : ""}
         </span>
         <span style={{ flex: 1 }} />
@@ -144,7 +149,7 @@ export function ReviewRunAccordion({
                 verdict={review.verdict as Verdict}
                 summary={review.summary}
                 score={review.score}
-                findingsCount={findings.length}
+                findingsCount={visibleFindings.length}
                 blockers={blockers}
                 agentName={review.agent_name}
               />
