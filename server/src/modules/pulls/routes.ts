@@ -111,23 +111,44 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
-    // Latest-review SCORE per PR for the list's score ring. Computed on read
-    // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // PR score = the average of each AGENT's latest review score (so a PR
+    // reviewed by 3 agents isn't represented by whichever happened to run
+    // last — a single request_changes agent still pulls the average down).
+    // Cost stays "latest review's cost" (a single $ figure, not averaged).
+    // Computed on read from reviews (no FK denorm); the list is small, so one
+    // IN-query + JS grouping is cheap. (The per-severity FINDINGS breakdown is
+    // intentionally not surfaced on the list — findings live on the PR detail page.)
     const prIds = rows.map((r) => r.id);
     const latestReviewByPr = new Map<string, { score: number | null; cost_usd: number | null }>();
     if (prIds.length > 0) {
       const reviewRows = await container.db
-        .select({ prId: t.reviews.prId, score: t.reviews.score, costUsd: t.agentRuns.costUsd })
+        .select({
+          prId: t.reviews.prId,
+          agentId: t.reviews.agentId,
+          score: t.reviews.score,
+          costUsd: t.agentRuns.costUsd,
+        })
         .from(t.reviews)
         .leftJoin(t.agentRuns, eq(t.agentRuns.id, t.reviews.runId))
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
-      // Rows are newest-first → first seen per PR is the latest review.
+      // Rows are newest-first → first seen per (PR, agent) is that agent's
+      // latest review; first seen per PR overall is the latest review (for cost).
+      const latestScoreByPrAgent = new Map<string, number>();
       for (const rv of reviewRows) {
         if (!latestReviewByPr.has(rv.prId))
-          latestReviewByPr.set(rv.prId, { score: rv.score, cost_usd: rv.costUsd });
+          latestReviewByPr.set(rv.prId, { score: null, cost_usd: rv.costUsd });
+        const agentKey = `${rv.prId}:${rv.agentId ?? 'unknown'}`;
+        if (rv.score != null && !latestScoreByPrAgent.has(agentKey)) latestScoreByPrAgent.set(agentKey, rv.score);
+      }
+      const scoresByPr = new Map<string, number[]>();
+      for (const [key, score] of latestScoreByPrAgent) {
+        const prId = key.slice(0, key.lastIndexOf(':'));
+        (scoresByPr.get(prId) ?? scoresByPr.set(prId, []).get(prId)!).push(score);
+      }
+      for (const [prId, scores] of scoresByPr) {
+        const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+        latestReviewByPr.set(prId, { score: avg, cost_usd: latestReviewByPr.get(prId)?.cost_usd ?? null });
       }
     }
 
