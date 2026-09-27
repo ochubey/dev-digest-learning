@@ -56,12 +56,25 @@ export function ReviewRunAccordion({
   }, [targetRunId, targetNonce, review.run_id]);
   const del = useDeleteReview(prId);
   const findings = review.findings;
-  // Header/banner counts reflect the active severity filter (from
-  // SeverityCountBadges) so they stay consistent with what FindingsPanel
-  // actually shows below — otherwise "2 findings" in the header next to a
-  // single visible card reads as a bug.
-  const visibleFindings = severityFilter ? findings.filter((f) => f.severity === severityFilter) : findings;
-  const blockers = visibleFindings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
+  // blockers is a status fact about the run (severity >= the agent's gate),
+  // not a view of what's currently filtered/visible — always derived from
+  // the full finding set.
+  const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
+  // Header/banner "N findings" count mirrors exactly what FindingsPanel shows
+  // below (severityFilter AND hideLow) — FindingsPanel reports it back via
+  // onVisibleCountChange once mounted, so the header never lags. Before the
+  // panel mounts (accordion collapsed), fall back to a severityFilter-only
+  // estimate (hideLow defaults to false, so this is exact while collapsed).
+  const [visibleCount, setVisibleCount] = React.useState(
+    severityFilter ? findings.filter((f) => f.severity === severityFilter).length : findings.length,
+  );
+  React.useEffect(() => {
+    // Only recompute the fallback while collapsed — while open, FindingsPanel
+    // is the source of truth via onVisibleCountChange (which also accounts
+    // for hideLow); overwriting it here would race with that callback.
+    if (open) return;
+    setVisibleCount(severityFilter ? findings.filter((f) => f.severity === severityFilter).length : findings.length);
+  }, [findings, severityFilter, open]);
   const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
 
   return (
@@ -102,7 +115,7 @@ export function ReviewRunAccordion({
           </Badge>
         )}
         <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-          {visibleFindings.length} finding{visibleFindings.length === 1 ? "" : "s"}
+          {visibleCount} finding{visibleCount === 1 ? "" : "s"}
           {blockers > 0 ? ` · ${blockers} blocker${blockers === 1 ? "" : "s"}` : ""}
         </span>
         <span style={{ flex: 1 }} />
@@ -149,7 +162,7 @@ export function ReviewRunAccordion({
                 verdict={review.verdict as Verdict}
                 summary={review.summary}
                 score={review.score}
-                findingsCount={visibleFindings.length}
+                findingsCount={visibleCount}
                 blockers={blockers}
                 agentName={review.agent_name}
               />
@@ -161,6 +174,7 @@ export function ReviewRunAccordion({
             repoFullName={repoFullName}
             headSha={headSha}
             severityFilter={severityFilter}
+            onVisibleCountChange={setVisibleCount}
           />
         </div>
       )}

@@ -18,6 +18,7 @@ export function FindingsPanel({
   repoFullName,
   headSha,
   severityFilter = null,
+  onVisibleCountChange,
 }: {
   findings: FindingRecord[];
   prId: string;
@@ -25,6 +26,10 @@ export function FindingsPanel({
   headSha?: string | null;
   /** Page-level severity filter (from SeverityCountBadges), ANDed with hideLow. */
   severityFilter?: Severity | null;
+  /** Reports the post-filter count (severityFilter + hideLow) so an ancestor
+   *  (e.g. ReviewRunAccordion's header) can stay in sync with what's actually
+   *  shown here, instead of re-deriving a partial count itself. */
+  onVisibleCountChange?: (count: number) => void;
 }) {
   const t = useTranslations("prReview");
   const action = useFindingAction();
@@ -35,6 +40,10 @@ export function FindingsPanel({
     () => visibleFindings(findings, hideLow, severityFilter),
     [findings, hideLow, severityFilter],
   );
+
+  React.useEffect(() => {
+    onVisibleCountChange?.(shown.length);
+  }, [shown.length, onVisibleCountChange]);
 
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
