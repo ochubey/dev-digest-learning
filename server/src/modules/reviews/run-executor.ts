@@ -210,8 +210,11 @@ export class ReviewRunExecutor {
           if (this.container.runBus.isCancelled(runId)) throw new RunCancelledError();
         },
       });
-      const { tokensIn, tokensOut, grounding } = outcome;
-      const costUsd = this.container.priceBook.estimate(agent.model, tokensIn, tokensOut);
+      // reviewer-core already computes costUsd per LLM call (summed across
+      // map-reduce chunks, preferring OpenRouter's live billed cost over our
+      // own price-book estimate when the provider reports one) — use it
+      // directly rather than re-estimating from the totals here.
+      const { tokensIn, tokensOut, grounding, costUsd } = outcome;
 
       const keptFindings = outcome.review.findings;
 
