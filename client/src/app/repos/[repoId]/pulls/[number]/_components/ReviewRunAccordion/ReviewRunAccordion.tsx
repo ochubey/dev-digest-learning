@@ -9,6 +9,7 @@ import React from "react";
 import { Icon, Badge } from "@devdigest/ui";
 import type { ReviewRecord, Verdict, Severity } from "@devdigest/shared";
 import { FindingsPanel } from "../FindingsPanel";
+import { SeverityCountBadges } from "../SeverityCountBadges";
 import { VerdictBanner } from "../VerdictBanner";
 import { useDeleteReview } from "../../../../../../../lib/hooks/reviews";
 
@@ -31,7 +32,6 @@ export function ReviewRunAccordion({
   headSha,
   targetRunId = null,
   targetNonce = 0,
-  severityFilter = null,
 }: {
   review: ReviewRecord;
   prId: string;
@@ -42,10 +42,12 @@ export function ReviewRunAccordion({
    *  (driven from the Timeline: clicking an agent name navigates here). */
   targetRunId?: string | null;
   targetNonce?: number;
-  /** Page-level severity filter (from SeverityCountBadges) — passed through to this run's FindingsPanel. */
-  severityFilter?: Severity | null;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
+  // Severity pills + filter are local to THIS run — each expanded card gets
+  // its own independent "N CRITICAL · N WARNING · N SUGGESTION" row and
+  // filter, scoped only to this review's own findings.
+  const [severityFilter, setSeverityFilter] = React.useState<Severity | null>(null);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     if (review.run_id && review.run_id === targetRunId) {
@@ -168,6 +170,11 @@ export function ReviewRunAccordion({
               />
             </div>
           )}
+          <SeverityCountBadges
+            findings={findings}
+            activeSeverity={severityFilter}
+            onChange={setSeverityFilter}
+          />
           <FindingsPanel
             findings={findings}
             prId={prId}
