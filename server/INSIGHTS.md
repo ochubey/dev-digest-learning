@@ -20,4 +20,6 @@
 
 ## Session Notes
 
+- Seeded agents default to `deepseek/deepseek-v4-flash` via OpenRouter — this is a reasoning model (hidden `reasoning`/`reasoning_details` tokens billed as `completion_tokens` before any visible `content`). A real single-pass review of a 3-file/~70-line diff took 16s and 1028 completion tokens (`$0.00105`) end-to-end — noticeably slower than a plain non-reasoning flash model would be, and can look like a hang if you expect sub-5s responses; give runs 30s+ before assuming something's stuck. `server/src/adapters/llm/pricing.ts:1`. (2026-09-27)
+
 ## Open Questions
