@@ -17,6 +17,7 @@
 ## Recurring Errors & Fixes
 
 - `pnpm db:migrate` / `pnpm db:seed` silently do NOTHING on Windows (exit 0, no output, no DB changes) — both `migrate.ts:35` and `seed.ts:227` gate their CLI entrypoint on `import.meta.url === \`file://${process.argv[1]}\``, but on Windows `process.argv[1]` is a backslash path (`E:\...`) while `import.meta.url` is a `file:///E:/...` URL — they never match, so the guarded block never runs. Workaround: write a one-off script that imports `runMigrations`/`seed` directly and calls them, instead of running the file as a CLI entrypoint. `server/src/db/migrate.ts:35`, `server/src/db/seed.ts:227`. (2026-09-27)
+- `run-executor.ts` was re-deriving `costUsd` from `priceBook.estimate(agent.model, tokensIn, tokensOut)` on the summed totals, completely ignoring that `reviewer-core`'s `ReviewOutcome.costUsd` already sums per-chunk cost AND prefers OpenRouter's live billed cost (`costFromApi` in `reviewer-core/llm/openrouter.ts:107`) over the same static estimate when the provider reports one. Fixed to destructure `costUsd` straight from `outcome`. The line 10 entry above (from earlier this session) describing `priceBook.estimate` as the source of truth is now superseded by this — `outcome.costUsd` is. `server/src/modules/reviews/run-executor.ts:213`. (2026-09-27)
 
 ## Session Notes
 
