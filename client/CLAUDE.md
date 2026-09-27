@@ -6,9 +6,9 @@ don't duplicate here.
 ## Read when
 
 - Setup, scripts overview → `README.md`
-- Deeper design docs (architecture, ADRs) → `docs/` (doesn't exist yet — create if starting one)
-- Test/flow specs → `specs/` (doesn't exist yet — create if adding one)
-- Session gotchas, non-obvious facts → `INSIGHTS.md` (doesn't exist yet — auto-created by `engineering-insights` skill on first finding)
+- Component boundary/data-layer conventions → `docs/ui-architecture.md`
+- Per-page data contract → `specs/pages.md`
+- Session gotchas, non-obvious facts → `INSIGHTS.md`
 
 ## Do not touch
 

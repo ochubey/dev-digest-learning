@@ -6,8 +6,8 @@ don't duplicate here.
 ## Read when
 
 - Setup, scripts, routes overview → `README.md`
-- Deeper design docs (architecture, ADRs) → `docs/` (create if starting one)
-- Test/flow specs → `specs/` (doesn't exist yet — create if adding one)
+- DI container/adapter architecture → `docs/architecture.md`
+- Review-run behavior contract → `specs/review-flow.md`
 - Session gotchas, non-obvious facts → `INSIGHTS.md` (auto-appended by `engineering-insights` skill)
 
 ## Do not touch

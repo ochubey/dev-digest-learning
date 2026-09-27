@@ -7,8 +7,8 @@ stack/conventions — don't duplicate here.
 ## Read when
 
 - Setup, scripts overview → `README.md`
-- Deeper design docs (architecture, ADRs) → `docs/` (doesn't exist yet — create if starting one)
-- Test/flow specs → `specs/` (doesn't exist yet — create if adding one)
+- Why the no-DB/FS/GitHub constraint exists → `docs/architecture.md`
+- `reviewPullRequest()` input/output contract → `specs/review-contract.md`
 - Session gotchas, non-obvious facts → `INSIGHTS.md` (doesn't exist yet — auto-created by `engineering-insights` skill on first finding)
 
 ## Do not touch
