@@ -35,8 +35,16 @@ export const conventions = pgTable('conventions', {
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   repoId: uuid('repo_id').references(() => repos.id, { onDelete: 'cascade' }),
   rule: text('rule').notNull(),
+  // From the LLM extraction's {category, rule, evidence, confidence} shape
+  // (rubric #40) — was previously (incorrectly) folded into evidenceSnippet.
+  category: text('category'),
   evidencePath: text('evidence_path'),
   evidenceSnippet: text('evidence_snippet'),
   confidence: doublePrecision('confidence'),
   accepted: boolean('accepted').notNull().default(false),
+  // Distinct from `accepted=false` (still pending): a rejected candidate must
+  // survive reload without reappearing (rubric requirement) and must never be
+  // folded into the resulting skill, so it needs its own persisted flag rather
+  // than reusing the accepted/not-accepted boolean.
+  rejected: boolean('rejected').notNull().default(false),
 });

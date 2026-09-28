@@ -289,6 +289,50 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('linked+enabled skill lands in prompt_assembly.skills and skills_meta', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'SkillfulAgent', provider: 'openai', model: 'gpt-4.1', system_prompt: 's' },
+      })
+    ).json();
+    const skill = (
+      await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: {
+          name: 'coverage-gap-rubric',
+          description: 'Flags untested branches',
+          type: 'rubric',
+          body: 'Flag any changed branch not covered by the accompanying test diff.',
+        },
+      })
+    ).json();
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skill_id: skill.id },
+    });
+
+    const body = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } })
+    ).json();
+    const runId = body.runs[0].run_id;
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+
+    const trace = (await app.inject({ method: 'GET', url: `/runs/${runId}/trace` })).json();
+    expect(trace.prompt_assembly.skills).toContain(skill.body);
+    expect(trace.prompt_assembly.skills_meta).toHaveLength(1);
+    expect(trace.prompt_assembly.skills_meta[0].skill_id).toBe(skill.id);
+    expect(trace.prompt_assembly.skills_meta[0].name).toBe('coverage-gap-rubric');
+    expect(trace.prompt_assembly.skills_meta[0].tokens).toBeGreaterThan(0);
+
+    await app.close();
+  });
+
   it('run all enabled agents reviews with each enabled agent', async () => {
     const app = await appWith(REVIEW_FIXTURE);
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);

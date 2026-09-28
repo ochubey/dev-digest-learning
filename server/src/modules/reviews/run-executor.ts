@@ -184,6 +184,18 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // Skills — agent's linked, enabled skills, sorted by agent_skills.order
+      // (linkedSkills already sorts ascending). Only enabled skills are
+      // injected; a disabled link stays linked but contributes nothing to the
+      // prompt (spec §1/§4).
+      const linkedSkills = await this.agents.linkedSkills(agent.id);
+      const enabledSkills = linkedSkills.filter((l) => l.skill.enabled);
+      const skillsMeta = enabledSkills.map((l) => ({
+        skill_id: l.skill.id,
+        name: l.skill.name,
+        tokens: this.container.tokenizer.count(l.skill.body),
+      }));
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -201,6 +213,9 @@ export class ReviewRunExecutor {
         ...(callersDigest ? { callers: callersDigest } : {}),
         // T3 — repo skeleton, same omit-when-empty contract.
         ...(repoMap ? { repoMap } : {}),
+        // Skills feature — enabled, ordered skill bodies (empty array omits the
+        // section entirely inside assemblePrompt).
+        ...(enabledSkills.length > 0 ? { skills: enabledSkills.map((l) => l.skill.body) } : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -245,21 +260,15 @@ export class ReviewRunExecutor {
       const blockers = countBlockers(keptFindings, agent.ciFailOn);
       const severityCounts = rollupSeverities(keptFindings);
 
-      // ---- Observability: agent_runs + ONE run_traces document --------------
-      await this.repo.completeAgentRun(runId, {
-        status: 'done',
-        durationMs,
-        tokensIn,
-        tokensOut,
-        costUsd,
-        findingsCount: findingRows.length,
-        grounding,
-        score: outcome.review.score,
-        blockers,
-        severityCounts,
-        error: null,
-      });
-
+      // ---- Observability: ONE run_traces document, THEN agent_runs status ---
+      // Trace is saved BEFORE the status flip to 'done' — callers (including
+      // this repo's own tests) poll agent_runs.status to know a run finished,
+      // then immediately fetch its trace. If the status flip happened first,
+      // there's a window where the run reads as "done" but GET /runs/:id/trace
+      // 404s or (worse) returns a stale/partial document. Saving the trace
+      // first makes "done" mean "trace is readable", not just "reviews row
+      // exists" — a strict widening of what "done" guarantees, not a behavior
+      // change for anything that only checked status before.
       const trace: RunTrace = {
         config: {
           agent: agent.name,
@@ -277,7 +286,10 @@ export class ReviewRunExecutor {
           findings: findingRows.length,
           grounding,
         },
-        prompt_assembly: outcome.assembly,
+        prompt_assembly: {
+          ...outcome.assembly,
+          skills_meta: skillsMeta.length > 0 ? skillsMeta : null,
+        },
         tool_calls: outcome.chunks.map((c) => ({
           tool: 'review_file',
           args: c.label,
@@ -293,6 +305,19 @@ export class ReviewRunExecutor {
       };
       runLog.info('Run complete; trace persisted');
       await this.repo.saveRunTrace(runId, trace);
+      await this.repo.completeAgentRun(runId, {
+        status: 'done',
+        durationMs,
+        tokensIn,
+        tokensOut,
+        costUsd,
+        findingsCount: findingRows.length,
+        grounding,
+        score: outcome.review.score,
+        blockers,
+        severityCounts,
+        error: null,
+      });
       this.container.runBus.complete(runId);
 
       return { review, findings: findingRows, grounding, raw: outcome.review };
@@ -431,7 +456,14 @@ export class ReviewRunExecutor {
         source: 'local',
       },
       stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
-      prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
+      prompt_assembly: {
+        system: agent.systemPrompt,
+        skills: null,
+        skills_meta: null,
+        memory: null,
+        specs: null,
+        user: '',
+      },
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],
