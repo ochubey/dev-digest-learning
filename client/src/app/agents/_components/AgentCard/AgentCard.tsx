@@ -4,7 +4,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Icon, Badge, Toggle } from "@devdigest/ui";
+import { Icon, Badge, Toggle, Modal, Button } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
 import { useDeleteAgent } from "../../../../lib/hooks/agents";
 import { modelColor } from "./helpers";
@@ -26,6 +26,7 @@ export function AgentCard({
   const t = useTranslations("agents");
   const del = useDeleteAgent();
   const color = modelColor(ag.model);
+  const [confirming, setConfirming] = React.useState(false);
   return (
     <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
       <div style={s.headerRow}>
@@ -41,7 +42,7 @@ export function AgentCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete agent "${ag.name}"? This cannot be undone.`)) del.mutate(ag.id);
+            setConfirming(true);
           }}
           disabled={del.isPending}
           title="Delete agent"
@@ -69,6 +70,33 @@ export function AgentCard({
           </Badge>
         )}
       </div>
+      {confirming && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Modal
+            title={t("card.deleteConfirmTitle")}
+            onClose={() => setConfirming(false)}
+            footer={
+              <div style={s.confirmFooter}>
+                <Button kind="ghost" onClick={() => setConfirming(false)}>
+                  {t("card.deleteConfirmCancel")}
+                </Button>
+                <Button
+                  kind="danger"
+                  icon="Trash"
+                  disabled={del.isPending}
+                  onClick={() => {
+                    del.mutate(ag.id, { onSuccess: () => setConfirming(false) });
+                  }}
+                >
+                  {del.isPending ? t("card.deleteConfirmDeleting") : t("card.deleteConfirmConfirm")}
+                </Button>
+              </div>
+            }
+          >
+            <p style={s.confirmBody}>{t("card.deleteConfirmBody", { name: ag.name })}</p>
+          </Modal>
+        </div>
+      )}
     </div>
   );
 }

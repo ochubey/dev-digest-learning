@@ -48,4 +48,6 @@ export const s = {
     padding: "1px 8px",
     borderRadius: 4,
   }),
+  confirmFooter: { display: "flex", justifyContent: "flex-end", gap: 8 } satisfies CSSProperties,
+  confirmBody: { padding: "18px 24px", fontSize: 14, lineHeight: 1.5 } satisfies CSSProperties,
 } as const;
