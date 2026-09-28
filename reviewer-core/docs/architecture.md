@@ -36,7 +36,7 @@ imports it directly — only `index.ts` re-exports it as a convenience.
 
 ## Enforcing it in practice
 
-There's no lint rule or CI check for this (per root `CLAUDE.md`: no
+There's no lint rule or CI check for this (per root `AGENTS.md`: no
 lint/eslint config in the repo) — it's enforced by review discipline and by
 this doc existing. The fastest way to violate it by accident: adding a
 "just log this to a file for debugging" line, or importing a shared
