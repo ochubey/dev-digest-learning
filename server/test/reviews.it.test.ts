@@ -299,4 +299,41 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(body.runs.length).toBeGreaterThanOrEqual(2);
     await app.close();
   });
+
+  it('PR-list FINDINGS column sums each agent\'s latest review, not just one', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    const agentA = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'AgentA', provider: 'openai', model: 'gpt-4.1', system_prompt: 'a' },
+      })
+    ).json();
+    const agentB = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'AgentB', provider: 'openai', model: 'gpt-4.1', system_prompt: 'b' },
+      })
+    ).json();
+
+    // Both agents run against the same MockLLMProvider fixture, which keeps
+    // exactly 1 grounded finding (the other is dropped as hallucinated) —
+    // so 2 agents having reviewed should total 2 kept findings, not 1.
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agentA.id } });
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agentB.id } });
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 2 });
+
+    const listed = (
+      await app.inject({ method: 'GET', url: `/repos/${pr.repoId}/pulls` })
+    ).json() as { id: string; findings: { severity_counts: Record<string, number> } | null }[];
+    const row = listed.find((p) => p.id === pr.id)!;
+    expect(row.findings).not.toBeNull();
+    const total = Object.values(row.findings!.severity_counts).reduce((a, b) => a + b, 0);
+    expect(total).toBe(2);
+
+    await app.close();
+  });
 });

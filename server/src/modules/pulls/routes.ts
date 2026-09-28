@@ -120,26 +120,28 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
     // few IN-queries + JS grouping is cheap.
     const prIds = rows.map((r) => r.id);
     const scoreByPr = new Map<string, number>();
-    const latestReviewIdByPr = new Map<string, string>();
+    // One review id per (PR, agent) — that agent's own latest run — not one
+    // per PR overall, so a PR reviewed by N agents contributes N reviews'
+    // worth of findings, not just whichever agent happened to run last.
+    const latestReviewIdsByPr = new Map<string, string[]>();
     if (prIds.length > 0) {
       const reviewRows = await container.db
         .select({ prId: t.reviews.prId, id: t.reviews.id, agentId: t.reviews.agentId, score: t.reviews.score })
         .from(t.reviews)
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
-      // Rows are newest-first → first seen per PR overall is the latest
-      // review (for the findings preview); first seen per (PR, agent) is
-      // that agent's own latest score.
-      const latestScoreByPrAgent = new Map<string, number>();
+      // Rows are newest-first → first seen per (PR, agent) is that agent's
+      // own latest review (for both the score and the findings preview).
+      const latestByPrAgent = new Map<string, { reviewId: string; score: number | null }>();
       for (const rv of reviewRows) {
-        if (!latestReviewIdByPr.has(rv.prId)) latestReviewIdByPr.set(rv.prId, rv.id);
         const agentKey = `${rv.prId}:${rv.agentId ?? 'unknown'}`;
-        if (rv.score != null && !latestScoreByPrAgent.has(agentKey)) latestScoreByPrAgent.set(agentKey, rv.score);
+        if (!latestByPrAgent.has(agentKey)) latestByPrAgent.set(agentKey, { reviewId: rv.id, score: rv.score });
       }
       const scoresByPr = new Map<string, number[]>();
-      for (const [key, score] of latestScoreByPrAgent) {
+      for (const [key, { reviewId, score }] of latestByPrAgent) {
         const prId = key.slice(0, key.lastIndexOf(':'));
-        (scoresByPr.get(prId) ?? scoresByPr.set(prId, []).get(prId)!).push(score);
+        (latestReviewIdsByPr.get(prId) ?? latestReviewIdsByPr.set(prId, []).get(prId)!).push(reviewId);
+        if (score != null) (scoresByPr.get(prId) ?? scoresByPr.set(prId, []).get(prId)!).push(score);
       }
       for (const [prId, scores] of scoresByPr) {
         scoreByPr.set(prId, Math.round(scores.reduce((a, b) => a + b, 0) / scores.length));
@@ -158,9 +160,10 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
-    // FINDINGS column preview: the latest review's findings, grouped by
-    // severity for the count pills + a lightweight read-only list for the
-    // hover popover (no rationale/suggestion — that's the PR detail page).
+    // FINDINGS column preview: findings from each agent's latest review,
+    // summed across agents, grouped by severity for the count pills + a
+    // lightweight read-only list for the hover popover (no rationale/
+    // suggestion — that's the PR detail page).
     type FindingPreview = {
       severity: Severity;
       title: string;
@@ -173,9 +176,11 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       string,
       { severity_counts: Record<Severity, number>; items: FindingPreview[] }
     >();
-    const latestReviewIds = [...latestReviewIdByPr.values()];
+    const latestReviewIds = [...latestReviewIdsByPr.values()].flat();
     if (latestReviewIds.length > 0) {
-      const reviewIdToPrId = new Map([...latestReviewIdByPr].map(([prId, reviewId]) => [reviewId, prId]));
+      const reviewIdToPrId = new Map(
+        [...latestReviewIdsByPr].flatMap(([prId, reviewIds]) => reviewIds.map((id) => [id, prId] as const)),
+      );
       const findingRows = await container.db
         .select({
           reviewId: t.findings.reviewId,

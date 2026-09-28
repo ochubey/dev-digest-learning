@@ -8,6 +8,7 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { rollupSeverities } from '../pulls/status.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -242,6 +243,7 @@ export class ReviewRunExecutor {
       // Deterministic blocker count (severity ≥ the agent's gate) — the signal
       // the timeline colors on, NOT the model's self-reported verdict.
       const blockers = countBlockers(keptFindings, agent.ciFailOn);
+      const severityCounts = rollupSeverities(keptFindings);
 
       // ---- Observability: agent_runs + ONE run_traces document --------------
       await this.repo.completeAgentRun(runId, {
@@ -254,6 +256,7 @@ export class ReviewRunExecutor {
         grounding,
         score: outcome.review.score,
         blockers,
+        severityCounts,
         error: null,
       });
 
