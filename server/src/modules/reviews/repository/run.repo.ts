@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
+import { clearReviewedIfNoReviewsLeft } from './pull.repo.js';
 
 // ---- in-flight / history --------------------------------------------------
 
@@ -81,6 +82,11 @@ export async function deleteAgentRun(
   workspaceId: string,
   runId: string,
 ): Promise<boolean> {
+  const [run] = await db
+    .select({ prId: t.agentRuns.prId })
+    .from(t.agentRuns)
+    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.workspaceId, workspaceId)));
+
   await db
     .delete(t.reviews)
     .where(and(eq(t.reviews.runId, runId), eq(t.reviews.workspaceId, workspaceId)));
@@ -88,6 +94,8 @@ export async function deleteAgentRun(
     .delete(t.agentRuns)
     .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.workspaceId, workspaceId)))
     .returning({ id: t.agentRuns.id });
+
+  if (run?.prId) await clearReviewedIfNoReviewsLeft(db, run.prId);
   return rows.length > 0;
 }
 

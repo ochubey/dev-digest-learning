@@ -3,6 +3,7 @@ import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { Finding } from '@devdigest/shared';
 import type { FindingRow, PullRow } from '../../../db/rows.js';
+import { clearReviewedIfNoReviewsLeft } from './pull.repo.js';
 
 export type ReviewRow = typeof t.reviews.$inferSelect;
 
@@ -88,7 +89,8 @@ export async function deleteReview(
   const rows = await db
     .delete(t.reviews)
     .where(and(eq(t.reviews.workspaceId, workspaceId), eq(t.reviews.id, reviewId)))
-    .returning({ id: t.reviews.id });
+    .returning({ id: t.reviews.id, prId: t.reviews.prId });
+  if (rows[0]) await clearReviewedIfNoReviewsLeft(db, rows[0].prId);
   return rows.length > 0;
 }
 

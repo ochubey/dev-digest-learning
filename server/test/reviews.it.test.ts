@@ -333,6 +333,43 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('deleting a run reverts the PR to needs_review (lastReviewedSha was stale otherwise)', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'DeleteMe', provider: 'openai', model: 'gpt-4.1', system_prompt: 's' },
+      })
+    ).json();
+
+    const body = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } })
+    ).json();
+    const runId = body.runs[0].run_id;
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+
+    const listedBefore = (
+      await app.inject({ method: 'GET', url: `/repos/${pr.repoId}/pulls` })
+    ).json() as { id: string; status: string; score: number | null }[];
+    const before = listedBefore.find((p) => p.id === pr.id)!;
+    expect(before.status).toBe('reviewed');
+    expect(before.score).not.toBeNull();
+
+    const del = await app.inject({ method: 'DELETE', url: `/runs/${runId}` });
+    expect(del.statusCode).toBe(200);
+
+    const listedAfter = (
+      await app.inject({ method: 'GET', url: `/repos/${pr.repoId}/pulls` })
+    ).json() as { id: string; status: string; score: number | null }[];
+    const after = listedAfter.find((p) => p.id === pr.id)!;
+    expect(after.status).toBe('needs_review');
+    expect(after.score).toBeNull();
+
+    await app.close();
+  });
+
   it('run all enabled agents reviews with each enabled agent', async () => {
     const app = await appWith(REVIEW_FIXTURE);
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
