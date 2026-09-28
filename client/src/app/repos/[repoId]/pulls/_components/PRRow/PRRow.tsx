@@ -5,6 +5,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
+import { RunCostBadge } from "@/components/run-cost-badge";
+import { FindingsPreviewPopover } from "../FindingsPreviewPopover";
 import type { PrMeta } from "@/lib/types";
 import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
@@ -52,6 +54,12 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         ) : (
           <span style={s.muted}>—</span>
         )}
+      </div>
+      <div style={s.scoreCell}>
+        <RunCostBadge costUsd={pr.cost_usd ?? null} />
+      </div>
+      <div>
+        <FindingsPreviewPopover findings={pr.findings ?? null} />
       </div>
       <div>
         <Badge dot color={st.c} bg="transparent">
