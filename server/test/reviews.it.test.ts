@@ -8,6 +8,7 @@ import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mo
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
+import { SCOPE_INSTRUCTIONS } from '@devdigest/reviewer-core';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -82,7 +83,7 @@ async function setupRepoAndPr(db: PgFixture['handle']['db'], workspaceId: string
       deletions: 0,
       filesCount: 1,
       status: 'needs_review',
-      body: 'Add rate limiting. Closes #471.',
+      body: 'Add rate limiting. Closes #471. The logging refactor is out of scope.',
     })
     .returning();
   // persist the patch so the reviewer can reconstruct a diff (MockGit also returns one)
@@ -416,5 +417,214 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(total).toBe(2);
 
     await app.close();
+  });
+
+  it('scope: intent derives, scope persisted/returned, code overrides critical-on-changed, out hidden from counts', async () => {
+    const INTENT = {
+      summary: 'Add rate limiting',
+      in_scope: ['rate limiting config'],
+      out_of_scope: ['logging refactor'],
+      confidence: 0.9,
+      sources: [],
+      missing_context: [],
+    };
+    const mk = (id: string, severity: 'CRITICAL' | 'WARNING', line: number, scope: 'in' | 'out') => ({
+      id,
+      severity,
+      category: 'bug' as const,
+      title: `finding ${id}`,
+      file: 'src/config.ts',
+      start_line: line,
+      end_line: line,
+      rationale: 'r',
+      confidence: 0.9,
+      kind: 'finding' as const,
+      scope,
+      scope_reason: scope === 'out' ? 'unrelated to the PR intent' : 'part of the change',
+    });
+    // line 11 is the added line; line 10 is context (unchanged).
+    const SCOPED: Review = {
+      verdict: 'comment',
+      summary: 'ok',
+      score: 80,
+      findings: [mk('crit-added', 'CRITICAL', 11, 'out'), mk('warn-out', 'WARNING', 10, 'out')],
+    };
+    const mockOpenai = new MockLLMProvider('openai', { structuredBySchema: { Review: SCOPED } });
+    const mockRouter = new MockLLMProvider('openai', { structuredBySchema: { Intent: INTENT } });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: mockOpenai, openrouter: mockRouter },
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: {
+          name: 'ScopeAgent',
+          provider: 'openai',
+          model: 'gpt-4.1',
+          system_prompt: 's',
+          strategy: 'single-pass',
+        },
+      })
+    ).json();
+    const res = await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runId = res.json().runs[0].run_id;
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+
+    // intent + review = exactly 2 structured calls for a single-pass run
+    const structuredCalls = [...mockOpenai.calls, ...mockRouter.calls].filter(
+      (c) => c.method === 'completeStructured',
+    );
+    expect(structuredCalls).toHaveLength(2);
+
+    // The Review call actually carries the derived intent + scope instructions.
+    const reviewReq = mockOpenai.calls.find(
+      (c) => c.method === 'completeStructured' && (c.req as { schemaName: string }).schemaName === 'Review',
+    )!.req as { messages: { role: string; content: string }[] };
+    const sysMsg = reviewReq.messages.find((m) => m.role === 'system')!.content;
+    const userMsg = reviewReq.messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => m.content)
+      .join('\n');
+    expect(userMsg).toMatch(
+      /## Intent\n<untrusted source="intent">\n[\s\S]*Add rate limiting[\s\S]*<\/untrusted>/,
+    );
+    expect(userMsg).toContain('rate limiting config');
+    expect(userMsg).toContain('logging refactor');
+    expect(sysMsg).toContain(SCOPE_INSTRUCTIONS);
+
+    // DB rows carry scope; CRITICAL on a changed line was forced to 'in'
+    const [review] = await pg.handle.db.select().from(t.reviews).where(eq(t.reviews.prId, pr.id));
+    const rows = await pg.handle.db.select().from(t.findings).where(eq(t.findings.reviewId, review!.id));
+    expect(rows).toHaveLength(2);
+    const crit = rows.find((r) => r.severity === 'CRITICAL')!;
+    const warn = rows.find((r) => r.severity === 'WARNING')!;
+    expect(crit.scope).toBe('in');
+    expect(crit.scopeReason).toBeTruthy();
+    expect(warn.scope).toBe('out');
+    expect(warn.scopeReason).toBeTruthy();
+
+    // GET reviews exposes scope + scope_reason
+    const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+    const dtoWarn = reviews[0].findings.find((f: { severity: string }) => f.severity === 'WARNING');
+    expect(dtoWarn.scope).toBe('out');
+    expect(dtoWarn.scope_reason).toBeTruthy();
+
+    // verdict/score from in-scope only: one CRITICAL ⇒ 65; run stats count only 'in'
+    expect(reviews[0].score).toBe(65);
+    const [run] = await pg.handle.db.select().from(t.agentRuns).where(eq(t.agentRuns.id, runId));
+    expect(run!.findingsCount).toBe(1);
+    expect(run!.blockers).toBe(1);
+
+    // smart-diff: the out finding's line (10) is absent, the in line (11) present
+    const sd = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/smart-diff` })).json();
+    const lines = sd.groups.flatMap((g: { files: { finding_lines: number[] }[] }) =>
+      g.files.flatMap((f) => f.finding_lines),
+    );
+    expect(lines).toContain(11);
+    expect(lines).not.toContain(10);
+
+    // PR-list FINDINGS column excludes the out finding
+    const listed = (await app.inject({ method: 'GET', url: `/repos/${pr.repoId}/pulls` })).json() as {
+      id: string;
+      findings: { severity_counts: Record<string, number> } | null;
+    }[];
+    const counts = listed.find((p) => p.id === pr.id)!.findings!.severity_counts;
+    expect(counts).toEqual({ CRITICAL: 1, WARNING: 0, SUGGESTION: 0 });
+
+    await app.close();
+  });
+  describe('scope policy end-to-end edge cases', () => {
+    const INTENT = {
+      summary: 'Add rate limiting',
+      in_scope: ['rate limiting config'],
+      out_of_scope: ['logging refactor'],
+      confidence: 0.9,
+      sources: [],
+      missing_context: [],
+    };
+    const mkFinding = (over: Record<string, unknown>) => ({
+      id: 'x',
+      severity: 'CRITICAL' as const,
+      category: 'bug' as const,
+      title: 'finding x',
+      file: 'src/config.ts',
+      start_line: 11,
+      end_line: 11,
+      rationale: 'r',
+      confidence: 0.9,
+      kind: 'finding' as const,
+      scope: 'out' as const,
+      scope_reason: 'unrelated to the PR intent',
+      ...over,
+    });
+
+    async function runScoped(findings: unknown[]) {
+      const review = { verdict: 'request_changes', summary: 'ok', score: 50, findings };
+      const app = await buildApp({
+        config: config(),
+        db: pg.handle.db,
+        overrides: {
+          embedder: new MockEmbedder(),
+          git: new MockGitClient({ diff: DIFF }),
+          llm: {
+            openai: new MockLLMProvider('openai', { structuredBySchema: { Review: review } }),
+            openrouter: new MockLLMProvider('openai', { structuredBySchema: { Intent: INTENT } }),
+          },
+        },
+      });
+      const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+      const agent = (
+        await app.inject({
+          method: 'POST',
+          url: '/agents',
+          payload: { name: 'EdgeAgent', provider: 'openai', model: 'gpt-4.1', system_prompt: 's', strategy: 'single-pass' },
+        })
+      ).json();
+      const res = await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+      const runId = res.json().runs[0].run_id;
+      await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+      const [rev] = await pg.handle.db.select().from(t.reviews).where(eq(t.reviews.prId, pr.id));
+      const rows = await pg.handle.db.select().from(t.findings).where(eq(t.findings.reviewId, rev!.id));
+      const [run] = await pg.handle.db.select().from(t.agentRuns).where(eq(t.agentRuns.id, runId));
+      const sd = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/smart-diff` })).json();
+      const lines: number[] = sd.groups.flatMap((g: { files: { finding_lines: number[] }[] }) =>
+        g.files.flatMap((f) => f.finding_lines),
+      );
+      const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+      await app.close();
+      return { rows, run: run!, lines, reviews, rev: rev! };
+    }
+
+    it('CRITICAL on a CONTEXT line inside a hunk marked out stays in (changed lines include hunk context)', async () => {
+      // line 10 is unchanged context, but within the hunk's new-side range 10-13
+      const { rows, run, lines } = await runScoped([mkFinding({ id: 'ctx-crit', start_line: 10, end_line: 10 })]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.scope).toBe('in');
+      expect(run.findingsCount).toBe(1);
+      expect(run.blockers).toBe(1);
+      expect(lines).toContain(10);
+    });
+
+    it('CRITICAL with a full-file kind outside the hunks marked out becomes the signal: persisted, not counted, visible in smart-diff', async () => {
+      const { rows, run, lines, reviews, rev } = await runScoped([
+        mkFinding({ id: 'far-crit', kind: 'phantom', start_line: 500, end_line: 500 }),
+      ]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.scope).toBe('signal');
+      expect(rows[0]!.scopeReason).toBeTruthy();
+      expect(run.findingsCount).toBe(0);
+      expect(run.blockers).toBe(0);
+      expect(reviews[0].findings.find((f: { scope: string }) => f.scope === 'signal')).toBeTruthy();
+      expect(rev.verdict).toBe('approve');
+      expect(lines).toContain(500);
+    });
   });
 });

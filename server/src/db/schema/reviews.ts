@@ -43,15 +43,33 @@ export const findings = pgTable('findings', {
   trifectaComponents: jsonb('trifecta_components').$type<string[]>(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
   dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+  scope: text('scope', { enum: ['in', 'out', 'signal'] }),
+  scopeReason: text('scope_reason'),
 });
 
 export const prIntent = pgTable('pr_intent', {
   prId: uuid('pr_id')
     .primaryKey()
     .references(() => pullRequests.id, { onDelete: 'cascade' }),
-  intent: text('intent').notNull(),
+  summary: text('summary').notNull().default(''),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  confidence: doublePrecision('confidence').notNull().default(0),
+  sources: jsonb('sources')
+    .$type<Array<{ label: string; status: 'fetched' | 'unavailable' | 'error' }>>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  missingContext: jsonb('missing_context').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  basis: text('basis', { enum: ['title_body', 'files_only', 'partial_context'] }),
+  derivedFromHeadSha: text('derived_from_head_sha'),
+  cacheKeyHash: text('cache_key_hash'),
+  model: text('model'),
+  tokens: integer('tokens'),
+  costUsd: doublePrecision('cost_usd'),
+  derivedBy: text('derived_by').default('auto'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  // Keep legacy intent column for backward compatibility during migration
+  intent: text('intent'),
 });
 
 export const prBrief = pgTable('pr_brief', {

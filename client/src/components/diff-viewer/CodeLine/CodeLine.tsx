@@ -8,17 +8,24 @@ import { type Line } from "../helpers";
 import { s, lineRowFor, lineSignFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
 import { InlineComposer } from "../InlineComposer";
+import { SmartFindingCard } from "../SmartFindingCard";
+import type { FindingRecord } from "@devdigest/shared";
 
 export function CodeLine({
   ln,
   path,
   threads,
   commenting,
+  findings,
+  prId = null,
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
+  /** Smart Diff findings anchored to this row; caller passes [] when hidden. */
+  findings?: FindingRecord[];
+  prId?: string | null;
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -69,6 +76,10 @@ export function CodeLine({
         threads.map((th) => (
           <CommentThreadView key={th.rootId} thread={th} commenting={commenting} path={path} />
         ))}
+
+      {findings?.map((f) => (
+        <SmartFindingCard key={f.id} finding={f} prId={prId} />
+      ))}
 
       {commenting && composing && target && (
         <InlineComposer

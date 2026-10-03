@@ -26,6 +26,7 @@ import { s } from "./styles";
 export function FindingCard({
   f,
   focused,
+  muted: mutedProp,
   defaultExpanded,
   onAction,
   pending,
@@ -34,6 +35,8 @@ export function FindingCard({
 }: {
   f: FindingRecord;
   focused?: boolean;
+  /** Force the muted look (revealed out-of-scope findings). */
+  muted?: boolean;
   defaultExpanded?: boolean;
   onAction?: (action: FindingActionKind, reply?: string) => void;
   pending?: boolean;
@@ -49,10 +52,12 @@ export function FindingCard({
       : undefined;
   const accepted = !!f.accepted_at;
   const dismissed = !!f.dismissed_at;
-  const muted = accepted || dismissed;
+  const muted = accepted || dismissed || !!mutedProp;
+  const isSignal = f.scope === "signal";
+  const isOut = f.scope === "out";
 
   return (
-    <div data-finding-id={f.id} style={s.card(!!focused, sevColor, muted)}>
+    <div data-finding-id={f.id} data-scope={f.scope ?? undefined} style={s.card(!!focused, sevColor, muted)}>
       <div onClick={() => setExpanded((e) => !e)} style={s.header}>
         <div style={s.badgeWrap}>
           <SeverityBadge severity={f.severity as Severity} compact />
@@ -63,7 +68,15 @@ export function FindingCard({
             <CategoryTag category={f.category as Category} />
             {accepted && <span style={s.acceptedTag}>{t("finding.accepted")}</span>}
             {dismissed && <span style={s.dismissedTag}>{t("finding.dismissed")}</span>}
+            {isOut && <span style={s.outBadge}>{t("scope.outBadge")}</span>}
+            {isSignal && <span style={s.signalTag}>{t("scope.signal")}</span>}
           </div>
+          {/* scope_reason is model output: plain text node only, never Markdown/HTML. */}
+          {isSignal && f.scope_reason && (
+            <div data-testid="finding-scope-reason" style={s.scopeReason}>
+              {f.scope_reason}
+            </div>
+          )}
           <div style={s.metaRow}>
             <MonoLink href={fileHref}>
               {f.file}:{lineLabel(f)}

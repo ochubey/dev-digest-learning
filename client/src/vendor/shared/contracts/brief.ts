@@ -6,10 +6,21 @@ import { z } from 'zod';
  */
 
 // ---- Intent ----
+export const IntentSource = z.object({
+  label: z.string(),
+  status: z.enum(['fetched', 'unavailable', 'error']),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
 export const Intent = z.object({
-  intent: z.string(),
+  summary: z.string(),
   in_scope: z.array(z.string()),
   out_of_scope: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  sources: z.array(IntentSource),
+  missing_context: z.array(z.string()).optional(),
+  // Legacy fields for backward compatibility
+  intent: z.string().optional(),
 });
 export type Intent = z.infer<typeof Intent>;
 
@@ -78,7 +89,7 @@ export const PrHistory = z.object({
 export type PrHistory = z.infer<typeof PrHistory>;
 
 // ---- Smart Diff ----
-export const SmartDiffRole = z.enum(['core', 'wiring', 'boilerplate']);
+export const SmartDiffRole = z.enum(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
 export type SmartDiffRole = z.infer<typeof SmartDiffRole>;
 
 export const SmartDiffFile = z.object({

@@ -164,6 +164,8 @@ export interface GitHubClient {
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
+  /** Read a file from the repo at a given commit SHA. */
+  readRepoFile(repo: RepoRef, path: string, sha: string): Promise<string | null>;
 }
 
 // ---------- Git (simple-git, heavy) ----------

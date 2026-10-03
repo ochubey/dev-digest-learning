@@ -4,7 +4,7 @@
 
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, API_BASE } from "../api";
+import { api, API_BASE, ApiError } from "../api";
 import { notify } from "../toast";
 import type {
   FindingActionKind,
@@ -213,4 +213,33 @@ export function useRunEvents(runIds: string[]) {
   }, [key]);
 
   return { events, running };
+}
+
+// ---- PR Intent ----
+import type { Intent } from "@devdigest/shared";
+
+/** Fetch intent for a PR; re-derive on demand via mutation. */
+export function useIntent(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["pr-intent", prId],
+    queryFn: () => api.get<Intent & { stale: boolean; derived_from_head_sha: string }>(
+      `/pulls/${prId}/intent`
+    ),
+    enabled: !!prId,
+    // 404 = intent was never derived: a normal empty state, not worth retrying.
+    retry: (failureCount, err) => !(err instanceof ApiError && err.status === 404) && failureCount < 1,
+  });
+}
+
+/** Manually re-derive intent for a PR (POST /pulls/:id/intent/derive).
+   Sends force:true so a non-stale intent is re-derived instead of served from cache.
+   Rate-limited server-side: a 429 surfaces as ApiError with details.retry_after (seconds). */
+export function useRederiveIntent(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Intent & { stale: boolean }>(`/pulls/${prId}/intent/derive`, { force: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pr-intent", prId] });
+    },
+  });
 }

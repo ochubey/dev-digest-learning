@@ -6,7 +6,14 @@ Required: `systemPrompt`, `model`, `diff` (already-parsed `UnifiedDiff`),
 `llm` (an `LLMProvider`). Everything else is optional and **omitted, not
 empty-string'd**, when not supplied — `assemblePrompt` leaves out a prompt
 section entirely rather than rendering `""`: `skills`, `memory`, `specs`,
-`callers`, `repoMap`, `prDescription`, `task`.
+`callers`, `repoMap`, `prDescription`, `intent` (deprecated string), `intentObj`,
+`task`.
+
+`intentObj?: Intent` — structured derived intent. When present, the prompt gets a
+bounded, `wrapUntrusted` `## Intent` section (`renderIntent`) and the trusted
+`SCOPE_INSTRUCTIONS` are appended to the system prompt; it also drives the
+scope policy below. Absent, or confidence < 0.5, or empty in/out lists → scope
+filter inactive (every finding `in`).
 
 `strategy` picks `'auto' | 'single-pass' | 'map-reduce'` — `'auto'` (the
 default) only chunks per-file when the diff is **both** over
@@ -31,8 +38,44 @@ file; a large single-file diff still goes single-pass.
   with a hole in it.
 - `assembly` / `chunks` / `raw` — for the caller's own run-trace/logging
   needs; the engine doesn't persist anything itself.
+- `review.findings` — in-scope (`scope='in'`) findings ONLY; they drive score,
+  verdict and counters. Out/signal findings are NOT here.
+- `allFindings: Finding[]` — EVERY grounded finding (incl. the single
+  serious-but-out-of-intent `signal`) annotated `scope` (`in|out|signal`) +
+  `scope_reason`; **this is what the caller persists**. (There is no separate
+  `signal` field: find it via `allFindings.find(f => f.scope === 'signal')`.)
+- `scope: ScopeStats` — counters (`in/out/signal/hidden/collapsed`,
+  `modelHints`, `overrides`, `overridesTotal` (their sum, computed once in
+  `scope.ts`), `guardTripped`, `active`).
+- `llmCalls: number` — structured review calls made, reprompts included.
 - `mode: ReviewMode` — which path actually ran (`'single-pass'` or
   `'map-reduce'`), since `'auto'` resolves to one of these before running.
+
+## Scope policy (code-owned, no extra LLM call)
+
+The model only **labels** each finding (`ModelReview`: `scope: in|out|signal` +
+`scope_reason`, both `.nullish().catch(null)` — a bad label parses to `null`,
+costs no reprompt, and counts as `in`). `applyScopePolicy` (`review/scope.ts`,
+pure) then decides, once over all grounded findings (never per chunk):
+
+1. Inactive (no intent / confidence < 0.5 / both scope lists empty) → all `in`.
+2. Normalise hints (missing/invalid → `in`; model `signal` treated as `out`).
+3. Never-out → `in`: category `security`; kind `secret_leak`/`lethal_trifecta`;
+   `CRITICAL` overlapping changed lines. "Changed lines" = new-side hunk ranges
+   incl. context lines (`changedLines`), so a signal is rare (CRITICAL outside hunks / full-file kinds).
+4. Mass-out guard: outs > 0.6 of total (total ≥ 3) or all-out (total ≥ 2) →
+   everything `in`.
+5. `CRITICAL` outs collapse into one `signal` (confidence desc, then file,
+   line, id); the rest stay `out` (hidden, persisted).
+
+Verdict, score and `review.findings` derive from `scope='in'` only; when
+something was hidden/signalled the verdict is re-derived from them
+(`deriveScopedVerdict` in `review/scope.ts`). The engine emits the single
+human-readable `Scope policy: ...` line (`formatScopeStats`) and per-override
+`info` events; callers should not log a second copy.
+
+Model calls per run: single-pass = 1 review call (map-reduce = 1 per chunk);
+the intent classifier is a separate call owned by the server (none when cached).
 
 ## Cancellation
 

@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { inScopeCondition } from '../reviews/scope-visibility.js';
 import type {
   PrMeta,
   PrDetail,
@@ -191,7 +192,14 @@ export class PullsService {
           confidence: t.findings.confidence,
         })
         .from(t.findings)
-        .where(inArray(t.findings.reviewId, latestReviewIds));
+        .where(
+          and(
+            inArray(t.findings.reviewId, latestReviewIds),
+            // Only in-scope findings count; out/signal rows are persisted for
+            // transparency but never inflate the PR-list column.
+            inScopeCondition(),
+          ),
+        );
       for (const f of findingRows) {
         const prId = reviewIdToPrId.get(f.reviewId);
         if (!prId) continue;

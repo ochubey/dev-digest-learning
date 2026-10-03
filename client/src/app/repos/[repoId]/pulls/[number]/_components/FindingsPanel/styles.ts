@@ -23,5 +23,17 @@ export const s = {
     fontSize: 13,
     color: "var(--text-secondary)",
   } satisfies CSSProperties,
+  hiddenCounter: {
+    fontSize: 13,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  revealGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+  } satisfies CSSProperties,
   list: { display: "flex", flexDirection: "column", gap: 12 } satisfies CSSProperties,
 } as const;
