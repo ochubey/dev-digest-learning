@@ -85,6 +85,13 @@
       "when": 1790614014706,
       "tag": "0011_brave_morbius",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791065257032,
+      "tag": "0012_thin_johnny_storm",
+      "breakpoints": true
     }
   ]
 }
