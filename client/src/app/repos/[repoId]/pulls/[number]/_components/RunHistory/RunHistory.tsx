@@ -2,7 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
+import { Badge, Icon, CircularScore, SeverityBadge, type IconName } from "@devdigest/ui";
+import type { Severity } from "@devdigest/shared";
 import { RunCostBadge } from "@/components/run-cost-badge";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 
@@ -193,6 +194,20 @@ export function RunHistory({
                 <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                   {t("runStatus.findings", { count: r.findings_count ?? 0 })}
                   {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
+                </div>
+              )}
+              {settled && r.severity_counts && (
+                <div style={{ display: "flex", gap: 6 }}>
+                  {(["CRITICAL", "WARNING", "SUGGESTION"] as Severity[])
+                    .filter((sev) => r.severity_counts![sev.toLowerCase() as "critical" | "warning" | "suggestion"] > 0)
+                    .map((sev) => (
+                      <SeverityBadge
+                        key={sev}
+                        severity={sev}
+                        count={r.severity_counts![sev.toLowerCase() as "critical" | "warning" | "suggestion"]}
+                        compact
+                      />
+                    ))}
                 </div>
               )}
             </div>

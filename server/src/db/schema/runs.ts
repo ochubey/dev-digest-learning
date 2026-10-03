@@ -28,6 +28,9 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
+  /** { critical, warning, suggestion } tally for this run's kept findings — lets the
+   *  timeline show severity icons without a join back to `findings`. Null on failed/cancelled runs. */
+  severityCounts: jsonb('severity_counts'),
   /** USD cost of this run, computed from tokens_in/out via the price book at run time. */
   costUsd: doublePrecision('cost_usd'),
 });
