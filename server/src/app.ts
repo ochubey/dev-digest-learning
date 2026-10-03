@@ -165,6 +165,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // Register feature modules from the static registry (src/modules/index.ts).
   // Each module is a Fastify plugin in modules/<name>/routes.ts.
+  const moduleNames = Object.keys(modules);
+  app.log.debug({ modules: moduleNames, count: moduleNames.length }, 'registering feature modules');
   for (const plugin of Object.values(modules)) {
     await app.register(plugin);
   }

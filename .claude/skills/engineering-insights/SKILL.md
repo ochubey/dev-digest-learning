@@ -6,7 +6,7 @@ description: "Auto-apply at the start (read) and end (append) of any coding task
 # Engineering Insights
 
 Repo is not a monorepo — packages: `client/`, `server/`, `reviewer-core/`, `e2e/`
-(see root `CLAUDE.md`).
+(see root `AGENTS.md`).
 
 ## At the start of a session/task
 

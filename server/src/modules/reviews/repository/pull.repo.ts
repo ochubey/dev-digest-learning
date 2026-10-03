@@ -44,6 +44,29 @@ export async function markReviewed(db: Db, prId: string, sha: string): Promise<v
     .where(eq(t.pullRequests.id, prId));
 }
 
+/**
+ * Call after deleting a review/run. `last_reviewed_sha` is denormalized (set
+ * by `markReviewed` so the PR list can derive status without a join) and was
+ * never cleared on delete — a PR whose only review just got deleted kept
+ * reading as "reviewed" forever, findings/score gone but the status stuck.
+ * Only clears when NO reviews remain for the PR: other reviews for the same
+ * PR always ran against the same current head (that's what "reviewed" means
+ * here), so deleting one of several doesn't invalidate the flag.
+ */
+export async function clearReviewedIfNoReviewsLeft(db: Db, prId: string): Promise<void> {
+  const remaining = await db
+    .select({ id: t.reviews.id })
+    .from(t.reviews)
+    .where(eq(t.reviews.prId, prId))
+    .limit(1);
+  if (remaining.length === 0) {
+    await db
+      .update(t.pullRequests)
+      .set({ lastReviewedSha: null })
+      .where(eq(t.pullRequests.id, prId));
+  }
+}
+
 // ---- intent ---------------------------------------------------------------
 
 export async function upsertIntent(db: Db, prId: string, intent: Intent): Promise<void> {

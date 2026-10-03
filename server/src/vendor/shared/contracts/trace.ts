@@ -36,9 +36,20 @@ export const ToolCall = z.object({
 });
 export type ToolCall = z.infer<typeof ToolCall>;
 
+/** Per-skill token attribution for the run trace (Skills feature, req #3). */
+export const SkillPromptMeta = z.object({
+  skill_id: z.string(),
+  name: z.string(),
+  tokens: z.number().int(),
+});
+export type SkillPromptMeta = z.infer<typeof SkillPromptMeta>;
+
 export const PromptAssembly = z.object({
   system: z.string(),
   skills: z.string().nullish(),
+  /** Per-skill token breakdown of the `skills` block, in prompt order; null
+      when no skills were linked/enabled for this run. */
+  skills_meta: z.array(SkillPromptMeta).nullish(),
   memory: z.string().nullish(),
   specs: z.string().nullish(),
   /** Callers-of-changed-symbols digest (T1.3); null when absent. */

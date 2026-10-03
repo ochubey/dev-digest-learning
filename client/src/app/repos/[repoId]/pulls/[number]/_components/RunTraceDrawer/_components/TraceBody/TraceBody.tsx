@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import { PROMPT_COLORS } from "../../constants";
-import { formatSeconds, formatTokens } from "../../helpers";
+import { formatSeconds, formatTokens, formatSkillTokens } from "../../helpers";
 import { formatCost } from "@/components/run-cost-badge";
 import { s } from "../../styles";
 import { TraceSection } from "../TraceSection";
@@ -36,6 +36,18 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
           <Row label={t("trace.config.memoryPulled")}>
             <span>{t("trace.config.items", { count: trace.memory_pulled.length })}</span>
           </Row>
+          {trace.prompt_assembly.skills_meta != null && trace.prompt_assembly.skills_meta.length > 0 && (
+            <Row label={t("trace.config.skillsLoaded")}>
+              <div style={s.specsWrap}>
+                {trace.prompt_assembly.skills_meta.map((sk) => (
+                  <Badge key={sk.skill_id} color="var(--accent-text)" bg="var(--bg-hover)">
+                    {sk.name}
+                    <span style={{ opacity: 0.7 }}>{`+${formatSkillTokens(sk.tokens)} tok`}</span>
+                  </Badge>
+                ))}
+              </div>
+            </Row>
+          )}
           <Row label={t("trace.config.specsRead")}>
             <div style={s.specsWrap}>
               {trace.specs_read.length === 0 ? (

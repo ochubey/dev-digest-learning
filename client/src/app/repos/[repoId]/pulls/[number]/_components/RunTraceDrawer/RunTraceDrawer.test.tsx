@@ -8,7 +8,17 @@ import messages from "../../../../../../../../messages/en/runs.json"; // apps/we
 const TRACE: RunTrace = {
   config: { agent: "Security", version: "1", provider: "openai", model: "gpt-4.1", pr: 482, source: "local" },
   stats: { duration_ms: 8200, tokens_in: 12000, tokens_out: 1500, cost_usd: 0.0198, findings: 2, grounding: "2/2 passed" },
-  prompt_assembly: { system: "You are a reviewer.", skills: "### skill", memory: null, specs: null, user: "Review PR #482" },
+  prompt_assembly: {
+    system: "You are a reviewer.",
+    skills: "### skill",
+    skills_meta: [
+      { skill_id: "s1", name: "Security review", tokens: 820 },
+      { skill_id: "s2", name: "Onion architecture", tokens: 1500 },
+    ],
+    memory: null,
+    specs: null,
+    user: "Review PR #482",
+  },
   tool_calls: [{ tool: "review_file", args: "src/config.ts", meta: "single-pass", ms: 1200 }],
   raw_output: '{"verdict":"request_changes"}',
   memory_pulled: [{ pr: 471, text: "rate-limit public endpoints" }],
@@ -19,8 +29,9 @@ const TRACE: RunTrace = {
   ],
 };
 
+let currentTrace: RunTrace = TRACE;
 vi.mock("../../../../../../../lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: TRACE, isLoading: false }),
+  useRunTrace: () => ({ data: currentTrace, isLoading: false }),
 }));
 vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
@@ -28,7 +39,10 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
 
 import RunTraceDrawer from "./RunTraceDrawer";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  currentTrace = TRACE;
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -45,6 +59,24 @@ describe("A5 Run Trace drawer (smoke)", () => {
     expect(screen.getByText("Stats")).toBeInTheDocument();
     expect(screen.getByText("2/2 passed")).toBeInTheDocument();
     expect(screen.getByText("Tool calls")).toBeInTheDocument();
+  });
+
+  it("renders Skills loaded badges with per-skill token counts", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(screen.getByText("Skills loaded")).toBeInTheDocument();
+    expect(screen.getByText("Security review")).toBeInTheDocument();
+    expect(screen.getByText("+820 tok")).toBeInTheDocument();
+    expect(screen.getByText("Onion architecture")).toBeInTheDocument();
+    expect(screen.getByText("+1.5k tok")).toBeInTheDocument();
+  });
+
+  it("hides Skills loaded badges when skills_meta is null", () => {
+    currentTrace = {
+      ...TRACE,
+      prompt_assembly: { ...TRACE.prompt_assembly, skills: null, skills_meta: null },
+    };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(screen.queryByText("Skills loaded")).not.toBeInTheDocument();
   });
 
   it("switches to the live log tab", () => {

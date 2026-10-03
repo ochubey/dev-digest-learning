@@ -45,7 +45,7 @@ for the pattern.
 ## The `@devdigest/ui` boundary (`src/vendor/ui`)
 
 Everything under `src/vendor/ui` and `src/vendor/shared` is a **vendored
-copy** (per root `CLAUDE.md`'s do-not-touch list) — treated as a read-only
+copy** (per root `AGENTS.md`'s do-not-touch list) — treated as a read-only
 external design-system package, not app code. New app-specific UI (anything
 that isn't a generic, reusable-across-any-DevDigest-screen primitive) goes
 in `src/components/<name>/` instead, even if it looks similar to something

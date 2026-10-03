@@ -36,6 +36,8 @@ export const STATUS_FILTERS: { key: string; labelKey: string }[] = [
   { key: "needs_review", labelKey: "needs_review" },
   { key: "reviewed", labelKey: "reviewed" },
   { key: "stale", labelKey: "stale" },
+  { key: "merged", labelKey: "merged" },
+  { key: "closed", labelKey: "closed" },
 ];
 
 /** Column header i18n keys (under `list.columns`), in display order. */
