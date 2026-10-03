@@ -6,6 +6,7 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 
 /** Default provider/model for the built-in reviewer agents. */
@@ -175,7 +176,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     ]);
   }
 
-  // ---- built-in agents (the three starter presets) ----
+  // ---- built-in agents (the four starter presets) ----
   // Prompt bodies live in ./seed-prompts.ts (mirrored in docs/agent-prompts/*.md).
   const seedAgents: Array<typeof t.agents.$inferInsert> = [
     {
@@ -211,6 +212,17 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'API Contract Reviewer',
+      description: 'Flags breaking changes to route/handler signatures and response shapes.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
   for (const a of seedAgents) {
     const [existing] = await db
@@ -218,6 +230,48 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
     if (!existing) await db.insert(t.agents).values(a);
+  }
+
+  // ---- link API Contract Reviewer with breaking-change-detector skill ----
+  const [apiContractReviewerAgent] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'API Contract Reviewer')));
+
+  if (apiContractReviewerAgent) {
+    // Ensure the breaking-change-detector skill exists
+    const [breakingChangeSkill] = await db
+      .select()
+      .from(t.skills)
+      .where(
+        and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, 'breaking-change-detector')),
+      );
+    if (!breakingChangeSkill) {
+      const [newSkill] = await db
+        .insert(t.skills)
+        .values({
+          workspaceId,
+          name: 'breaking-change-detector',
+          description: 'Flags removed/renamed params or changed response shapes',
+          type: 'rubric',
+          source: 'manual',
+          body: `# Breaking-change detector
+
+Flag route/handler signature changes that remove or rename a required parameter, or change a response shape callers rely on.
+
+## What to look for
+- Removed required parameters (callers sending them will be silently ignored).
+- Renamed parameters or fields.
+- Changed response shape or field types.
+- Changed or removed endpoints.
+- Type narrowing that breaks existing callers.`,
+        })
+        .returning();
+      await db.insert(t.agentSkills).values({ agentId: apiContractReviewerAgent.id, skillId: newSkill!.id }).onConflictDoNothing();
+    } else {
+      // Link existing skill if not already linked
+      await db.insert(t.agentSkills).values({ agentId: apiContractReviewerAgent.id, skillId: breakingChangeSkill.id }).onConflictDoNothing();
+    }
   }
 
   return { workspaceId, userId };
