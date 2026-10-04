@@ -10,6 +10,9 @@ export interface RequestContext {
  * Resolve the tenancy context for a request via the AuthProvider. In MVP
  * (LocalNoAuthProvider) this always returns the default workspace + system user.
  * Every module uses this so workspace scoping is never forgotten.
+ *
+ * Every route handler calls this, so a change to it reaches every endpoint (the Blast
+ * Radius of a PR touching this file lists them all).
  */
 export async function getContext(
   container: Container,
