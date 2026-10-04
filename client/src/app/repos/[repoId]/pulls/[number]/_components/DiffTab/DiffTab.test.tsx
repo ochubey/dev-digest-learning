@@ -61,18 +61,41 @@ function renderTab() {
   );
 }
 
+const goSmart = () => fireEvent.click(screen.getByRole("button", { name: "Smart order" }));
+
 describe("DiffTab smart-diff groups", () => {
-  it("shows group headers with label and file count in fixed order", () => {
+  it("defaults to Original order (flat list, no group headers) and Smart order switches to groups", () => {
     smartDiffState.data = SMART;
     renderTab();
-    const headers = screen.getAllByTestId("smart-diff-group-header");
-    expect(headers[0]!.textContent).toContain("Core");
-    expect(headers[1]!.textContent).toContain("Tests");
-    expect(headers[2]!.textContent).toContain("Docs");
-    expect(headers[3]!.textContent).toContain("Boilerplate");
+    expect(screen.queryByTestId("smart-diff-group-header")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Original order" })).toHaveAttribute("aria-pressed", "true");
+    goSmart();
+    expect(screen.getAllByTestId("smart-diff-group-header").length).toBe(5);
+    expect(screen.getByRole("button", { name: "Smart order" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows all five roles in fixed order with label, description, colour and file count; empty ones are disabled", () => {
+    smartDiffState.data = SMART;
+    renderTab();
+    goSmart();
+    const groups = screen.getAllByTestId("smart-diff-group");
+    expect(groups.map((g) => g.getAttribute("data-role"))).toEqual(["core", "tests", "wiring", "docs", "boilerplate"]);
+    const header = (i: number) => within(groups[i]!).getByTestId("smart-diff-group-header");
+    expect(header(0).textContent).toContain("Core logic");
+    expect(header(0).textContent).toContain("The substance of the change");
+    expect(header(1).textContent).toContain("Tests");
+    expect(header(2).textContent).toContain("Wiring");
+    expect(header(3).textContent).toContain("Docs");
+    expect(header(4).textContent).toContain("Boilerplate");
+    expect(within(groups[0]!).getByTestId("group-color")).toBeInTheDocument();
     // exact: "1 files" must fail
-    expect(within(headers[0]!).getByText(/^1 file$/)).toBeInTheDocument();
-    expect(within(headers[0]!).queryByText(/1 files/)).not.toBeInTheDocument();
+    expect(within(groups[0]!).getByText(/^1 file$/)).toBeInTheDocument();
+    expect(within(groups[0]!).queryByText(/1 files/)).not.toBeInTheDocument();
+    // wiring has no files in SMART: shown as "0 files", header disabled, no expand-all button
+    expect(within(groups[2]!).getByText("0 files")).toBeInTheDocument();
+    expect(header(2)).toBeDisabled();
+    expect(groups[2]).toHaveAttribute("data-empty", "true");
+    expect(within(groups[2]!).queryByTestId("group-toggle-files")).not.toBeInTheDocument();
   });
 
   it("header uses the singular for one file and the plural otherwise", () => {
@@ -87,7 +110,7 @@ describe("DiffTab smart-diff groups", () => {
     expect(screen.getByText(/^Files changed · 4 files$/)).toBeInTheDocument();
   });
 
-  it("renders all five groups together in server order with their labels", () => {
+  it("renders the group counts for a five-role response", () => {
     const five: SmartDiff = {
       ...SMART,
       groups: [
@@ -109,43 +132,45 @@ describe("DiffTab smart-diff groups", () => {
         />
       </NextIntlClientProvider>,
     );
-    const roles = screen.getAllByTestId("smart-diff-group").map((g) => g.getAttribute("data-role"));
-    expect(roles).toEqual(["core", "tests", "wiring", "docs", "boilerplate"]);
-    const headers = screen.getAllByTestId("smart-diff-group-header").map((h) => h.textContent ?? "");
-    const labels = ["Core", "Tests", "Wiring", "Docs", "Boilerplate"];
+    goSmart();
     const counts = ["1 file", "1 file", "2 files", "1 file", "1 file"];
-    labels.forEach((label, i) => {
-      expect(headers[i]).toContain(label);
-      // exact count text at the end of the header (so "1 files" / "11 file" fail)
-      expect(headers[i]!.endsWith(counts[i]!)).toBe(true);
-      expect(headers[i]).not.toMatch(/1 files/);
+    screen.getAllByTestId("smart-diff-group").forEach((g, i) => {
+      expect(within(g).getByText(new RegExp(`^${counts[i]}$`))).toBeInTheDocument();
     });
   });
 
-  it("preserves the server group order (a shuffled response keeps its order)", () => {
+  it("always shows the fixed role order, whatever order the server returns", () => {
     smartDiffState.data = { ...SMART, groups: [...SMART.groups].reverse() };
     renderTab();
+    goSmart();
     const roles = screen.getAllByTestId("smart-diff-group").map((g) => g.getAttribute("data-role"));
-    expect(roles).toEqual(["boilerplate", "docs", "tests", "core"]);
+    expect(roles).toEqual(["core", "tests", "wiring", "docs", "boilerplate"]);
   });
 
-  it("collapses docs and boilerplate by default and expands on click with cards following the auto-expand rule", () => {
+  it("core/tests/wiring groups start expanded, docs/boilerplate collapsed; files start collapsed and the end button expands them all", () => {
     smartDiffState.data = SMART;
     renderTab();
+    goSmart();
     expect(screen.getByText("src/a.ts")).toBeInTheDocument();
-    expect(screen.getByText("corebody")).toBeInTheDocument();
+    // file rows are collapsed: patch bodies are hidden
+    expect(screen.queryByText("corebody")).not.toBeInTheDocument();
     expect(screen.queryByText("README.md")).not.toBeInTheDocument();
     expect(screen.queryByText("pnpm-lock.yaml")).not.toBeInTheDocument();
 
+    const core = screen.getAllByTestId("smart-diff-group")[0]!;
+    fireEvent.click(within(core).getByTestId("group-toggle-files"));
+    expect(screen.getByText("corebody")).toBeInTheDocument();
+    fireEvent.click(within(core).getByTestId("group-toggle-files"));
+    expect(screen.queryByText("corebody")).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByText("Docs"));
     expect(screen.getByText("README.md")).toBeInTheDocument();
-    // small file card inside an expanded docs group follows AUTO_EXPAND_MAX_LINES
-    expect(screen.getByText("docbody")).toBeInTheDocument();
   });
 
   it("Original order toggle removes group headers and renders GitHub order", () => {
     smartDiffState.data = SMART;
     renderTab();
+    goSmart();
     fireEvent.click(screen.getByRole("button", { name: "Original order" }));
     expect(screen.queryByTestId("smart-diff-group-header")).not.toBeInTheDocument();
     const paths = screen.getAllByText(/\.(md|ts|yaml)$/).map((e) => e.textContent);

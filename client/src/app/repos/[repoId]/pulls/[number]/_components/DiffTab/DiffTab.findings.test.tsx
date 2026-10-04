@@ -111,38 +111,54 @@ function renderTab(canComment = false) {
   );
 }
 
+const goSmart = () => fireEvent.click(screen.getByRole("button", { name: "Smart order" }));
+const expandAll = (i = 0) =>
+  fireEvent.click(within(screen.getAllByTestId("smart-diff-group")[i]!).getByTestId("group-toggle-files"));
+const sev = (id: string, severity: string, file: string, line: number): FindingRecord => ({
+  ...fi(id, file, line),
+  severity: severity as FindingRecord["severity"],
+});
+
 describe("DiffTab findings", () => {
-  it("group header shows the number of FILES with findings (3 findings in one file count once)", () => {
+  it("group header sums FINDINGS by severity (more findings than files is fine)", () => {
     state.smart = SMART;
     state.reviews = [
-      review([fi("1", "src/a.ts", 2), fi("2", "src/a.ts", 2), fi("3", "src/a.ts", 1)]),
+      review([
+        fi("1", "src/a.ts", 2),
+        fi("2", "src/a.ts", 2),
+        fi("3", "src/a.ts", 1),
+        sev("4", "WARNING", "src/b.ts", 2),
+      ]),
     ];
     renderTab();
-    const headers = screen.getAllByTestId("smart-diff-group-header");
-    const dot = within(headers[0]!).getByTestId("group-findings-dot");
-    expect(dot.textContent).toBe("1");
-    expect(dot).toHaveAttribute("aria-label", "1 file with findings");
-    // dot comes before the "N files" label
-    expect(headers[0]!.textContent).toMatch(/Core.*1.*2 files$/);
-    expect(within(headers[0]!).getByText(/^2 files$/)).toBeInTheDocument();
-    expect(within(headers[1]!).getByText(/^1 file$/)).toBeInTheDocument();
-    // tests group has no findings -> no dot
-    expect(within(headers[1]!).queryByTestId("group-findings-dot")).not.toBeInTheDocument();
+    goSmart();
+    const groups = screen.getAllByTestId("smart-diff-group");
+    const badges = within(groups[0]!).getAllByTestId("group-findings-dot");
+    expect(badges.map((b) => [b.getAttribute("data-severity"), b.textContent])).toEqual([
+      ["CRITICAL", "3"],
+      ["WARNING", "1"],
+    ]);
+    expect(badges[0]).toHaveAttribute("aria-label", "3 findings");
+    expect(badges[1]).toHaveAttribute("aria-label", "1 finding");
+    // tests group has no findings -> no badge
+    expect(within(groups[1]!).queryByTestId("group-findings-dot")).not.toBeInTheDocument();
   });
 
-  it("group counter and file dot both come from the reviews, not from finding_lines", () => {
+  it("group badges and file dots come from the reviews, not from finding_lines", () => {
     // SMART carries finding_lines [2] for src/a.ts, but no review has findings
     state.smart = SMART;
     state.reviews = [review([])];
     renderTab();
+    goSmart();
     expect(screen.queryByTestId("group-findings-dot")).not.toBeInTheDocument();
     expect(screen.queryByTestId("file-findings-dot")).not.toBeInTheDocument();
   });
 
-  it("dismissing a finding updates the group counter and the file dot together", () => {
+  it("dismissing a finding updates the group badge and the file dot together", () => {
     state.smart = SMART;
     state.reviews = [review([fi("1", "src/a.ts", 2)])];
     const view = renderTab();
+    goSmart();
     expect(screen.getByTestId("group-findings-dot").textContent).toBe("1");
     expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
 
@@ -157,35 +173,55 @@ describe("DiffTab findings", () => {
     expect(screen.queryByTestId("file-findings-dot")).not.toBeInTheDocument();
   });
 
-  it("an accepted finding stays visible: dot and counter remain", () => {
+  it("an accepted finding stays visible: dot and badge remain", () => {
     state.smart = SMART;
-    state.reviews = [
-      review([{ ...fi("1", "src/a.ts", 2), accepted_at: "2026-01-02T00:00:00Z" }]),
-    ];
+    state.reviews = [review([{ ...fi("1", "src/a.ts", 2), accepted_at: "2026-01-02T00:00:00Z" }])];
     renderTab();
+    goSmart();
     expect(screen.getByTestId("group-findings-dot").textContent).toBe("1");
     expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
   });
 
-  it("shows no group dot when there are no findings", () => {
-    state.smart = { ...SMART, groups: SMART.groups.map((g) => ({ ...g, files: g.files.map((f) => ({ ...f, finding_lines: [] })) })) };
+  it("file header shows the dot plus an icon + count per blocker / warning", () => {
+    state.smart = SMART;
+    state.reviews = [
+      review([fi("1", "src/a.ts", 2), fi("2", "src/a.ts", 1), sev("3", "WARNING", "src/a.ts", 2)]),
+    ];
     renderTab();
-    expect(screen.queryByTestId("group-findings-dot")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
+    const chips = screen.getAllByTestId("file-findings-count");
+    expect(chips.map((c) => [c.getAttribute("data-severity"), c.textContent])).toEqual([
+      ["CRITICAL", "2"],
+      ["WARNING", "1"],
+    ]);
   });
 
-  it("renders file dots and inline finding cards in grouped mode", () => {
+  it("renders inline finding cards in grouped mode once the files are expanded", () => {
     state.smart = SMART;
     state.reviews = [review([fi("1", "src/a.ts", 2)])];
     renderTab();
+    goSmart();
     expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
+    expect(screen.queryByText("title-1")).not.toBeInTheDocument(); // file rows start collapsed
+    expandAll(0);
     expect(screen.getByText("title-1")).toBeInTheDocument();
   });
 
-  it("renders file dots and cards in Original order, without header counters", () => {
+  it("the finding card shows category, location, confidence, rationale and the suggested fix", () => {
+    state.reviews = [review([{ ...fi("1", "src/a.ts", 2), suggestion: "do-this-instead" }])];
+    renderTab();
+    expect(screen.getByTestId("smart-finding-category").textContent).toBe("bug");
+    expect(screen.getByTestId("smart-finding-meta").textContent).toContain("src/a.ts:2");
+    expect(screen.getByTestId("smart-finding-meta").textContent).toContain("90% conf");
+    expect(screen.getByText("why-1")).toBeInTheDocument();
+    expect(screen.getByText("Suggested fix")).toBeInTheDocument();
+    expect(screen.getByText("do-this-instead")).toBeInTheDocument();
+  });
+
+  it("renders file dots and cards in the default Original order, without group badges", () => {
     state.smart = SMART;
     state.reviews = [review([fi("1", "src/a.ts", 2)])];
     renderTab();
-    fireEvent.click(screen.getByRole("button", { name: "Original order" }));
     expect(screen.queryByTestId("group-findings-dot")).not.toBeInTheDocument();
     expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
     expect(screen.getByText("title-1")).toBeInTheDocument();
@@ -197,62 +233,59 @@ describe("DiffTab findings", () => {
     expect(screen.getByText("title-1")).toBeInTheDocument();
   });
 
-  it("one button hides and shows BOTH github comments and finding cards; dots and counters stay", () => {
+  it("Hide/Show findings only touches finding cards; dots and badges stay, github comments stay", () => {
     state.smart = SMART;
     state.reviews = [review([fi("1", "src/a.ts", 2), fi("far", "src/a.ts", 900)])];
     state.comments = [ghComment(1, "src/a.ts", 2)];
     renderTab();
-    // default: both shown
     expect(screen.getByText("title-1")).toBeInTheDocument();
     expect(screen.getByTestId("unmatched-findings")).toBeInTheDocument();
     expect(screen.getByText("gh-body-1")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /(hide|show) comments/i })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /(hide|show) findings/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Hide comments/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide findings (2)" }));
     expect(screen.queryByText("title-1")).not.toBeInTheDocument();
     expect(screen.queryByTestId("unmatched-findings")).not.toBeInTheDocument();
-    expect(screen.queryByText("gh-body-1")).not.toBeInTheDocument();
+    expect(screen.getByText("gh-body-1")).toBeInTheDocument();
     expect(screen.getByTestId("file-findings-dot")).toBeInTheDocument();
+    goSmart();
     expect(screen.getByTestId("group-findings-dot")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Show comments/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Show findings (2)" }));
+    expandAll(0);
     expect(screen.getByText("title-1")).toBeInTheDocument();
+  });
+
+  it("Hide/Show comments is a separate button, only present with github comments", () => {
+    state.smart = SMART;
+    state.reviews = [review([fi("1", "src/a.ts", 2)])];
+    state.comments = [ghComment(1, "src/a.ts", 2)];
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: "Hide comments (1)" }));
+    expect(screen.queryByText("gh-body-1")).not.toBeInTheDocument();
+    expect(screen.getByText("title-1")).toBeInTheDocument(); // findings unaffected
+    fireEvent.click(screen.getByRole("button", { name: "Show comments (1)" }));
     expect(screen.getByText("gh-body-1")).toBeInTheDocument();
   });
 
-  it("toggle is visible with findings only, shows the count and actually hides the finding card", () => {
-    state.smart = SMART;
-    state.reviews = [review([fi("1", "src/a.ts", 2)])];
-    renderTab();
-    expect(screen.getByRole("button", { name: "Hide comments (1)" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Hide comments (1)" }));
-    expect(screen.queryByText("title-1")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show comments (1)" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show comments (1)" }));
-    expect(screen.getByText("title-1")).toBeInTheDocument();
-  });
-
-  it("count is github comments + findings", () => {
+  it("findings button counts findings only (not github comments)", () => {
     state.smart = SMART;
     state.reviews = [review([fi("1", "src/a.ts", 2), fi("2", "src/b.ts", 2)])];
     state.comments = [ghComment(1, "src/a.ts", 2), ghComment(2, "src/a.ts", 2), ghComment(3, "src/a.ts", 2)];
     renderTab();
-    expect(screen.getByRole("button", { name: "Hide comments (5)" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Hide comments (5)" }));
-    expect(screen.getByRole("button", { name: "Show comments (5)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide findings (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide comments (3)" })).toBeInTheDocument();
   });
 
   it("findings on files that are not in the PR do not inflate the count or show the button", () => {
     state.smart = SMART;
     state.reviews = [review([fi("ghost", "src/not-in-pr.ts", 1)])];
     renderTab();
-    expect(screen.queryByRole("button", { name: /(hide|show) comments/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(hide|show) findings/i })).not.toBeInTheDocument();
 
     cleanup();
     state.reviews = [review([fi("1", "src/a.ts", 2), fi("ghost", "src/not-in-pr.ts", 1)])];
     renderTab();
-    expect(screen.getByRole("button", { name: "Hide comments (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide findings (1)" })).toBeInTheDocument();
   });
 
   it("hides outdated github comments too", () => {
@@ -268,34 +301,34 @@ describe("DiffTab findings", () => {
 
   it("posting a comment re-shows comments that were hidden", async () => {
     state.smart = SMART;
-    state.reviews = [review([fi("1", "src/a.ts", 2)])];
+    state.comments = [ghComment(1, "src/a.ts", 2)];
     state.createMutate.mockResolvedValue({});
     renderTab(true);
     fireEvent.click(screen.getByRole("button", { name: /^Hide comments/ }));
-    expect(screen.queryByText("title-1")).not.toBeInTheDocument();
+    expect(screen.queryByText("gh-body-1")).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(screen.getAllByText("body of src/a.ts")[0]!.parentElement!.parentElement!);
     fireEvent.click(screen.getByRole("button", { name: "Add a comment on this line" }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "hello" } });
     fireEvent.click(screen.getByRole("button", { name: "Comment" }));
     await waitFor(() => expect(state.createMutate).toHaveBeenCalled());
-    expect(await screen.findByText("title-1")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Hide comments/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Hide comments/ })).toBeInTheDocument();
   });
 
-  it("toggle is visible with github comments only", () => {
+  it("buttons are hidden when there are neither comments nor findings", () => {
     state.smart = SMART;
-    state.comments = [ghComment(1, "src/a.ts", 2)];
     renderTab();
-    expect(screen.getByRole("button", { name: /^Hide comments/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^Hide comments/ }));
-    expect(screen.queryByText("gh-body-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(hide|show) (comments|findings)/i })).not.toBeInTheDocument();
   });
 
-  it("toggle is hidden when there are neither comments nor findings", () => {
+  it("tells the user the review has not run yet, until a review exists", () => {
     state.smart = SMART;
     renderTab();
-    expect(screen.queryByRole("button", { name: /(hide|show) comments/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("review-not-run").textContent).toBe(prReview.smartDiff.reviewNotRun);
+    cleanup();
+    state.reviews = [review([])];
+    renderTab();
+    expect(screen.queryByTestId("review-not-run")).not.toBeInTheDocument();
   });
 });
 
@@ -306,15 +339,16 @@ describe("DiffTab scope", () => {
     scope_reason: reason ?? null,
   });
 
-  it("out findings produce no inline card, dot, group counter, or Hide-comments count", () => {
+  it("out findings produce no inline card, dot, group badge, or Hide-findings count", () => {
     state.smart = SMART;
     state.reviews = [review([sc("o1", "src/a.ts", 2, "out"), sc("o2", "src/b.ts", 2, "out")])];
     renderTab();
+    goSmart();
     expect(screen.queryByText("title-o1")).not.toBeInTheDocument();
     expect(screen.queryByText("title-o2")).not.toBeInTheDocument();
     expect(screen.queryByTestId("file-findings-dot")).not.toBeInTheDocument();
     expect(screen.queryByTestId("group-findings-dot")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /(hide|show) comments/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(hide|show) findings/i })).not.toBeInTheDocument();
   });
 
   it("out findings are not counted next to in-scope ones; legacy null and in count", () => {
@@ -327,8 +361,9 @@ describe("DiffTab scope", () => {
       ]),
     ];
     renderTab();
-    expect(screen.getByRole("button", { name: "Hide comments (2)" })).toBeInTheDocument();
-    expect(screen.getByTestId("group-findings-dot").textContent).toBe("1");
+    expect(screen.getByRole("button", { name: "Hide findings (2)" })).toBeInTheDocument();
+    goSmart();
+    expect(screen.getByTestId("group-findings-dot").textContent).toBe("2");
     expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
   });
 
@@ -336,7 +371,7 @@ describe("DiffTab scope", () => {
     state.smart = SMART;
     state.reviews = [review([sc("s", "src/b.ts", 2, "signal", "Uses <b>x</b> and **md**")])];
     renderTab();
-    expect(screen.getByRole("button", { name: "Hide comments (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide findings (1)" })).toBeInTheDocument();
     expect(screen.getAllByTestId("file-findings-dot")).toHaveLength(1);
     expect(screen.getByText("title-s")).toBeInTheDocument();
     expect(screen.getByText("Out of scope · serious")).toBeInTheDocument();
@@ -352,8 +387,7 @@ describe("DiffTab scope", () => {
     expect(screen.getByTestId("out-of-scope-hint").textContent).toMatch(
       /^1 out-of-scope finding hidden$/,
     );
-    // still a single toggle, no second one
-    expect(screen.getAllByRole("button", { name: /(hide|show) comments/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /(hide|show) findings/i })).toHaveLength(1);
   });
 
   it("shows the plural hint for several hidden findings and no hint for zero", () => {
@@ -372,11 +406,11 @@ describe("DiffTab scope", () => {
     expect(screen.queryByTestId("out-of-scope-hint")).not.toBeInTheDocument();
   });
 
-  it("the hint stays when comments are hidden, and out findings on files outside the PR are not counted", () => {
+  it("the hint stays when findings are hidden, and out findings on files outside the PR are not counted", () => {
     state.smart = SMART;
     state.reviews = [review([sc("i", "src/a.ts", 2, "in"), sc("o", "src/b.ts", 2, "out"), sc("g", "src/ghost.ts", 1, "out")])];
     renderTab();
-    fireEvent.click(screen.getByRole("button", { name: /^Hide comments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Hide findings/ }));
     expect(screen.getByTestId("out-of-scope-hint").textContent).toMatch(/^1 out-of-scope finding hidden$/);
   });
 });

@@ -103,6 +103,33 @@ export const fs = {
     letterSpacing: "0.06em",
     color,
   }),
+  category: {
+    fontSize: 11,
+    color: "var(--text-muted)",
+    border: "1px solid var(--border)",
+    borderRadius: 4,
+    padding: "1px 6px",
+  } satisfies CSSProperties,
+  meta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    color: "var(--text-muted)",
+    wordBreak: "break-all",
+  } satisfies CSSProperties,
+  confidence: (c: number): CSSProperties => ({
+    color: c >= 0.85 ? "var(--ok-text)" : c >= 0.6 ? "var(--warn)" : "var(--text-muted)",
+    whiteSpace: "nowrap",
+  }),
+  fixLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: "var(--text-muted)",
+    marginBottom: 4,
+  } satisfies CSSProperties,
   tag: { fontSize: 11, color: "var(--text-muted)" } satisfies CSSProperties,
   signalTag: { fontSize: 11, fontWeight: 700, color: "var(--warn)" } satisfies CSSProperties,
   scopeReason: {
@@ -133,6 +160,14 @@ export const fs = {
     letterSpacing: "0.06em",
     color: "var(--text-muted)",
   } satisfies CSSProperties,
+  countChip: (color: string): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    fontSize: 12,
+    fontWeight: 600,
+    color,
+  }),
   /** Header dot on a file card: a filled circle, no number. */
   dot: (color: string): CSSProperties => ({
     display: "inline-block",

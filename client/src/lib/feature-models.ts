@@ -19,11 +19,11 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     defaultModel: "deepseek/deepseek-v4-flash",
   },
   {
-    id: "review_intent",
-    label: "Intent Classifier",
-    description: "Fast model for PR intent classification (e.g., Gemini Flash Lite).",
+    id: "standard",
+    label: "Standard Model",
+    description: "Used for: Intent, Multi-agent review Aggregate, and Blast radius summary.",
     defaultProvider: "openrouter",
-    defaultModel: "openrouter/google/gemini-2.5-flash-lite",
+    defaultModel: "google/gemini-2.5-flash-lite",
   },
   {
     id: "risk_brief",
@@ -40,10 +40,24 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     defaultModel: "gpt-4.1",
   },
   {
+    id: "eval_reference",
+    label: "Eval Reference Agent",
+    description: "Runs skill eval cases with/without the skill attached.",
+    defaultProvider: "openrouter",
+    defaultModel: "deepseek/deepseek-v4-flash",
+  },
+  {
     id: "conventions",
     label: "Conventions",
     description: "Extracts coding conventions from the repo.",
     defaultProvider: "openai",
     defaultModel: "gpt-5.4",
+  },
+  {
+    id: "memory_learning",
+    label: "Memory · Learning",
+    description: "Learns reusable memory from review activity.",
+    defaultProvider: "openrouter",
+    defaultModel: "deepseek/deepseek-v4-flash",
   },
 ];

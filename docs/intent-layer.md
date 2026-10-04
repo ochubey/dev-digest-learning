@@ -62,7 +62,7 @@ flowchart LR
 4. Call flash model with Zod `IntentSchema` (temperature=0)
 5. Output: `{summary, in_scope[], out_of_scope[], confidence, sources[], missing_context[]}`
 6. Cache on head SHA; stale if PR updates
-7. Fail-open: log error, intent is null. If the `review_intent` provider cannot be set up, the main review model is used instead (warning in the run log)
+7. Fail-open: log error, intent is null. If the `standard` feature-model provider cannot be set up, the main review model is used instead (warning in the run log)
 8. Confidence = `min(model, ceiling)`; the ceiling is computed in code from evidence (`confidence.ts`), the model's own number is only a self-assessment:
    - empty description: 0.4 (0.0 when no external source was fetched)
    - an explicitly referenced plan, spec or ticket that is unavailable (not found or fetch error): 0.5
@@ -160,7 +160,7 @@ No separate judge call. Exactly two model calls per single-pass run: the intent 
 
 ## Settings
 
-**Feature model:** `review_intent`
+**Feature model:** `standard` (Settings → Feature Models → "Standard Model"; an override saved under the legacy `review_intent` key is still honoured)
 - Default: `openrouter/google/gemini-2.5-flash-lite` (10x cheaper than GPT-4.1)
 - User-overridable via Settings UI
 - Used for intent derivation only (scope is labelled by the main review model)

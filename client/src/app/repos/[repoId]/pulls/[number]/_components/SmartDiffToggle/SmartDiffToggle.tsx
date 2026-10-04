@@ -1,4 +1,4 @@
-/* SmartDiffToggle — "Original order" switch: on = flat GitHub-order list. */
+/* SmartDiffToggle — Smart order / Original order segmented switch. */
 "use client";
 
 import { useTranslations } from "next-intl";
@@ -6,21 +6,29 @@ import { Button } from "@devdigest/ui";
 
 interface SmartDiffToggleProps {
   originalOrder: boolean;
-  onToggle: () => void;
+  onChange: (originalOrder: boolean) => void;
 }
 
-export function SmartDiffToggle({ originalOrder, onToggle }: SmartDiffToggleProps) {
+export function SmartDiffToggle({ originalOrder, onChange }: SmartDiffToggleProps) {
   const t = useTranslations("prReview");
   return (
-    <Button
-      kind="ghost"
-      size="sm"
-      icon="Layers"
-      active={originalOrder}
-      aria-pressed={originalOrder}
-      onClick={onToggle}
-    >
-      {t("smartDiff.originalOrder")}
-    </Button>
+    <>
+      <Button
+        kind={originalOrder ? "ghost" : "primary"}
+        size="sm"
+        aria-pressed={!originalOrder}
+        onClick={() => onChange(false)}
+      >
+        {t("smartDiff.smartOrder")}
+      </Button>
+      <Button
+        kind={originalOrder ? "primary" : "ghost"}
+        size="sm"
+        aria-pressed={originalOrder}
+        onClick={() => onChange(true)}
+      >
+        {t("smartDiff.originalOrder")}
+      </Button>
+    </>
   );
 }

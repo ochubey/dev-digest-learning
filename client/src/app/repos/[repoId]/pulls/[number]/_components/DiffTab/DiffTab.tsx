@@ -11,7 +11,7 @@ import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { SmartDiffGroup } from "../SmartDiffGroup";
 import { SmartDiffToggle } from "../SmartDiffToggle";
-import { groupFiles } from "./helpers";
+import { groupFiles, withEmptyRoles } from "./helpers";
 
 interface DiffTabProps {
   prId: string | null;
@@ -25,12 +25,13 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   const t = useTranslations("prReview");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
-  // One switch for both GitHub comments and inline finding cards (dots/counters stay).
+  // Two independent switches: GitHub comments, and inline finding cards (dots/counters stay).
   const [showComments, setShowComments] = React.useState(true);
+  const [showFindings, setShowFindings] = React.useState(true);
 
   const { data: smartDiff, isError: smartDiffFailed } = useSmartDiff(prId);
-  // Off = grouped by role; on = flat list in GitHub order.
-  const [originalOrder, setOriginalOrder] = React.useState(false);
+  // On (default) = flat list in GitHub order; off = grouped by role (Smart order).
+  const [originalOrder, setOriginalOrder] = React.useState(true);
 
   // Smart Diff findings: ONE visible list (lib/latest-findings.ts) drives the group
   // counters, the file dots and the inline cards.
@@ -46,12 +47,13 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
     const paths = new Set(files.map((f) => f.path));
     return hiddenByScope(reviews).filter((f) => paths.has(f.file)).length;
   }, [reviews, files]);
-  const findings: DiffFindingsApi = { items: findingItems, show: showComments, prId };
+  const findings: DiffFindingsApi = { items: findingItems, show: showFindings, prId };
+  const reviewNotRun = !!reviews && !reviews.some((r) => r.kind === "review");
 
   const commentCount = comments?.length ?? 0;
   // While smart-diff is loading or failed `smartDiff` is undefined -> flat list.
   const groups = React.useMemo(
-    () => (smartDiff ? groupFiles(files, smartDiff, findingItems) : null),
+    () => (smartDiff ? withEmptyRoles(groupFiles(files, smartDiff, findingItems)) : null),
     [files, smartDiff, findingItems],
   );
 
@@ -78,13 +80,20 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
         icon="Code"
         right={
           <div style={{ display: "flex", gap: 6 }}>
-            {groups && (
-              <SmartDiffToggle
-                originalOrder={originalOrder}
-                onToggle={() => setOriginalOrder((v) => !v)}
-              />
+            {groups && <SmartDiffToggle originalOrder={originalOrder} onChange={setOriginalOrder} />}
+            {findingItems.length > 0 && (
+              <Button
+                kind="ghost"
+                size="sm"
+                icon={showFindings ? "EyeOff" : "Eye"}
+                onClick={() => setShowFindings((v) => !v)}
+              >
+                {showFindings
+                  ? t("smartDiff.hideFindings", { count: findingItems.length })
+                  : t("smartDiff.showFindings", { count: findingItems.length })}
+              </Button>
             )}
-            {(commentCount > 0 || findingItems.length > 0) && (
+            {commentCount > 0 && (
               <Button
                 kind="ghost"
                 size="sm"
@@ -92,8 +101,8 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
                 onClick={() => setShowComments((v) => !v)}
               >
                 {showComments
-                  ? t("smartDiff.hideComments", { count: commentCount + findingItems.length })
-                  : t("smartDiff.showComments", { count: commentCount + findingItems.length })}
+                  ? t("smartDiff.hideComments", { count: commentCount })
+                  : t("smartDiff.showComments", { count: commentCount })}
               </Button>
             )}
           </div>
@@ -101,6 +110,22 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
       >
         {t("smartDiff.filesChanged", { count: filesCount })}
       </SectionLabel>
+      {reviewNotRun && (
+        <div
+          data-testid="review-not-run"
+          role="status"
+          style={{
+            margin: "0 0 10px",
+            padding: "10px 12px",
+            fontSize: 13,
+            color: "var(--text-muted)",
+            border: "1px dashed var(--border)",
+            borderRadius: 6,
+          }}
+        >
+          {t("smartDiff.reviewNotRun")}
+        </div>
+      )}
       {hiddenCount > 0 && (
         <div
           data-testid="out-of-scope-hint"
@@ -123,6 +148,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
               role={g.role}
               files={g.files}
               findingFiles={g.findingFiles}
+              findingCounts={g.findingCounts}
               commenting={commenting}
               findings={findings}
             />

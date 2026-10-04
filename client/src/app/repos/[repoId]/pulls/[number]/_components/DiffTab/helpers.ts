@@ -1,11 +1,37 @@
 import type { FindingRecord, PrFile, SmartDiff, SmartDiffRole } from "@devdigest/shared";
 import { filesWithFindings } from "@/lib/latest-findings";
+import { ROLE_ORDER } from "./constants";
 
 export interface FileGroup {
   role: SmartDiffRole;
   files: PrFile[];
   /** Number of files in the group that have findings. */
   findingFiles: number;
+  /** Findings in the group's files by display severity (can exceed the file count). */
+  findingCounts: SeverityCounts;
+}
+
+export interface SeverityCounts {
+  CRITICAL: number;
+  WARNING: number;
+  SUGGESTION: number;
+}
+
+export const emptyCounts = (): SeverityCounts => ({ CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
+
+/** Count findings per display bucket (anything but CRITICAL/WARNING counts as SUGGESTION). */
+export function countBySeverity(findings: readonly FindingRecord[]): SeverityCounts {
+  const out = emptyCounts();
+  for (const f of findings) out[f.severity === "CRITICAL" || f.severity === "WARNING" ? f.severity : "SUGGESTION"]++;
+  return out;
+}
+
+/** Every role in display order; roles without files get an empty group (shown disabled). */
+export function withEmptyRoles(groups: readonly FileGroup[]): FileGroup[] {
+  return ROLE_ORDER.map(
+    (role) =>
+      groups.find((g) => g.role === role) ?? { role, files: [], findingFiles: 0, findingCounts: emptyCounts() },
+  );
 }
 
 /** Join PR files (with patches) to smart-diff entries by path. The group order and
@@ -36,7 +62,7 @@ export function groupFiles(
       out.push(f);
       if (withFindings.has(sf.path)) findingFiles++;
     }
-    groups.push({ role: g.role, files: out, findingFiles });
+    groups.push({ role: g.role, files: out, findingFiles, findingCounts: emptyCounts() });
   }
 
   const missing = files.filter((f) => !seen.has(f.path));
@@ -46,8 +72,12 @@ export function groupFiles(
     if (core) {
       core.files.push(...missing);
       core.findingFiles += extra;
-    } else groups.unshift({ role: "core", files: missing, findingFiles: extra });
+    } else groups.unshift({ role: "core", files: missing, findingFiles: extra, findingCounts: emptyCounts() });
   }
 
+  for (const g of groups) {
+    const paths = new Set(g.files.map((f) => f.path));
+    g.findingCounts = countBySeverity(visibleFindings.filter((f) => paths.has(f.file)));
+  }
   return groups.filter((g) => g.files.length > 0);
 }

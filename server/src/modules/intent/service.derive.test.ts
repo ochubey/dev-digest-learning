@@ -335,3 +335,58 @@ describe('IntentService confidence ceiling from source evidence', () => {
     expect(res.intent?.confidence).toBe(0.5);
   });
 });
+
+describe('IntentService reuseIfSameHead (review runs)', () => {
+  const cached = (sha: string) => ({
+    summary: 'Old summary',
+    inScope: ['a'],
+    outOfScope: [],
+    confidence: 0.7,
+    sources: [],
+    missingContext: [],
+    derivedFromHeadSha: sha,
+    cacheKeyHash: 'different-hash',
+  });
+  const run = (svc: IntentService, extra = {}) =>
+    svc.deriveIntentDetailed(pull, repo, [], 'openrouter' as never, 'flash', {
+      reuseIfSameHead: true,
+      ...extra,
+    });
+
+  it('reuses the intent without refs or LLM when the head SHA is unchanged', async () => {
+    const llm = okLlm();
+    const { svc, upsertIntent } = makeService({ cached: cached('sha1'), llm: () => llm });
+    const res = await run(svc);
+    expect(res.status).toBe('cached');
+    expect(res.intent?.summary).toBe('Old summary');
+    expect(res.meta?.reused).toBe(true);
+    expect(llm.completeStructured).not.toHaveBeenCalled();
+    expect(upsertIntent).not.toHaveBeenCalled();
+  });
+
+  it('re-derives when the head SHA changed', async () => {
+    const llm = okLlm();
+    const { svc } = makeService({ cached: cached('old1234'), llm: () => llm });
+    const res = await run(svc);
+    expect(res.status).toBe('derived');
+    expect(llm.completeStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('derives when nothing is persisted yet, and reports the LLM call via onLlmCall', async () => {
+    const llm = okLlm();
+    const { svc } = makeService({ llm: () => llm });
+    const onLlmCall = vi.fn();
+    const res = await run(svc, { onLlmCall });
+    expect(res.status).toBe('derived');
+    expect(onLlmCall).toHaveBeenCalledTimes(1);
+    expect(onLlmCall.mock.calls[0]![0]).toMatchObject({ provider: 'openrouter', model: 'flash' });
+    expect(onLlmCall.mock.calls[0]![0].estPromptTokens).toBeGreaterThan(0);
+  });
+
+  it('force (Recalculate) always re-derives, even with an unchanged head SHA', async () => {
+    const llm = okLlm();
+    const { svc } = makeService({ cached: cached('sha1'), llm: () => llm });
+    const res = await run(svc, { force: true });
+    expect(res.status).toBe('derived');
+  });
+});

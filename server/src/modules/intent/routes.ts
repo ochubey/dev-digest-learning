@@ -177,8 +177,8 @@ export default async function intentRoutes(appBase: FastifyInstance) {
       const github = await container.github();
       const service = new IntentService(container, github);
 
-      // Resolve review_intent feature model (defaults to openrouter flash model)
-      const featureModel = await resolveFeatureModel(container, workspaceId, 'review_intent');
+      // Resolve the standard feature model (defaults to openrouter flash model)
+      const featureModel = await resolveFeatureModel(container, workspaceId, 'standard');
 
       // Fallback: the workspace's first enabled agent's model (the "main review model")
       const [agent] = await container.db

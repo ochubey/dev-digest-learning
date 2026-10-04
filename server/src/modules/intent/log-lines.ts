@@ -23,6 +23,7 @@ export function loadLine(meta?: DeriveMeta, reason?: string): string {
   if (!meta || meta.cache === 'not_reached') {
     return `intent.load: not reached (${asciiSafe(reason ?? 'unknown')})`;
   }
+  if (meta.reused) return 'intent.load: reused existing intent (head SHA unchanged, no LLM call)';
   const how = { hit: 'cache hit', miss: 'cache miss', bypass: 'cache bypassed (force)' }[meta.cache];
   return `intent.load: ${how}`;
 }
@@ -36,6 +37,7 @@ export function resolveRefsLine(meta?: DeriveMeta, reason?: string): string {
   if (!meta || meta.refsReached === false) {
     return `intent.resolve_refs: not reached (${asciiSafe(reason ?? 'unknown')})`;
   }
+  if (meta.reused) return 'intent.resolve_refs: skipped (existing intent reused)';
   if (meta.refSources.length === 0) return 'intent.resolve_refs: no references in PR title/body';
   const parts = meta.refSources.map((r) => `${r.label}: ${STATUS_WORD[r.status]}`);
   return `intent.resolve_refs: ${parts.join(', ')}`;

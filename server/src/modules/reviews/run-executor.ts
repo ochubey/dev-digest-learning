@@ -51,7 +51,7 @@ interface DeriveIntentParams {
   runLog: RunLogger;
   correlationId: string;
   logger?: Logger;
-  /** Main review model: used (with a warning) if the review_intent feature model is unavailable. */
+  /** Main review model: used (with a warning) if the standard feature model is unavailable. */
   fallback?: { provider: Provider; model: string };
 }
 
@@ -210,7 +210,8 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
-    // Derive intent once per run (skip if already derived and SHA matches)
+    // Derive intent when none exists or the PR head SHA changed; otherwise reuse it.
+    // Re-deriving is the manual Regenerate button only (POST /pulls/:id/intent/derive).
     const firstAgent = jobs[0]?.agent;
     const intent = await this.deriveIntent({
       workspaceId,
@@ -276,20 +277,36 @@ export class ReviewRunExecutor {
     try {
       const github = await this.container.github();
       const intentService = new IntentService(this.container, github);
-      const featureModel = await resolveFeatureModel(this.container, workspaceId, 'review_intent');
+      const featureModel = await resolveFeatureModel(this.container, workspaceId, 'standard');
       const fullModel = `${featureModel.provider}/${featureModel.model}`;
 
       const intentStartTime = Date.now();
       // Files + hunk headers come from the diff this run loaded (not the pr_files table,
       // which can be empty: see intentFilesFromDiff for the root cause).
       const prFiles = intentFilesFromDiff(diff);
-      const result = await intentService.deriveIntentDetailed(
-        pull,
-        { owner: repo.owner, name: repo.name },
-        prFiles,
-        featureModel.provider,
-        featureModel.model,
-        { fallback },
+      const fullDiffTokens = Math.ceil((diff.raw?.length ?? 0) / 4);
+      const result = await runLog.step(
+        'Deriving PR intent',
+        () =>
+          intentService.deriveIntentDetailed(
+            pull,
+            { owner: repo.owner, name: repo.name },
+            prFiles,
+            featureModel.provider,
+            featureModel.model,
+            {
+              fallback,
+              reuseIfSameHead: true,
+              onLlmCall: ({ provider, model, estPromptTokens }) => {
+                runLog.info(
+                  `Intent input: ~${estPromptTokens} est. tokens (vs ~${fullDiffTokens} for full diff)`,
+                  { step: 'intent.input', correlationId },
+                );
+                runLog.info(`Intent: calling ${provider}/${model}`, { step: 'intent.call', correlationId });
+              },
+            },
+          ),
+        { kind: 'tool' },
       );
       const intentDurationMs = Date.now() - intentStartTime;
 
@@ -348,6 +365,12 @@ export class ReviewRunExecutor {
         correlationId,
         success: true,
       });
+      runLog.info(
+        result.status === 'cached'
+          ? 'Intent reused (head SHA unchanged) — injecting into review prompt'
+          : 'Intent derived — injecting into review prompt',
+        { step: 'intent.inject', correlationId },
+      );
       const policy = reviewIntentPolicy(intent);
       if (policy.line) {
         runLog.info(policy.line, {

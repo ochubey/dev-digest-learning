@@ -20,6 +20,8 @@ const PROMPT_FILE_CAP = 100;
 export interface DeriveMeta {
   /** `hit` = served from cache; `miss` = derived; `bypass` = derived because `force` skipped the cache. */
   cache: 'hit' | 'miss' | 'bypass' | 'not_reached';
+  /** True when an existing intent was reused as is (`reuseIfSameHead`): no refs fetched, no LLM call. */
+  reused?: boolean;
   /** False when the failure happened before references were resolved (default: reached). */
   refsReached?: boolean;
   /** `provider/model` actually used for the LLM call (derived only; differs from the requested one on fallback). */
@@ -56,6 +58,14 @@ export type DeriveIntentResult =
 export interface DeriveOptions {
   /** Skip the cache and always call the LLM (manual re-derive). */
   force?: boolean;
+  /**
+   * Reuse the persisted intent when it was derived from the PR's CURRENT head SHA: no ref
+   * fetch, no LLM call. A new head SHA (or no intent yet) derives normally. Review runs set
+   * this; only the manual Regenerate button (`force`) bypasses it. Ignored when `force` is set.
+   */
+  reuseIfSameHead?: boolean;
+  /** Called right before the LLM call (never on a cache hit / reuse): lets callers log the input size and model. */
+  onLlmCall?: (info: { provider: Provider; model: string; estPromptTokens: number }) => void;
   /** Main review model, used (with a warning) when the feature model's provider is unavailable. */
   fallback?: { provider: Provider; model: string };
 }
@@ -120,6 +130,24 @@ export class IntentService {
     const warnings: string[] = [];
     let partial: Pick<DeriveMeta, 'refStatuses' | 'refSources' | 'sources'> | undefined;
     try {
+      if (opts.reuseIfSameHead && !opts.force) {
+        const existing = await this.repo.getIntent(pull.id);
+        if (existing?.summary && existing.derivedFromHeadSha === pull.headSha) {
+          return {
+            status: 'cached',
+            attempts: 0,
+            intent: {
+              summary: existing.summary,
+              in_scope: existing.inScope,
+              out_of_scope: existing.outOfScope,
+              confidence: existing.confidence,
+              sources: existing.sources,
+              missing_context: existing.missingContext,
+            },
+            meta: { cache: 'hit', reused: true, refStatuses: {}, refSources: [], sources: existing.sources, warnings },
+          };
+        }
+      }
       const body = pull.body || '';
       // The cache key covers the linked issue / docs content, so refs are fetched before the
       // cache check (an edited issue must invalidate the cache even without a new commit).
@@ -181,7 +209,7 @@ export class IntentService {
         const reason = err instanceof Error ? err.message : String(err);
         fallbackFrom = `${provider}/${model}`;
         warnings.push(
-          `review_intent model ${provider}/${model} unavailable (${reason}); falling back to main review model ${fb.provider}/${fb.model}`,
+          `standard (feature) model ${provider}/${model} unavailable (${reason}); falling back to main review model ${fb.provider}/${fb.model}`,
         );
         llm = await this.container.llm(fb.provider);
         usedProvider = fb.provider;
@@ -205,6 +233,11 @@ export class IntentService {
       });
 
       llmCalled = true;
+      opts.onLlmCall?.({
+        provider: usedProvider,
+        model: usedModel,
+        estPromptTokens: Math.ceil(prompt.stats.promptChars / 4),
+      });
       const result = await llm.completeStructured<Intent>({
         model: usedModel,
         schema: IntentSchema,

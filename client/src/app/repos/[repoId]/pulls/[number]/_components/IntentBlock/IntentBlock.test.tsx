@@ -84,12 +84,12 @@ describe("IntentBlock", () => {
     expect(screen.queryByText(brief.intent.loadError)).not.toBeInTheDocument();
   });
 
-  it("renders the empty state with a Derive button on 404 and derives on click", () => {
+  it("renders the empty state with a Run Intent button on 404 and derives on click", () => {
     state.error = new ApiError("404 Not Found", 404);
     renderBlock();
     expect(screen.queryByText(brief.intent.loadError)).not.toBeInTheDocument();
     expect(screen.getByText(brief.intent.notDerivedTitle)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Derive intent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Intent" }));
     expect(state.derive).toHaveBeenCalledTimes(1);
   });
 
@@ -97,12 +97,12 @@ describe("IntentBlock", () => {
     state.error = new ApiError("500 Server Error", 500);
     renderBlock();
     expect(screen.getByText(brief.intent.loadError)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Derive intent" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run Intent" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
     expect(state.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("renders a normal intent without stale badge or Re-derive", () => {
+  it("renders a normal intent without stale badge, with an always-on Recalculate button", () => {
     state.data = INTENT;
     renderBlock();
     expect(screen.getByText("Add intent layer")).toBeInTheDocument();
@@ -110,14 +110,15 @@ describe("IntentBlock", () => {
     expect(screen.getByText("• billing")).toBeInTheDocument();
     expect(screen.getByText("PR body")).toBeInTheDocument();
     expect(screen.queryByText(brief.intent.stale)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Re-derive" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
+    expect(state.derive).toHaveBeenCalledTimes(1);
   });
 
-  it("stale intent shows the badge and Re-derive triggers the mutation", () => {
+  it("stale intent shows the badge and Recalculate triggers the mutation", () => {
     state.data = { ...INTENT, stale: true };
     renderBlock();
     expect(screen.getByText(brief.intent.stale)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Re-derive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
     expect(state.derive).toHaveBeenCalledTimes(1);
   });
 
@@ -144,7 +145,7 @@ describe("IntentBlock", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(brief.intent.deriveError);
   });
 
-  it("confidence 0: shows the 'Not enough context' card instead of the normal card, with a Re-derive action", () => {
+  it("confidence 0: shows the 'Not enough context' card instead of the normal card, with a Recalculate action", () => {
     state.data = { ...INTENT, confidence: 0 };
     renderBlock();
     expect(screen.getByText(brief.intent.insufficientContext)).toBeInTheDocument();
@@ -153,7 +154,7 @@ describe("IntentBlock", () => {
     expect(screen.queryByText("Add intent layer")).not.toBeInTheDocument();
     expect(screen.queryByText("� derive intent")).not.toBeInTheDocument();
     // action is available even when the intent is not stale
-    fireEvent.click(screen.getByRole("button", { name: "Re-derive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
     expect(state.derive).toHaveBeenCalledTimes(1);
   });
 
@@ -207,5 +208,23 @@ describe("IntentBlock: reason next to an unavailable source", () => {
     withSources([{ label: "Plan at docs/architecture.md", status: "unavailable" }]);
     const chip = screen.getByText("Plan at docs/architecture.md").parentElement!;
     expect(chip).toContainElement(screen.getByTestId("source-reason"));
+  });
+
+  it("renders the summary as a quote and exactly one button (Recalculate)", () => {
+    state.data = INTENT;
+    renderBlock();
+    expect(screen.getByText("Add intent layer").textContent).toBe("“Add intent layer”");
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Recalculate" })).toBeInTheDocument();
+  });
+
+  it("empty state matches the design: title, hint and a Run Intent button", () => {
+    state.error = new ApiError("404 Not Found", 404);
+    renderBlock();
+    expect(screen.getByText("Intent not yet analysed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Run review agents to analyse the intent and scope of this pull request."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run Intent" })).toBeInTheDocument();
   });
 });

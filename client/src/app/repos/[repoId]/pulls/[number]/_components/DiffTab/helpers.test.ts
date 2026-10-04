@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FindingRecord, PrFile, SmartDiff } from "@devdigest/shared";
-import { groupFiles } from "./helpers";
+import { countBySeverity, groupFiles, withEmptyRoles } from "./helpers";
 
 const pf = (path: string): PrFile => ({ path, additions: 1, deletions: 0, patch: "@@ -1 +1 @@\n+x" });
 const sf = (path: string, finding_lines: number[] = []) => ({
@@ -114,5 +114,44 @@ describe("groupFiles", () => {
   it("counts findings on files missing from the response (they land in core)", () => {
     const groups = groupFiles([pf("new.ts")], sd([]), [fnd("1", "new.ts")]);
     expect(groups[0]!.findingFiles).toBe(1);
+  });
+});
+
+describe("severity sums and empty roles", () => {
+  const sev = (id: string, severity: string, file: string): FindingRecord => ({
+    ...fnd(id, file),
+    severity: severity as FindingRecord["severity"],
+  });
+
+  it("countBySeverity buckets unknown severities as SUGGESTION", () => {
+    expect(
+      countBySeverity([sev("1", "CRITICAL", "a"), sev("2", "CRITICAL", "a"), sev("3", "WARNING", "a"), sev("4", "INFO", "a")]),
+    ).toEqual({ CRITICAL: 2, WARNING: 1, SUGGESTION: 1 });
+  });
+
+  it("groupFiles sums findings per group (can exceed the file count) and files missing from the response land in core", () => {
+    const smart: SmartDiff = {
+      groups: [{ role: "tests", files: [sf("t.test.ts")] }],
+      split_suggestion: { too_big: false, total_lines: 2, proposed_splits: [] },
+    };
+    const groups = groupFiles([pf("t.test.ts"), pf("src/x.ts")], smart, [
+      sev("1", "CRITICAL", "src/x.ts"),
+      sev("2", "CRITICAL", "src/x.ts"),
+      sev("3", "WARNING", "t.test.ts"),
+    ]);
+    const by = Object.fromEntries(groups.map((g) => [g.role, g]));
+    expect(by.core!.findingCounts).toEqual({ CRITICAL: 2, WARNING: 0, SUGGESTION: 0 });
+    expect(by.core!.findingFiles).toBe(1);
+    expect(by.tests!.findingCounts).toEqual({ CRITICAL: 0, WARNING: 1, SUGGESTION: 0 });
+  });
+
+  it("withEmptyRoles returns all five roles in fixed order, padding missing ones with empty groups", () => {
+    const smart: SmartDiff = {
+      groups: [{ role: "docs", files: [sf("README.md")] }],
+      split_suggestion: { too_big: false, total_lines: 1, proposed_splits: [] },
+    };
+    const groups = withEmptyRoles(groupFiles([pf("README.md")], smart));
+    expect(groups.map((g) => g.role)).toEqual(["core", "tests", "wiring", "docs", "boilerplate"]);
+    expect(groups.map((g) => g.files.length)).toEqual([0, 0, 0, 1, 0]);
   });
 });

@@ -109,13 +109,22 @@ export function IntentBlock({ prId }: IntentBlockProps) {
       <SectionLabel icon="Target">{t("intent.label")}</SectionLabel>
 
       {/* Summary quote */}
-      {intent.summary && <div style={s.summary}>{intent.summary}</div>}
+      {intent.summary && (
+        <div style={s.summary}>
+          <span aria-hidden="true">“</span>
+          {intent.summary}
+          <span aria-hidden="true">”</span>
+        </div>
+      )}
 
       {/* In Scope / Out of Scope columns */}
       <div style={s.columnsWrap}>
         {/* In Scope column */}
         <div style={s.column}>
-          <div style={s.columnLabel}>{t("intent.inScope")}</div>
+          <div style={{ ...s.columnLabel, color: "var(--ok-text)" }}>
+            <Icon.Check size={13} />
+            {t("intent.inScope")}
+          </div>
           {intent.in_scope && intent.in_scope.length > 0 ? (
             <div style={s.scopeItems}>
               {intent.in_scope.map((item, i) => (
@@ -133,7 +142,10 @@ export function IntentBlock({ prId }: IntentBlockProps) {
 
         {/* Out of Scope column */}
         <div style={s.column}>
-          <div style={s.columnLabel}>{t("intent.outOfScope")}</div>
+          <div style={s.columnLabel}>
+            <Icon.X size={13} />
+            {t("intent.outOfScope")}
+          </div>
           {intent.out_of_scope && intent.out_of_scope.length > 0 ? (
             <div style={s.scopeItems}>
               {intent.out_of_scope.map((item, i) => (
@@ -177,13 +189,18 @@ export function IntentBlock({ prId }: IntentBlockProps) {
 
       {deriveErrorNode}
 
-      {/* Footer: Confidence + Stale badge + Re-derive button */}
+      {/* Footer: the single Recalculate button (always forces a fresh derive), then
+          confidence + stale marker as muted info. */}
       <div style={s.footerWrap}>
-        <div style={s.confidenceWrap}>
-          {intent.confidence !== undefined && (
-            <ConfidenceNum value={intent.confidence} />
-          )}
-        </div>
+        <Button
+          kind="ghost"
+          size="sm"
+          icon="RefreshCw"
+          loading={isRederiving}
+          onClick={() => rederive()}
+        >
+          {t("intent.rederive")}
+        </Button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {intent.stale && (
@@ -196,17 +213,7 @@ export function IntentBlock({ prId }: IntentBlockProps) {
               {t("intent.stale")}
             </Badge>
           )}
-          {intent.stale && (
-            <Button
-              kind="ghost"
-              size="sm"
-              icon="RefreshCw"
-              loading={isRederiving}
-              onClick={() => rederive()}
-            >
-              {t("intent.rederive")}
-            </Button>
-          )}
+          {intent.confidence !== undefined && <ConfidenceNum value={intent.confidence} />}
         </div>
       </div>
     </Card>

@@ -32,7 +32,7 @@ function setup() {
   const container = { github: async () => ({}) } as never;
   const reviewRepo = { getPrFiles: async () => [] } as never;
   const exec = new ReviewRunExecutor(container, reviewRepo, {} as never);
-  const runLog = { info: vi.fn(), error: vi.fn() };
+  const runLog = { info: vi.fn(), error: vi.fn(), step: vi.fn(async (_label: string, fn: () => Promise<unknown>) => fn()) };
   const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   const call = () =>
     (
@@ -151,6 +151,7 @@ describe('ReviewRunExecutor.deriveIntent run-log details', () => {
       'intent.load',
       'intent.resolve_refs',
       'intent.derive',
+      'intent.inject',
     ]);
   });
 
@@ -232,7 +233,7 @@ describe('ReviewRunExecutor.deriveIntent run-log details', () => {
       correlationId: 'c',
       fallback: { provider: 'anthropic', model: 'main' },
     });
-    expect(detailed.mock.calls[0]![5]).toEqual({ fallback: { provider: 'anthropic', model: 'main' } });
+    expect(detailed.mock.calls[0]![5]).toEqual({ reuseIfSameHead: true, fallback: { provider: 'anthropic', model: 'main' }, onLlmCall: expect.any(Function) });
   });
 });
 
@@ -324,5 +325,35 @@ describe('ReviewRunExecutor.deriveIntent: load/resolve_refs logged on failure + 
     const low = lines(b.runLog.info).find((l) => l.startsWith('intent.low_confidence:'))!;
     expect(low).toMatch(/0\.30/);
     expect(low).toMatch(/scope filter inactive/);
+  });
+});
+
+describe('ReviewRunExecutor.deriveIntent: Live Log narrative', () => {
+  beforeEach(() => detailed.mockReset());
+
+  it('wraps the derive in a tool step and logs input size, model call and injection', async () => {
+    const seen: unknown[][] = [];
+    detailed.mockImplementation(async (...args: unknown[]) => {
+      seen.push(args);
+      const opts = args[5] as { onLlmCall?: (i: unknown) => void } | undefined;
+      opts?.onLlmCall?.({ provider: 'openrouter', model: 'flash', estPromptTokens: 3403 });
+      return { status: 'derived', intent: INTENT, attempts: 1, meta: META };
+    });
+    const { call, runLog } = setup();
+    await call();
+    expect(seen.map((a) => a.length)).toEqual([6]);
+    expect(runLog.step.mock.calls[0]![0]).toBe('Deriving PR intent');
+    expect(runLog.step.mock.calls[0]![2]).toEqual({ kind: 'tool' });
+    const out = lines(runLog.info);
+    expect(out).toContain('Intent input: ~3403 est. tokens (vs ~0 for full diff)');
+    expect(out).toContain('Intent: calling openrouter/flash');
+    expect(out).toContain('Intent derived — injecting into review prompt');
+  });
+
+  it('a reused intent says so instead of "derived"', async () => {
+    detailed.mockResolvedValue({ status: 'cached', intent: INTENT, attempts: 0, meta: { ...META, cache: 'hit', reused: true } });
+    const { call, runLog } = setup();
+    await call();
+    expect(lines(runLog.info)).toContain('Intent reused (head SHA unchanged) — injecting into review prompt');
   });
 });
