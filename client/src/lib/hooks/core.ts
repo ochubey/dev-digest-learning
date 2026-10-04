@@ -46,6 +46,7 @@ export function useTestConnection() {
     // cached (possibly empty) model lists so the agent picker refetches, and
     // refresh the "Configured / Not set" key-status badges.
     onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["github-status"] });
       if (res.ok) {
         qc.invalidateQueries({ queryKey: ["provider-models"] });
         qc.invalidateQueries({ queryKey: ["secrets-status"] });
@@ -60,6 +61,23 @@ export function useSecretsStatus() {
     queryKey: ["secrets-status"],
     queryFn: () => api.get<SecretsStatus>("/settings/secrets-status"),
     staleTime: 30_000,
+  });
+}
+
+/** REAL GitHub token check (hits GitHub), unlike the "configured" boolean above. */
+export interface GithubStatus {
+  configured: boolean;
+  ok: boolean;
+  login?: string;
+  reason?: SyncReason;
+  message?: string;
+}
+
+export function useGithubStatus() {
+  return useQuery({
+    queryKey: ["github-status"],
+    queryFn: () => api.get<GithubStatus>("/settings/github-status"),
+    staleTime: 60_000,
   });
 }
 
@@ -108,6 +126,25 @@ export function usePulls(repoId: string | null | undefined) {
     // open, and whenever the window regains focus.
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
+  });
+}
+
+/** Outcome of the last GitHub PR sync (GET /repos/:id/sync-status). */
+export type SyncReason = "no_token" | "bad_credentials" | "no_access" | "rate_limited" | "error";
+export interface RepoSyncStatus {
+  ok: boolean;
+  reason?: SyncReason;
+  status?: number;
+  message?: string;
+  at: string;
+}
+
+/** Re-read after every PR list refresh (`pullsUpdatedAt` is part of the key) so the banner follows the sync. */
+export function useRepoSyncStatus(repoId: string | null | undefined, pullsUpdatedAt?: number) {
+  return useQuery({
+    queryKey: ["pulls", repoId, "sync-status", pullsUpdatedAt ?? 0],
+    queryFn: () => api.get<RepoSyncStatus>(`/repos/${repoId}/sync-status`),
+    enabled: !!repoId && pullsUpdatedAt !== undefined,
   });
 }
 

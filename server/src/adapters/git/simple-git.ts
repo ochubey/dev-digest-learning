@@ -11,6 +11,7 @@ import type {
   GitCommit,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './diff-parser.js';
+import { githubAuthConfig, stripUrlCredentials } from './auth.js';
 
 /**
  * Depth fetched by `sync()`. Deeper than the shallow clone (CLONE_DEPTH=1) so the
@@ -24,7 +25,15 @@ const RESYNC_FETCH_DEPTH = 50;
  * `<cloneDir>/<owner>/<repo>`. We NEVER execute repo code — only git ops.
  */
 export class SimpleGitClient implements GitClient {
-  constructor(private cloneDir: string) {
+  /**
+   * @param tokenProvider resolves the GitHub token lazily (so a token changed in Settings is used
+   *   on the next operation). It is applied as an http header to network operations only; it is
+   *   never placed in a URL.
+   */
+  constructor(
+    private cloneDir: string,
+    private tokenProvider?: () => Promise<string | undefined>,
+  ) {
     // Force non-interactive auth so an unauthenticated/private clone fails in
     // ~1s with a clear error instead of hanging on a credential prompt until the
     // job timeout. Set on process.env (inherited by git subprocesses) rather
@@ -42,6 +51,24 @@ export class SimpleGitClient implements GitClient {
     return simpleGit(this.clonePathFor(repo));
   }
 
+  /** simple-git handle for a network operation (clone/fetch): authenticated via header when a token exists. */
+  private async remoteGit(baseDir: string): Promise<SimpleGit> {
+    const token = await this.tokenProvider?.();
+    return simpleGit(baseDir, token ? { config: githubAuthConfig(token) } : {});
+  }
+
+  /** Older clones were made with the token inside the remote URL: rewrite `origin` to the plain URL. */
+  private async scrubOrigin(repo: RepoRef): Promise<void> {
+    try {
+      const g = this.git(repo);
+      const url = (await g.remote(['get-url', 'origin']))?.toString().trim() ?? '';
+      const plain = stripUrlCredentials(url);
+      if (url && plain !== url) await g.remote(['set-url', 'origin', plain]);
+    } catch {
+      /* no origin / not a repo yet: nothing to scrub */
+    }
+  }
+
   private async exists(path: string): Promise<boolean> {
     try {
       await access(path, constants.F_OK);
@@ -56,7 +83,8 @@ export class SimpleGitClient implements GitClient {
     await mkdir(join(this.cloneDir, repo.owner), { recursive: true });
     if (await this.exists(join(dest, '.git'))) {
       // already cloned → fetch latest
-      await simpleGit(dest).fetch();
+      await this.scrubOrigin(repo);
+      await (await this.remoteGit(dest)).fetch();
       return { path: dest };
     }
     // A prior clone may have timed out mid-write, leaving a partial dir without
@@ -65,13 +93,15 @@ export class SimpleGitClient implements GitClient {
     const args: string[] = [];
     if (opts?.depth) args.push('--depth', String(opts.depth));
     if (opts?.branch) args.push('--branch', opts.branch);
-    await simpleGit(this.cloneDir).clone(url, dest, args);
+    // Never let a credential-bearing URL reach git (args, errors, .git/config).
+    await (await this.remoteGit(this.cloneDir)).clone(stripUrlCredentials(url), dest, args);
     return { path: dest };
   }
 
   async fetchPullHead(repo: RepoRef, n: number): Promise<void> {
     // Fetch the PR head ref into a local ref (GitHub exposes pull/<n>/head).
-    await this.git(repo).fetch(['origin', `pull/${n}/head:pr-${n}`]);
+    await this.scrubOrigin(repo);
+    await (await this.remoteGit(this.clonePathFor(repo))).fetch(['origin', `pull/${n}/head:pr-${n}`]);
   }
 
   async sync(repo: RepoRef, branch: string): Promise<{ head: string }> {
@@ -81,8 +111,9 @@ export class SimpleGitClient implements GitClient {
     // Fetch a bounded depth (> the shallow CLONE_DEPTH) so the prior indexed sha
     // is usually reachable for an incremental diff; the indexer falls back to a
     // full reindex when it isn't.
+    await this.scrubOrigin(repo);
     const g = this.git(repo);
-    await g.fetch(['origin', branch, '--depth', String(RESYNC_FETCH_DEPTH)]);
+    await (await this.remoteGit(this.clonePathFor(repo))).fetch(['origin', branch, '--depth', String(RESYNC_FETCH_DEPTH)]);
     await g.reset(['--hard', `origin/${branch}`]);
     return { head: (await g.revparse(['HEAD'])).trim() };
   }

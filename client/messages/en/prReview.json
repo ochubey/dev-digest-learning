@@ -99,6 +99,16 @@
     }
   },
   "list": {
+    "sync": {
+      "title": "Couldn't sync pull requests from GitHub",
+      "no_token": "No GitHub token is configured. Add GITHUB_TOKEN in server/.env or Settings → API keys, then restart the server.",
+      "bad_credentials": "GitHub rejected the token (bad credentials, it may be expired or revoked). Create a new token, update GITHUB_TOKEN in server/.env and Settings → API keys, then restart the server.",
+      "no_access": "The token can't see this repository (not found or no permission). Check the repository name and the token's repository access.",
+      "rate_limited": "GitHub rate limit reached. Try again in a few minutes.",
+      "error": "GitHub request failed.",
+      "showingSaved": "Showing the pull requests saved earlier (may be out of date).",
+      "settings": "Open API key settings"
+    },
     "breadcrumb": "Pull Requests",
     "title": "Pull Requests",
     "summary": "{open} open · {needsReview} need review",

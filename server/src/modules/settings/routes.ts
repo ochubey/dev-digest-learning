@@ -30,6 +30,12 @@ export default async function settingsRoutes(appBase: FastifyInstance) {
     return service.getSecretsStatus();
   });
 
+  // Real GitHub token check (hits GitHub): `configured` != `ok` when the token is expired/revoked.
+  app.get('/settings/github-status', async (req) => {
+    await getContext(container, req);
+    return service.getGithubStatus();
+  });
+
   app.put('/settings', { schema: { body: SettingsUpdate } }, async (req) => {
     const { workspaceId, userId } = await getContext(container, req);
     return service.updateSettings(workspaceId, userId, req.body);

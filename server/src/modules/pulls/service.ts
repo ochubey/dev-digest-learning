@@ -13,6 +13,7 @@ import type { Logger } from '../reviews/run-executor.js';
 import * as t from '../../db/schema.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import { deriveReviewStatus } from './status.js';
+import { classifyGithubError, getSync, recordSync, type SyncStatus } from './sync-status.js';
 
 type FindingPreview = {
   severity: Severity;
@@ -43,6 +44,8 @@ export class PullsService {
     try {
       gh = await container.github();
     } catch (err) {
+      const { reason, message } = classifyGithubError(err);
+      recordSync(repo.id, { ok: false, reason, message });
       logger?.warn({ err }, 'GitHub client unavailable (no token / offline); serving persisted PRs');
     }
 
@@ -51,6 +54,7 @@ export class PullsService {
     if (gh) {
       try {
         const pulls = await gh.listPullRequests({ owner: repo.owner, name: repo.name });
+        recordSync(repo.id, { ok: true });
         for (const pr of pulls) {
           await container.db
             .insert(t.pullRequests)
@@ -81,6 +85,7 @@ export class PullsService {
             });
         }
       } catch (err) {
+        recordSync(repo.id, { ok: false, ...classifyGithubError(err) });
         logger?.warn({ err }, 'GitHub PR sync skipped (no token / offline); serving persisted PRs');
       }
     }
@@ -246,6 +251,16 @@ export class PullsService {
       cost_usd: costByPr.get(r.id) ?? null,
       findings: findingsByPr.get(r.id) ?? null,
     }));
+  }
+
+  /** Result of the last PR sync for this repo (drives the PR list banner). */
+  async getSyncStatus(workspaceId: string, repoId: string): Promise<SyncStatus> {
+    const [repo] = await this.container.db
+      .select({ id: t.repos.id })
+      .from(t.repos)
+      .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, repoId)));
+    if (!repo) throw new NotFoundError('Repo not found');
+    return getSync(repo.id);
   }
 
   async getPullDetail(workspaceId: string, id: string, logger?: Logger): Promise<PrDetail> {

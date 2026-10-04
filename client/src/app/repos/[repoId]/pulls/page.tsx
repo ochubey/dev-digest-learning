@@ -13,13 +13,14 @@ import {
 } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
-import { usePulls, useRefreshRepo } from "@/lib/hooks";
+import { usePulls, useRefreshRepo, useRepoSyncStatus } from "@/lib/hooks";
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { ApiError } from "@/lib/api";
 import { COLUMN_KEYS, SKELETON_ROWS } from "./constants";
 import { s } from "./styles";
 import { PRRow } from "./_components/PRRow";
 import { FilterBar } from "./_components/FilterBar";
+import { SyncBanner } from "./_components/SyncBanner";
 
 /** Open PRs carry a derived review status; everything else is merged/closed. */
 const OPEN_STATUSES = new Set(["needs_review", "reviewed", "stale"]);
@@ -32,7 +33,9 @@ export default function PullsPage() {
   const router = useRouter();
   const { activeRepo } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
-  const { data: pulls, isLoading, isError, error, refetch } = usePulls(repoId);
+  const { data: pulls, isLoading, isError, error, refetch, dataUpdatedAt } = usePulls(repoId);
+  // Asked after each list load: a failed GitHub sync otherwise looks like "no pull requests".
+  const { data: sync } = useRepoSyncStatus(repoId, pulls ? dataUpdatedAt : undefined);
   const refresh = useRefreshRepo();
 
   // Default to "needs review" — the most actionable filter on open.
@@ -84,6 +87,8 @@ export default function PullsPage() {
           <AutoTriggerStatus on={false} />
         </div>
       </div>
+
+      <SyncBanner sync={sync} />
 
       <div style={s.tableCard}>
         <FilterBar

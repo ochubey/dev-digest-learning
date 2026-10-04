@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Icon, FormField, TextInput } from "@devdigest/ui";
-import { useTestConnection, useSecretsStatus } from "../../../../../../../lib/hooks";
+import { useTestConnection, useSecretsStatus, useGithubStatus } from "../../../../../../../lib/hooks";
 import { ApiError } from "../../../../../../../lib/api";
 import type { ConnTestProvider } from "../../../../../../../lib/types";
 import { SectionTitle } from "../SectionTitle";
@@ -11,9 +11,26 @@ import { KEY_ROWS } from "./constants";
 import { s } from "./styles";
 
 /** "Configured / Not set" pill driven by GET /settings/secrets-status. */
-function StatusBadge({ configured }: { configured: boolean | undefined }) {
+function StatusBadge({
+  configured,
+  invalid,
+  invalidTitle,
+}: {
+  configured: boolean | undefined;
+  /** Configured but rejected by the provider (checked for real, see useGithubStatus). */
+  invalid?: boolean;
+  invalidTitle?: string;
+}) {
   const t = useTranslations("settings");
   if (configured === undefined) return null; // status still loading
+  if (configured && invalid) {
+    return (
+      <span data-testid="key-invalid" title={invalidTitle} style={{ ...s.badge(false), color: "var(--crit)" }}>
+        <span style={{ ...s.badgeDot(false), background: "var(--crit)" }} />
+        {t("apiKeys.invalid")}
+      </span>
+    );
+  }
   return (
     <span style={s.badge(configured)}>
       <span style={s.badgeDot(configured)} />
@@ -27,11 +44,15 @@ function KeyRow({
   provider,
   hint,
   configured,
+  invalid,
+  invalidTitle,
 }: {
   label: string;
   provider: ConnTestProvider;
   hint: string;
   configured: boolean | undefined;
+  invalid?: boolean;
+  invalidTitle?: string;
 }) {
   const t = useTranslations("settings");
   const [val, setVal] = React.useState("");
@@ -50,7 +71,7 @@ function KeyRow({
   };
 
   return (
-    <FormField label={label} hint={hint} right={<StatusBadge configured={configured} />}>
+    <FormField label={label} hint={hint} right={<StatusBadge configured={configured} invalid={invalid} invalidTitle={invalidTitle} />}>
       <div style={s.keyRow}>
         <div style={s.keyInput}>
           <TextInput
@@ -81,6 +102,8 @@ function KeyRow({
 export function SettingsApiKeys() {
   const t = useTranslations("settings");
   const { data: status } = useSecretsStatus();
+  // GitHub is verified against GitHub itself; "Configured" alone can't tell an expired PAT.
+  const { data: github } = useGithubStatus();
   return (
     <div style={s.wrap}>
       <SectionTitle title={t("apiKeys.title")} body={t("apiKeys.body")} />
@@ -91,6 +114,8 @@ export function SettingsApiKeys() {
           provider={row.provider}
           hint={t(row.hintKey)}
           configured={status?.[row.provider]}
+          invalid={row.provider === "github" ? github?.configured === true && github.ok === false : undefined}
+          invalidTitle={row.provider === "github" ? github?.message : undefined}
         />
       ))}
     </div>

@@ -32,7 +32,7 @@ function setup() {
   const container = { github: async () => ({}) } as never;
   const reviewRepo = { getPrFiles: async () => [] } as never;
   const exec = new ReviewRunExecutor(container, reviewRepo, {} as never);
-  const runLog = { info: vi.fn(), error: vi.fn(), step: vi.fn(async (_label: string, fn: () => Promise<unknown>) => fn()) };
+  const runLog = { info: vi.fn(), error: vi.fn(), step: vi.fn(async (_label: string, fn: () => Promise<unknown>, _opts?: unknown) => fn()) };
   const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   const call = () =>
     (

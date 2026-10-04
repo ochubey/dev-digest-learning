@@ -1,11 +1,7 @@
 import { type Repo } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
 import { AppError } from '../../platform/errors.js';
-import {
-  GITHUB_URL_REGEX,
-  GIT_TOKEN_USERNAME,
-  GITHUB_HTTPS_HOST,
-} from './constants.js';
+import { GITHUB_URL_REGEX } from './constants.js';
 
 /**
  * F1 — repos pure helpers (extracted from routes.ts; no behaviour change).
@@ -20,24 +16,6 @@ export function parseRepoUrl(url: string): { owner: string; name: string } {
     throw new AppError('invalid_repo_url', `Could not parse owner/repo from '${url}'`, 400);
   }
   return { owner: match[1], name: match[2] };
-}
-
-/**
- * Embed a token into an https github.com URL so private clones authenticate
- * non-interactively. SSH/non-GitHub URLs are left untouched.
- */
-export function withGitHubToken(url: string, token: string): string {
-  try {
-    const u = new URL(url);
-    if (u.protocol === 'https:' && u.hostname === GITHUB_HTTPS_HOST) {
-      u.username = GIT_TOKEN_USERNAME;
-      u.password = token;
-      return u.toString();
-    }
-  } catch {
-    /* non-URL (e.g. git@github.com:...) — leave as-is */
-  }
-  return url;
 }
 
 /** Map a persisted repo row to the API `Repo` DTO. */
