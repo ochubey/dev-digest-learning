@@ -73,6 +73,43 @@ describe('buildBlastRadius', () => {
     expect(out.downstream[0]!.callers).toHaveLength(1);
   });
 
+  it('orders symbols by best caller rank, then caller count; no-caller symbols last', () => {
+    const out = buildBlastRadius(
+      base({
+        changedSymbols: [
+          { file: 'a.ts', name: 'idle', kind: 'function' },
+          { file: 'a.ts', name: 'low', kind: 'function' },
+          { file: 'a.ts', name: 'many', kind: 'function' },
+          { file: 'a.ts', name: 'top', kind: 'function' },
+        ],
+        callers: [
+          { file: 'x.ts', symbol: 'c1', viaSymbol: 'low', line: 1, rank: 1 },
+          { file: 'x.ts', symbol: 'c2', viaSymbol: 'many', line: 2, rank: 5 },
+          { file: 'y.ts', symbol: 'c3', viaSymbol: 'many', line: 3, rank: 2 },
+          { file: 'z.ts', symbol: 'c4', viaSymbol: 'top', line: 4, rank: 9 },
+        ],
+      }),
+    );
+    expect(out.downstream.map((d) => d.symbol)).toEqual(['top', 'many', 'low', 'idle']);
+  });
+
+  it('breaks rank ties by caller count', () => {
+    const out = buildBlastRadius(
+      base({
+        changedSymbols: [
+          { file: 'a.ts', name: 'one', kind: 'function' },
+          { file: 'a.ts', name: 'two', kind: 'function' },
+        ],
+        callers: [
+          { file: 'x.ts', symbol: 'c1', viaSymbol: 'one', line: 1, rank: 3 },
+          { file: 'x.ts', symbol: 'c2', viaSymbol: 'two', line: 2, rank: 3 },
+          { file: 'y.ts', symbol: 'c3', viaSymbol: 'two', line: 3, rank: 1 },
+        ],
+      }),
+    );
+    expect(out.downstream.map((d) => d.symbol)).toEqual(['two', 'one']);
+  });
+
   it('does not list a symbol\'s declaring file as its own caller', () => {
     const out = buildBlastRadius(
       base({

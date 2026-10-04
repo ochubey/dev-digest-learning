@@ -58,6 +58,8 @@ export function buildBlastRadius(result: BlastResult): BlastResponse {
     return files?.size === 1 && files.has(file);
   };
 
+  // Best caller rank per symbol (the contract has no rank field): orders the groups below.
+  const bestRank = new Map<string, number>();
   const callerSeen = new Set<string>();
   for (const c of result.callers) {
     if (isSelfCaller(c.viaSymbol, c.file)) continue;
@@ -65,6 +67,7 @@ export function buildBlastRadius(result: BlastResult): BlastResponse {
     if (callerSeen.has(key)) continue;
     callerSeen.add(key);
     ensure(c.viaSymbol).callers.push({ name: c.symbol, file: c.file, line: c.line });
+    bestRank.set(c.viaSymbol, Math.max(bestRank.get(c.viaSymbol) ?? -Infinity, c.rank));
   }
 
   // Endpoint/cron totals count only what is attributed to a caller group, so the summary
@@ -84,7 +87,13 @@ export function buildBlastRadius(result: BlastResult): BlastResponse {
     for (const cr of crons) allCrons.add(cr);
   }
 
-  const downstream = [...groups.values()];
+  // Most important first: best caller rank, then caller count. Array#sort is stable, so
+  // ties (and symbols without callers) keep the order repo-intel reported them in.
+  const downstream = [...groups.values()].sort(
+    (a, b) =>
+      (bestRank.get(b.symbol) ?? -Infinity) - (bestRank.get(a.symbol) ?? -Infinity) ||
+      b.callers.length - a.callers.length,
+  );
   const callerCount = downstream.reduce((n, g) => n + g.callers.length, 0);
 
   return {
