@@ -200,3 +200,24 @@ describe('RepoIntel facade — caller cap is per changed symbol', () => {
     expect(by('small')).toHaveLength(1); // was dropped when the cap covered the whole list
   });
 });
+
+describe('RepoIntel facade — getBlastRadius never throws', () => {
+  it('a DB error becomes degraded index_failed instead of an exception', async () => {
+    const container = { config: { repoIntelEnabled: true }, db: {} as never } as never;
+    const svc = new RepoIntelService(container);
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      tryGetIndexState: async () => {
+        throw new Error('connection terminated');
+      },
+    };
+    const blast = await svc.getBlastRadius('r1', ['a.ts']);
+    expect(blast).toMatchObject({
+      changedSymbols: [],
+      callers: [],
+      impactedEndpoints: [],
+      degraded: true,
+      reason: 'index_failed',
+    });
+  });
+});
+

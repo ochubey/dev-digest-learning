@@ -21,7 +21,7 @@ export function ResyncButton({ repoId, onDone }: ResyncButtonProps) {
   const t = useTranslations("blast");
   const resync = useResyncRepoIntel(repoId);
   const [waiting, setWaiting] = useState(false);
-  const [baseline, setBaseline] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<string | undefined>(undefined);
   const status = useRepoIntelStatus(repoId, waiting);
   const updatedAt = status.data?.updatedAt;
 
@@ -39,14 +39,23 @@ export function ResyncButton({ repoId, onDone }: ResyncButtonProps) {
   }, [waiting]);
 
   const start = () => {
-    setBaseline(updatedAt ?? null);
+    setBaseline(updatedAt);
     setWaiting(true);
     resync.mutate(undefined, { onError: () => setWaiting(false) });
   };
 
   return (
     <span style={s.resyncWrap}>
-      <Button kind="secondary" size="sm" icon="RefreshCw" loading={waiting} onClick={start}>
+      {/* Disabled until the index state has loaded: the click needs a baseline `updatedAt` to tell
+          "a new index row was written" apart from "the first state fetch arrived". */}
+      <Button
+        kind="secondary"
+        size="sm"
+        icon="RefreshCw"
+        loading={waiting}
+        disabled={updatedAt === undefined}
+        onClick={start}
+      >
         {waiting ? t("degraded.resyncing") : t("degraded.resync")}
       </Button>
       {resync.isError && (

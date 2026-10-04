@@ -14,8 +14,8 @@
  * `getUnresolvedReferences` and (via T1.3) `getCallerSignatures`. T2 fills in
  * the rank-driven methods. T3 unlocks `getCriticalPaths` etc.
  *
- * The constructor takes ONLY a Container. No astgrep / depgraph / tokenizer
- * deps are imported here — those land later and plug into this same shell.
+ * The constructor takes ONLY a Container; the adapters (astgrep, depgraph,
+ * tokenizer, codeIndex) are reached through it or imported by the pipelines.
  */
 import type { CodeSymbol, RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
@@ -218,6 +218,22 @@ export class RepoIntelService implements RepoIntel {
    * clone (not the index). T2 promotes this path to the persistent layer.
    */
   async getBlastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult> {
+    // Documented contract: never throws. A DB or clone error becomes a degraded result so the
+    // route answers 200 with a banner instead of a 500.
+    try {
+      return await this.blastRadius(repoId, changedFiles);
+    } catch {
+      return {
+        changedSymbols: [],
+        callers: [],
+        impactedEndpoints: [],
+        degraded: true,
+        reason: 'index_failed',
+      };
+    }
+  }
+
+  private async blastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult> {
     // T3: serve from the persistent index when it's built. Falls through to the
     // ripgrep best-effort below when the flag is off / index is absent.
     if (this.container.config.repoIntelEnabled && changedFiles.length > 0) {

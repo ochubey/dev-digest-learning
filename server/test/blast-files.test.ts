@@ -62,4 +62,21 @@ describe('changedFilesForPr', () => {
     await expect(changedFilesForPr(container, 'ws', pr, log)).resolves.toEqual([]);
     expect(getPullDetail).toHaveBeenCalledTimes(1);
   });
+
+  it('concurrent callers for the same PR share one import (blast + history fire together)', async () => {
+    const [a, b] = await Promise.all([
+      changedFilesForPr(container, 'ws', pr, log),
+      changedFilesForPr(container, 'ws', pr, log),
+    ]);
+    expect(a).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(b).toEqual(a);
+    expect(getPullDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache across requests: a later call resolves again', async () => {
+    await changedFilesForPr(container, 'ws', pr, log);
+    state.imported = false;
+    await changedFilesForPr(container, 'ws', pr, log);
+    expect(getPullDetail).toHaveBeenCalledTimes(2);
+  });
 });

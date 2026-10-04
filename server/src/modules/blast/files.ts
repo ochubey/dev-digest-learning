@@ -14,19 +14,7 @@ async function loadPaths(container: Container, workspaceId: string, pr: PullRow)
   return diff.files.map((f) => f.path);
 }
 
-/**
- * Paths of the files a PR changes, from the same diff the review run loads (a real
- * `git diff`, else the persisted pr_files patches).
- *
- * A PR nobody has opened yet has no persisted files and its head commit is usually not in
- * the clone (forks), so the diff is empty and the map would wrongly read "no usable index".
- * In that case the PR detail is imported once (the same import the PR page does, which
- * persists pr_files) and the diff is read again.
- *
- * Fail-open: any failure yields `[]`, so the blast lookup degrades to `no_data` instead of
- * erroring.
- */
-export async function changedFilesForPr(
+async function resolveChangedFiles(
   container: Container,
   workspaceId: string,
   pr: PullRow,
@@ -46,4 +34,35 @@ export async function changedFilesForPr(
     log.warn({ prId: pr.id, err: (err as Error).message, step: 'blast' }, 'blast: PR files import failed');
     return [];
   }
+}
+
+/** One resolution per PR at a time: the page fires /blast and /history together. */
+const inFlight = new Map<string, Promise<string[]>>();
+
+/**
+ * Paths of the files a PR changes, from the same diff the review run loads (a real
+ * `git diff`, else the persisted pr_files patches).
+ *
+ * A PR nobody has opened yet has no persisted files and its head commit is usually not in
+ * the clone (forks), so the diff is empty and the map would wrongly read "no usable index".
+ * In that case the PR detail is imported once (the same import the PR page does, which
+ * persists pr_files) and the diff is read again. Concurrent callers for the same PR share
+ * one resolution, so that import (a delete + insert of pr_files) never runs twice at once.
+ *
+ * Fail-open: any failure yields `[]`, so the blast lookup degrades to `no_data` instead of
+ * erroring.
+ */
+export function changedFilesForPr(
+  container: Container,
+  workspaceId: string,
+  pr: PullRow,
+  log: FastifyBaseLogger,
+): Promise<string[]> {
+  const running = inFlight.get(pr.id);
+  if (running) return running;
+  const started = resolveChangedFiles(container, workspaceId, pr, log).finally(() => {
+    inFlight.delete(pr.id);
+  });
+  inFlight.set(pr.id, started);
+  return started;
 }

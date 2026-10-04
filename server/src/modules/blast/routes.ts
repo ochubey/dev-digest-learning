@@ -43,6 +43,7 @@ export default async function blastRoutes(appBase: FastifyInstance) {
       req.log.info(
         {
           prId: pr.id,
+          repoId: pr.repoId,
           step: 'blast',
           files: files.length,
           symbols: result.changedSymbols.length,

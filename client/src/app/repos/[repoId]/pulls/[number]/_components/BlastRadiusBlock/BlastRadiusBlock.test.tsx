@@ -50,11 +50,17 @@ vi.mock("@/lib/hooks/blast", () => ({
   usePrHistory: () => ({ data: prior.data, isLoading: prior.isLoading, error: prior.error }),
 }));
 
-const repoIntel = { mutate: vi.fn(), updatedAt: "t0", isError: false };
+const repoIntel: { mutate: ReturnType<typeof vi.fn>; updatedAt: string | undefined; isError: boolean } = {
+  mutate: vi.fn(),
+  updatedAt: "t0",
+  isError: false,
+};
 
 vi.mock("@/lib/hooks/repo-intel", () => ({
   useResyncRepoIntel: () => ({ mutate: repoIntel.mutate, isError: repoIntel.isError }),
-  useRepoIntelStatus: () => ({ data: { updatedAt: repoIntel.updatedAt } }),
+  useRepoIntelStatus: () => ({
+    data: repoIntel.updatedAt === undefined ? undefined : { updatedAt: repoIntel.updatedAt },
+  }),
 }));
 
 import { BlastRadiusBlock } from "./BlastRadiusBlock";
@@ -259,6 +265,16 @@ describe("BlastRadiusBlock", () => {
       repoIntel.updatedAt = "t1";
       rerenderBlock();
       expect(state.refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the button disabled until the index state has loaded (no baseline yet)", () => {
+      state.data = degraded("index_partial");
+      repoIntel.updatedAt = undefined;
+      renderBlock();
+      const btn = screen.getByRole("button", { name: blast.degraded.resync });
+      expect(btn).toBeDisabled();
+      fireEvent.click(btn);
+      expect(repoIntel.mutate).not.toHaveBeenCalled();
     });
 
     it("shows an error when the resync request fails", () => {
