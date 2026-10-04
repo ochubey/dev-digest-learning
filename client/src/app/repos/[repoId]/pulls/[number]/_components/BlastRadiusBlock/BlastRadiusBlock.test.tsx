@@ -326,6 +326,7 @@ describe("BlastRadiusBlock", () => {
       expect(screen.getByText("a.ts")).toBeInTheDocument();
       expect(screen.queryByText("d.ts")).not.toBeInTheDocument();
       expect(screen.getByText("+2 more")).toBeInTheDocument();
+      expect(screen.getByText(blast.priorPrs.scope)).toBeInTheDocument();
     });
 
     it("shows an empty message when no earlier PR touched these files", () => {

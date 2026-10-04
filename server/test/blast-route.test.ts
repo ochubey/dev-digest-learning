@@ -158,14 +158,14 @@ describe('GET /pulls/:id/history', () => {
     expect(listMerged).toHaveBeenCalledWith({ owner: 'o', name: 'n' }, expect.objectContaining({ excludeNumber: undefined }));
   });
 
-  it('is fail-open: a GitHub error yields an empty history, not a 5xx', async () => {
+  it('502 when GitHub cannot be read, so "could not check" is not shown as "none"', async () => {
     const res = await history(okRows(), {
       listMergedPullRequestsWithFiles: async () => {
         throw new Error('rate limited');
       },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ history: [] });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ error: { code: 'github_unavailable' } });
   });
 
   it('404 for an unknown PR and 403 for another workspace', async () => {

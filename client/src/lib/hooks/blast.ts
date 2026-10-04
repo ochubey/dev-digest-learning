@@ -20,12 +20,14 @@ export function useBlastRadius(prId: string | null | undefined) {
   });
 }
 
-/** Prior merged PRs touching the same files (GitHub-backed; empty when unavailable). */
+/** Recent merged PRs touching the same files (GitHub-backed scan window, not full history).
+   An error means "could not check"; no retries, GitHub failures are usually rate limit/auth. */
 export function usePrHistory(prId: string | null | undefined) {
   return useQuery({
     queryKey: ["reviews", prId, "history"],
     queryFn: () => api.get<PrHistory>(`/pulls/${prId}/history`),
     enabled: !!prId,
     staleTime: 5 * 60_000,
+    retry: false,
   });
 }

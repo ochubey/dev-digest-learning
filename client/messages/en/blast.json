@@ -39,9 +39,10 @@
   },
   "priorPrs": {
     "title": "Prior PRs touching these files",
-    "empty": "No earlier merged PRs touched these files.",
-    "error": "Could not load prior PRs.",
+    "empty": "No recent merged PRs touched these files. Only the latest merged PRs are checked.",
+    "error": "Could not check GitHub for prior PRs (missing token or rate limit). This does not mean there are none.",
     "mergedBy": "merged {date} by {author}",
-    "moreFiles": "+{count} more"
+    "moreFiles": "+{count} more",
+    "scope": "Recent merged PRs only; older changes may not appear."
   }
 }

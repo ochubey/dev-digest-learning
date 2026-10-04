@@ -45,6 +45,7 @@ export function PriorPrs({ prId, repoFullName }: PriorPrsProps) {
           <div style={s.muted}>{t("priorPrs.empty")}</div>
         ) : (
           <div style={s.priorList}>
+            <div style={s.priorMeta}>{t("priorPrs.scope")}</div>
             {items.map((p) => {
               const shown = p.files_overlap.slice(0, HISTORY_FILES_SHOWN);
               const more = p.files_overlap.length - shown.length;

@@ -58,7 +58,9 @@ export default async function blastRoutes(appBase: FastifyInstance) {
 
   /**
    * Prior merged PRs touching the files this PR changes, from the GitHub API (bounded scan,
-   * cached per PR + head sha). Fail-open: no token / GitHub error -> empty history, logged.
+   * cached per PR + head sha). A scan window, not a full history. "Could not check" (no
+   * token, GitHub error, rate limit) is a 502, never an empty list, so the UI can tell it
+   * apart from "no recent PR touched these files".
    */
   app.get(
     '/pulls/:id/history',
@@ -95,7 +97,7 @@ export default async function blastRoutes(appBase: FastifyInstance) {
         return value;
       } catch (err) {
         req.log.warn({ prId: pr.id, err: (err as Error).message, step: 'history' }, 'blast: prior PRs unavailable');
-        return { history: [] };
+        throw new AppError('github_unavailable', 'Could not load prior PRs from GitHub', 502);
       }
     },
   );
