@@ -34,9 +34,11 @@ provider. If a real auth provider is added, the header (token, workspace) must b
 
 ## Tool
 
-`get_blast_radius { pr_id: uuid }` returns the JSON body of `GET /pulls/:id/blast`
-(`changed_symbols`, `downstream`, `summary`, `degraded`, `reason`). Errors (404, 403, network)
-come back as an `isError` tool result.
+`get_blast_radius` takes either `{ pr_id: uuid }` or `{ repo: "owner/name", number: <GitHub PR number> }`
+(the PR page URL contains the GitHub number, not the uuid) and returns the JSON body of
+`GET /pulls/:id/blast` (`changed_symbols`, `downstream`, `summary`, `degraded`, `reason`). With
+`repo` + `number` the server first looks the PR up through `GET /repos` and `GET /repos/:id/pulls`.
+Errors (unknown repo or PR, 404, 403, network) come back as an `isError` tool result with a hint.
 
 ## Claude Code
 
