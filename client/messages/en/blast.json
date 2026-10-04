@@ -44,5 +44,9 @@
     "mergedBy": "merged {date} by {author}",
     "moreFiles": "+{count} more",
     "scope": "Recent merged PRs only; older changes may not appear."
-  }
+  },
+  "idle": {
+    "title": "{count} changed symbols with no callers"
+  },
+  "showAll": "Show all {count}"
 }

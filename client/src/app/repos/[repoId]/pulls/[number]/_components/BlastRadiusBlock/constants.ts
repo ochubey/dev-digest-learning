@@ -17,3 +17,6 @@ export const GRAPH = {
 
 /** Shared files listed per prior PR before collapsing the rest into "+N more". */
 export const HISTORY_FILES_SHOWN = 3;
+
+/** Symbols with downstream impact listed before "Show all"; the rest stay one click away. */
+export const SYMBOLS_INITIAL = 10;

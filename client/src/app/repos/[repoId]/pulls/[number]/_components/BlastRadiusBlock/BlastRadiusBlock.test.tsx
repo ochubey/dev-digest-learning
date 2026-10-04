@@ -57,6 +57,7 @@ vi.mock("@/lib/hooks/repo-intel", () => ({
 }));
 
 import { BlastRadiusBlock } from "./BlastRadiusBlock";
+import { SYMBOLS_INITIAL } from "./constants";
 
 beforeEach(() => {
   state.data = undefined;
@@ -152,7 +153,9 @@ describe("BlastRadiusBlock", () => {
     expect(screen.getByTestId("blast-no-downstream")).toHaveTextContent(
       "1 changed symbol(s), no downstream callers found.",
     );
-    expect(screen.getByText(blast.noCallers)).toBeInTheDocument();
+    // the symbol is summarised on one collapsed line, not rendered as a "0 callers" row
+    expect(screen.queryByTestId("blast-symbol")).not.toBeInTheDocument();
+    expect(screen.getByTestId("blast-idle")).toHaveTextContent("1 changed symbols with no callers");
   });
 
   it("shows the empty state when there are no changed symbols", () => {
@@ -348,6 +351,60 @@ describe("BlastRadiusBlock", () => {
       renderBlock();
       fireEvent.click(screen.getByRole("button", { name: new RegExp(blast.priorPrs.title) }));
       expect(screen.getByText(blast.priorPrs.error)).toBeInTheDocument();
+    });
+  });
+
+  describe("many symbols", () => {
+    const idleSym = (name: string) => ({
+      symbol: name,
+      callers: [],
+      endpoints_affected: [],
+      crons_affected: [],
+    });
+    const activeSym = (name: string) => ({
+      symbol: name,
+      callers: [{ name: "h", file: `src/${name}.ts`, line: 1 }],
+      endpoints_affected: [],
+      crons_affected: [],
+    });
+    const many = (nActive: number, nIdle: number): BlastData => {
+      const downstream = [
+        ...Array.from({ length: nActive }, (_, i) => activeSym(`act${i}`)),
+        ...Array.from({ length: nIdle }, (_, i) => idleSym(`idle${i}`)),
+      ];
+      return {
+        ...DATA,
+        changed_symbols: downstream.map((d) => ({ name: d.symbol, file: "a.ts", kind: "function" })),
+        downstream,
+      };
+    };
+
+    it("lists a hundred caller-less symbols as one collapsed line, not a hundred rows", () => {
+      state.data = many(0, 100);
+      renderBlock();
+      expect(screen.queryAllByTestId("blast-symbol")).toHaveLength(0);
+      const idle = screen.getByTestId("blast-idle");
+      expect(idle).toHaveTextContent("100 changed symbols with no callers");
+      expect(screen.queryByText("idle0")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /100 changed symbols/ }));
+      expect(screen.getByText("idle0")).toBeInTheDocument();
+      expect(screen.getByText("idle99")).toBeInTheDocument();
+    });
+
+    it("caps the rows with callers and reveals the rest on request", () => {
+      state.data = many(SYMBOLS_INITIAL + 5, 3);
+      renderBlock();
+      expect(screen.getAllByTestId("blast-symbol")).toHaveLength(SYMBOLS_INITIAL);
+      fireEvent.click(screen.getByRole("button", { name: `Show all ${SYMBOLS_INITIAL + 5}` }));
+      expect(screen.getAllByTestId("blast-symbol")).toHaveLength(SYMBOLS_INITIAL + 5);
+      expect(screen.queryByRole("button", { name: /Show all/ })).not.toBeInTheDocument();
+    });
+
+    it("keeps symbols with callers as rows and folds only the idle ones", () => {
+      state.data = many(2, 4);
+      renderBlock();
+      expect(screen.getAllByTestId("blast-symbol")).toHaveLength(2);
+      expect(screen.getByTestId("blast-idle")).toHaveTextContent("4 changed symbols with no callers");
     });
   });
 });

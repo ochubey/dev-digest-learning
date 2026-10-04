@@ -5,7 +5,9 @@ import { useTranslations } from "next-intl";
 import { SectionLabel, Card, Skeleton, ErrorState, EmptyState, Icon } from "@devdigest/ui";
 import { useBlastRadius } from "@/lib/hooks/blast";
 import { BlastGraph } from "./BlastGraph";
-import { blastCounts, canResync, degradedReasonKey } from "./helpers";
+import { SYMBOLS_INITIAL } from "./constants";
+import { blastCounts, canResync, degradedReasonKey, splitSymbols } from "./helpers";
+import { IdleSymbols } from "./IdleSymbols";
 import { PriorPrs } from "./PriorPrs";
 import { ResyncButton } from "./ResyncButton";
 import { SymbolRow } from "./SymbolRow";
@@ -23,6 +25,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   const { data, isLoading, error, refetch } = useBlastRadius(prId);
   const onResynced = useCallback(() => void refetch(), [refetch]);
   const [view, setView] = useState<"tree" | "graph">("tree");
+  const [showAll, setShowAll] = useState(false);
 
   if (isLoading) {
     return (
@@ -70,6 +73,8 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   }
 
   const counts = blastCounts(data.changed_symbols.length, data.downstream);
+  const { active, idle } = splitSymbols(data.downstream);
+  const visible = showAll ? active : active.slice(0, SYMBOLS_INITIAL);
 
   return (
     <Card style={s.wrap}>
@@ -108,7 +113,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
         <BlastGraph downstream={data.downstream} />
       ) : (
         <div style={s.list}>
-          {data.downstream.map((d, i) => (
+          {visible.map((d, i) => (
             <SymbolRow
               key={d.symbol}
               impact={d}
@@ -117,6 +122,12 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
               headSha={headSha}
             />
           ))}
+          {active.length > visible.length && (
+            <button type="button" onClick={() => setShowAll(true)} style={s.showAll}>
+              {t("showAll", { count: active.length })}
+            </button>
+          )}
+          <IdleSymbols symbols={idle} />
         </div>
       )}
 

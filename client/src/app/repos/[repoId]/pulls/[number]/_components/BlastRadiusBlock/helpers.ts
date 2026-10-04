@@ -43,3 +43,18 @@ export function callerHref(
   if (!repoFullName || !headSha) return null;
   return githubBlobUrl(repoFullName, headSha, file, line);
 }
+
+/**
+ * Split changed symbols into those with downstream impact (callers, endpoints or crons) and
+ * those with none. The idle ones are summarised on one line instead of one row each.
+ */
+export function splitSymbols(downstream: DownstreamImpact[]) {
+  const active: DownstreamImpact[] = [];
+  const idle: DownstreamImpact[] = [];
+  for (const d of downstream) {
+    const hasImpact =
+      d.callers.length > 0 || d.endpoints_affected.length > 0 || d.crons_affected.length > 0;
+    (hasImpact ? active : idle).push(d);
+  }
+  return { active, idle };
+}

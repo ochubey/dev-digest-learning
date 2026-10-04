@@ -258,6 +258,47 @@ export const s = {
     color: "var(--text-secondary)",
   } as React.CSSProperties,
 
+  idleHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: 0,
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    font: "inherit",
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } as React.CSSProperties,
+
+  idleChips: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    margin: "8px 0 0 20px",
+  } as React.CSSProperties,
+
+  idleChip: {
+    padding: "1px 6px",
+    fontSize: 12,
+    borderRadius: 4,
+    background: "var(--bg-hover)",
+    border: "1px solid var(--border)",
+    fontFamily: "var(--font-mono, monospace)",
+    color: "var(--text-secondary)",
+  } as React.CSSProperties,
+
+  showAll: {
+    alignSelf: "flex-start",
+    padding: 0,
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    font: "inherit",
+    fontSize: 12,
+    color: "var(--accent)",
+  } as React.CSSProperties,
+
   muted: {
     fontSize: 12,
     color: "var(--text-muted)",
