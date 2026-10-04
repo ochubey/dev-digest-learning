@@ -1,4 +1,5 @@
 {
+  "title": "Blast radius",
   "stat": {
     "symbols": "symbols",
     "callers": "callers",
@@ -11,6 +12,19 @@
   },
   "callerCount": "{count} callers",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "noCallers": "No callers found",
+  "empty": "No changed symbols found in this PR.",
+  "loadError": "Could not load blast radius",
+  "loadErrorBody": "The request failed. Try again.",
+  "degraded": {
+    "title": "Blast radius is incomplete",
+    "no_data": "The repository has no usable index yet, so callers could not be determined.",
+    "flag_off": "Repository indexing is turned off, so callers could not be determined.",
+    "index_failed": "The last index run failed, so callers could not be determined.",
+    "index_partial": "The index is only partial. Some callers may be missing.",
+    "repo_too_large": "The repository is too large to index. Some callers may be missing.",
+    "unknown": "The index is degraded. Some callers may be missing."
+  },
   "graph": {
     "empty": "No downstream callers to graph.",
     "ariaLabel": "Blast radius graph"
