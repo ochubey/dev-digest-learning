@@ -296,7 +296,7 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callerRows,
+      callers: capCallersPerSymbol(callerRows),
       impactedEndpoints: [...endpoints],
       degraded: true,
       reason: 'no_data',
@@ -388,7 +388,7 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
+      callers: capCallersPerSymbol(callers),
       impactedEndpoints: [...endpoints],
       factsByFile,
       ...incomplete,
@@ -766,4 +766,22 @@ function enclosingSymbolName(
 
 async function readClone(clonePath: string, file: string): Promise<string | null> {
   return readFile(join(clonePath, file), 'utf8').catch(() => null);
+}
+
+/**
+ * Keep at most `limit` callers per changed symbol (`viaSymbol`), in input order, so callers
+ * must already be sorted most-important first. A cap over the whole list instead let one hot
+ * symbol use up the budget and made the others look caller-less.
+ */
+export function capCallersPerSymbol(
+  callers: BlastCallerRow[],
+  limit: number = MAX_CALLERS_PER_SYMBOL,
+): BlastCallerRow[] {
+  const taken = new Map<string, number>();
+  return callers.filter((c) => {
+    const n = taken.get(c.viaSymbol) ?? 0;
+    if (n >= limit) return false;
+    taken.set(c.viaSymbol, n + 1);
+    return true;
+  });
 }

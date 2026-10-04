@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BlastRadius, type DownstreamImpact } from '@devdigest/shared';
+import { MAX_CALLERS_PER_SYMBOL } from '../repo-intel/constants.js';
 import type { BlastResult } from '../repo-intel/types.js';
 
 /** Route response: the shared contract plus the repo-intel degradation flags. */
@@ -17,7 +18,6 @@ export function buildSummary(counts: {
   crons: number;
 }): string {
   const { symbols, callers, endpoints, crons } = counts;
-  if (symbols === 0) return 'No changed symbols found.';
   return (
     `${symbols} changed symbol(s), ${callers} caller(s), ` +
     `${endpoints} endpoint(s), ${crons} cron/job(s) affected.`
@@ -66,7 +66,11 @@ export function buildBlastRadius(result: BlastResult): BlastResponse {
     const key = `${c.viaSymbol}|${c.file}|${c.line}|${c.symbol}`;
     if (callerSeen.has(key)) continue;
     callerSeen.add(key);
-    ensure(c.viaSymbol).callers.push({ name: c.symbol, file: c.file, line: c.line });
+    const group = ensure(c.viaSymbol);
+    // Per-symbol cap from repo-intel/constants.ts (the facade applies it too; kept here so the
+    // route/MCP payload stays bounded whatever feeds the mapper). Input is rank-sorted.
+    if (group.callers.length >= MAX_CALLERS_PER_SYMBOL) continue;
+    group.callers.push({ name: c.symbol, file: c.file, line: c.line });
     bestRank.set(c.viaSymbol, Math.max(bestRank.get(c.viaSymbol) ?? -Infinity, c.rank));
   }
 

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import blast from "../../../../../../../../messages/en/blast.json";
+import { githubBlobUrl } from "@/lib/github-urls";
 
 type BlastData = {
   changed_symbols: { name: string; file: string; kind: string }[];
@@ -405,6 +406,166 @@ describe("BlastRadiusBlock", () => {
       renderBlock();
       expect(screen.getAllByTestId("blast-symbol")).toHaveLength(2);
       expect(screen.getByTestId("blast-idle")).toHaveTextContent("4 changed symbols with no callers");
+    });
+  });
+
+  describe("acceptance", () => {
+    const REPO = "o/r";
+    const SHA = "abc123";
+    const MULTI: BlastData = {
+      changed_symbols: [
+        { name: "foo", file: "src/a.ts", kind: "function" },
+        { name: "bar", file: "src/a.ts", kind: "function" },
+        { name: "idle", file: "src/b.ts", kind: "function" },
+      ],
+      downstream: [
+        {
+          symbol: "foo",
+          callers: [
+            { name: "routeA", file: "src/api/a.ts", line: 10 },
+            { name: "routeB", file: "src/api/with space.ts", line: 22 },
+          ],
+          endpoints_affected: ["GET /a", "POST /b"],
+          crons_affected: ["nightly"],
+        },
+        {
+          symbol: "bar",
+          callers: [{ name: "routeA", file: "src/api/a.ts", line: 11 }],
+          endpoints_affected: ["GET /a"], // same endpoint as foo: counted once in the summary
+          crons_affected: [],
+        },
+        { symbol: "idle", callers: [], endpoints_affected: [], crons_affected: [] },
+      ],
+      summary: "s",
+      degraded: false,
+      reason: null,
+    };
+
+    it("summary shows the right numbers (endpoints/crons unioned across symbols)", () => {
+      state.data = MULTI;
+      renderBlock();
+      const stats = screen.getByTestId("blast-stats");
+      expect(stats).toHaveTextContent("3symbols");
+      expect(stats).toHaveTextContent("3callers"); // 2 + 1 + 0
+      expect(stats).toHaveTextContent("2endpoints"); // GET /a, POST /b
+      expect(stats).toHaveTextContent("1cron/jobs");
+    });
+
+    it("lists callers as file:line under their symbol", () => {
+      state.data = MULTI;
+      renderBlock();
+      expect(screen.getByText("src/api/a.ts:10")).toBeInTheDocument();
+      expect(screen.getByText("src/api/with space.ts:22")).toBeInTheDocument();
+      // `bar` is collapsed by default (first symbol only is open); open it
+      fireEvent.click(screen.getByRole("button", { name: /bar/ }));
+      expect(screen.getByText("src/api/a.ts:11")).toBeInTheDocument();
+    });
+
+    it("every file:line href equals githubBlobUrl(repoFullName, sha, file, line)", () => {
+      state.data = MULTI;
+      renderBlock({ repoId: "repo1", repoFullName: REPO, headSha: SHA });
+      for (const [file, line] of [
+        ["src/api/a.ts", 10],
+        ["src/api/with space.ts", 22],
+      ] as const) {
+        expect(screen.getByRole("link", { name: `${file}:${line}` })).toHaveAttribute(
+          "href",
+          githubBlobUrl(REPO, SHA, file, line),
+        );
+      }
+    });
+
+    it("shows endpoint chips after the callers of the same symbol", () => {
+      state.data = MULTI;
+      renderBlock();
+      const lastCaller = screen.getByText("src/api/with space.ts:22");
+      const firstChip = screen.getAllByTestId("blast-endpoint")[0]!;
+      expect(firstChip).toHaveTextContent("GET /a");
+      expect(
+        lastCaller.compareDocumentPosition(firstChip) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(screen.getAllByTestId("blast-endpoint")).toHaveLength(2);
+      expect(screen.getByTestId("blast-cron")).toHaveTextContent("nightly");
+    });
+
+    it("empty state: shows the noDownstream text when nothing calls the symbols", () => {
+      state.data = {
+        ...MULTI,
+        downstream: MULTI.downstream.map((d) => ({ ...d, callers: [], endpoints_affected: [], crons_affected: [] })),
+      };
+      renderBlock();
+      expect(screen.getByTestId("blast-no-downstream")).toHaveTextContent(
+        "3 changed symbol(s), no downstream callers found.",
+      );
+    });
+
+    it("degraded: shows a separate notice with the reason text", () => {
+      state.data = { ...MULTI, degraded: true, reason: "repo_too_large" };
+      renderBlock();
+      const note = screen.getByTestId("blast-degraded");
+      expect(note).toHaveTextContent(blast.degraded.title);
+      expect(note).toHaveTextContent(blast.degraded.repo_too_large);
+    });
+
+    it("loading and hook-error states render without data", () => {
+      state.isLoading = true;
+      renderBlock();
+      expect(screen.queryByTestId("blast-stats")).not.toBeInTheDocument();
+      cleanup();
+      state.isLoading = false;
+      state.error = new Error("boom");
+      renderBlock();
+      expect(screen.getByText(blast.loadError)).toBeInTheDocument();
+      expect(screen.queryByTestId("blast-stats")).not.toBeInTheDocument();
+    });
+
+    it("takes every label from blast.json: no hardcoded UI strings", () => {
+      // Replace each message with a unique marker (keeping ICU placeholders), render the
+      // states, and require that markers show up and no original English text does.
+      const originals: string[] = [];
+      let id = 0;
+      const mark = (node: unknown): unknown => {
+        if (typeof node === "string") {
+          originals.push(node);
+          return `[#${id++}]` + (node.match(/\{\w+\}/g) ?? []).join("");
+        }
+        return Object.fromEntries(
+          Object.entries(node as Record<string, unknown>).map(([k, v]) => [k, mark(v)]),
+        );
+      };
+      const marked = mark(blast) as typeof blast;
+
+      const text = () => document.body.textContent ?? "";
+      const show = (data: BlastData | undefined, over: Partial<typeof state> = {}) => {
+        cleanup();
+        state.data = data;
+        Object.assign(state, { isLoading: false, error: null, ...over });
+        render(
+          <NextIntlClientProvider locale="en" messages={{ blast: marked }}>
+            <BlastRadiusBlock prId="pr1" repoId="repo1" repoFullName={REPO} headSha={SHA} />
+          </NextIntlClientProvider>,
+        );
+      };
+
+      const seen: string[] = [];
+      show(MULTI);
+      seen.push(text());
+      show({ ...MULTI, degraded: true, reason: "index_partial" });
+      seen.push(text());
+      show({ ...MULTI, downstream: MULTI.downstream.map((d) => ({ ...d, callers: [] })) });
+      seen.push(text());
+      show({ ...MULTI, changed_symbols: [], downstream: [] });
+      seen.push(text());
+      show(undefined, { error: new Error("x") });
+      seen.push(text());
+      const all = seen.join(" | ");
+
+      expect(all).toMatch(/\[#\d+\]/); // markers are rendered
+      for (const original of originals) {
+        const literal = original.replace(/\{\w+\}/g, "").trim();
+        if (literal.length < 4) continue;
+        expect(all, `hardcoded English UI string: "${literal}"`).not.toContain(literal);
+      }
     });
   });
 });

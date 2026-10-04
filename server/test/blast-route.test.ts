@@ -7,6 +7,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import type { Db } from '../src/db/client.js';
 import * as t from '../src/db/schema.js';
+import { BlastRadius } from '@devdigest/shared';
 import type { BlastResult } from '../src/modules/repo-intel/types.js';
 
 const config = loadConfig({
@@ -61,9 +62,15 @@ afterEach(async () => {
   closeApp = null;
 });
 
-async function get(rows: Rows, result: BlastResult, url = `/pulls/${PR_ID}/blast`) {
+async function get(
+  rows: Rows,
+  result: BlastResult,
+  url = `/pulls/${PR_ID}/blast`,
+  opts: { files?: string[]; llm?: unknown } = {},
+) {
   const getBlastRadius = vi.fn(async () => result);
-  const git = { diff: async () => ({ files: [{ path: 'src/a.ts', hunks: [] }] }) };
+  const files = (opts.files ?? ['src/a.ts']).map((path) => ({ path, hunks: [] }));
+  const git = { diff: async () => ({ files }) };
   const app = await buildApp({
     config,
     db: fakeDb(rows),
@@ -71,6 +78,7 @@ async function get(rows: Rows, result: BlastResult, url = `/pulls/${PR_ID}/blast
       auth: fakeAuth as never,
       repoIntel: { getBlastRadius } as never,
       git: git as never,
+      ...(opts.llm ? { llm: opts.llm as never } : {}),
     },
   });
   closeApp = () => app.close();
@@ -129,6 +137,67 @@ describe('GET /pulls/:id/blast', () => {
       reason: 'index_partial',
       changed_symbols: [],
     });
+  });
+});
+
+describe('GET /pulls/:id/blast — integration guarantees', () => {
+  const populated: BlastResult = {
+    changedSymbols: [{ file: 'src/a.ts', name: 'foo', kind: 'function' }],
+    callers: [{ file: 'src/r.ts', symbol: 'handler', viaSymbol: 'foo', line: 7, rank: 1 }],
+    impactedEndpoints: ['GET /x'],
+    factsByFile: { 'src/r.ts': { endpoints: ['GET /x'], crons: [] } },
+  };
+
+  it('success: 200, body passes BlastRadius, repo-intel is called exactly once', async () => {
+    const { res, getBlastRadius } = await get(okRows(), populated);
+    expect(res.statusCode).toBe(200);
+    expect(() => BlastRadius.parse(res.json())).not.toThrow();
+    expect(getBlastRadius).toHaveBeenCalledTimes(1);
+  });
+
+  it('unknown PR: 404 with a readable error body', async () => {
+    const { res, getBlastRadius } = await get(new Map(), populated);
+    expect(res.statusCode).toBe(404);
+    const body = res.json() as { error: { code: string; message: string } };
+    expect(body.error.message).toBe('PR not found');
+    expect(typeof body.error.code).toBe('string');
+    expect(getBlastRadius).not.toHaveBeenCalled();
+  });
+
+  it('degraded: 200 with degraded and reason in the body', async () => {
+    const { res } = await get(okRows(), { ...empty, degraded: true, reason: 'no_data' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ degraded: true, reason: 'no_data' });
+  });
+
+  it('facade returned empty arrays: 200 with an empty map, not a 500', async () => {
+    const { res } = await get(okRows(), empty);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      changed_symbols: [],
+      downstream: [],
+      degraded: false,
+      reason: null,
+    });
+  });
+
+  it('passes exactly the files of the PR diff as changedFiles', async () => {
+    const files = ['src/a.ts', 'src/deep/nested/b.tsx', 'README.md'];
+    const { getBlastRadius } = await get(okRows(), empty, undefined, { files });
+    expect(getBlastRadius).toHaveBeenCalledWith(REPO_ID, files);
+  });
+
+  it('never touches an LLM provider', async () => {
+    let touched = 0;
+    const provider = new Proxy({}, { get: () => () => { touched += 1; } });
+    const llm = {
+      get openai() { touched += 1; return provider; },
+      get anthropic() { touched += 1; return provider; },
+      get openrouter() { touched += 1; return provider; },
+    };
+    const { res } = await get(okRows(), populated, undefined, { llm });
+    expect(res.statusCode).toBe(200);
+    expect(touched).toBe(0);
   });
 });
 

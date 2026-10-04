@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { BlastRadius } from '@devdigest/shared';
 import { buildBlastRadius } from '../src/modules/blast/build.js';
-import type { BlastResult } from '../src/modules/repo-intel/types.js';
+import { MAX_CALLERS_PER_SYMBOL } from '../src/modules/repo-intel/constants.js';
+import type { BlastResult, DegradedReason } from '../src/modules/repo-intel/types.js';
 
 const base = (over: Partial<BlastResult> = {}): BlastResult => ({
   changedSymbols: [],
@@ -160,7 +161,103 @@ describe('buildBlastRadius', () => {
     expect(buildBlastRadius(base())).toMatchObject({ degraded: false, reason: null });
   });
 
-  it('empty result gives a deterministic summary', () => {
-    expect(buildBlastRadius(base()).summary).toBe('No changed symbols found.');
+  it('empty result gives an empty map and a summary with zeros', () => {
+    const out = buildBlastRadius(base());
+    expect(out.changed_symbols).toEqual([]);
+    expect(out.downstream).toEqual([]);
+    expect(out.summary).toBe(
+      '0 changed symbol(s), 0 caller(s), 0 endpoint(s), 0 cron/job(s) affected.',
+    );
+    expect(() => BlastRadius.parse(out)).not.toThrow();
+  });
+
+  it('several callers of one symbol from different files stay under that symbol', () => {
+    const out = buildBlastRadius(
+      base({
+        changedSymbols: [{ file: 'src/a.ts', name: 'foo', kind: 'function' }],
+        callers: [
+          { file: 'src/x.ts', symbol: 'x1', viaSymbol: 'foo', line: 3, rank: 3 },
+          { file: 'src/y.ts', symbol: 'y1', viaSymbol: 'foo', line: 9, rank: 2 },
+          { file: 'src/z.ts', symbol: 'z1', viaSymbol: 'foo', line: 1, rank: 1 },
+        ],
+      }),
+    );
+    expect(out.downstream).toHaveLength(1);
+    expect(out.downstream[0]!.callers.map((c) => c.file)).toEqual(['src/x.ts', 'src/y.ts', 'src/z.ts']);
+  });
+
+  it('one file calling two different symbols appears under both', () => {
+    const out = buildBlastRadius(
+      base({
+        changedSymbols: [
+          { file: 'src/a.ts', name: 'foo', kind: 'function' },
+          { file: 'src/a.ts', name: 'bar', kind: 'function' },
+        ],
+        callers: [
+          { file: 'src/x.ts', symbol: 'handler', viaSymbol: 'foo', line: 3, rank: 2 },
+          { file: 'src/x.ts', symbol: 'handler', viaSymbol: 'bar', line: 4, rank: 2 },
+        ],
+      }),
+    );
+    const by = (sym: string) => out.downstream.find((d) => d.symbol === sym)!;
+    expect(by('foo').callers).toEqual([{ name: 'handler', file: 'src/x.ts', line: 3 }]);
+    expect(by('bar').callers).toEqual([{ name: 'handler', file: 'src/x.ts', line: 4 }]);
+  });
+
+  it.each<DegradedReason>(['flag_off', 'index_failed', 'index_partial', 'repo_too_large', 'no_data'])(
+    'degraded:true with reason %s reaches the result',
+    (reason) => {
+      const out = buildBlastRadius(base({ degraded: true, reason }));
+      expect(out.degraded).toBe(true);
+      expect(out.reason).toBe(reason);
+      expect(() => BlastRadius.parse(out)).not.toThrow();
+    },
+  );
+
+  it('caps callers per symbol at MAX_CALLERS_PER_SYMBOL from repo-intel/constants.ts', () => {
+    const over = MAX_CALLERS_PER_SYMBOL + 5;
+    const out = buildBlastRadius(
+      base({
+        changedSymbols: [
+          { file: 'src/a.ts', name: 'hot', kind: 'function' },
+          { file: 'src/a.ts', name: 'small', kind: 'function' },
+        ],
+        callers: [
+          ...Array.from({ length: over }, (_, i) => ({
+            file: `src/h${i}.ts`,
+            symbol: `h${i}`,
+            viaSymbol: 'hot',
+            line: i + 1,
+            rank: 100 - i,
+          })),
+          { file: 'src/s.ts', symbol: 's', viaSymbol: 'small', line: 1, rank: 1 },
+        ],
+      }),
+    );
+    const by = (sym: string) => out.downstream.find((d) => d.symbol === sym)!;
+    expect(by('hot').callers).toHaveLength(MAX_CALLERS_PER_SYMBOL);
+    expect(by('hot').callers[0]!.name).toBe('h0'); // highest rank kept
+    expect(by('small').callers).toHaveLength(1); // not starved by the hot symbol
+  });
+
+  it('the whole mapped result passes BlastRadius.parse()', () => {
+    const out = buildBlastRadius(
+      base({
+        changedSymbols: [
+          { file: 'src/a.ts', name: 'foo', kind: 'function' },
+          { file: 'src/b.ts', name: 'idle', kind: 'class' },
+        ],
+        callers: [{ file: 'src/r.ts', symbol: 'route', viaSymbol: 'foo', line: 7, rank: 2 }],
+        factsByFile: { 'src/r.ts': { endpoints: ['GET /x'], crons: ['nightly'] } },
+        degraded: true,
+        reason: 'index_partial',
+      }),
+    );
+    expect(() => BlastRadius.parse(out)).not.toThrow();
+    expect(out.downstream[0]).toMatchObject({
+      symbol: 'foo',
+      endpoints_affected: ['GET /x'],
+      crons_affected: ['nightly'],
+    });
   });
 });
