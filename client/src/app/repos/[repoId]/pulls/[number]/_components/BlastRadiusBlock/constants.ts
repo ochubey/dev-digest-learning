@@ -14,3 +14,6 @@ export const GRAPH = {
   /** Labels longer than this are truncated; the full text stays in the node's <title>. */
   maxChars: 24,
 } as const;
+
+/** Shared files listed per prior PR before collapsing the rest into "+N more". */
+export const HISTORY_FILES_SHOWN = 3;

@@ -23,6 +23,22 @@ const state: {
   refetch: ReturnType<typeof vi.fn>;
 } = { data: undefined, isLoading: false, error: null, refetch: vi.fn() };
 
+type HistoryData = {
+  history: {
+    pr_number: number;
+    title: string;
+    merged_at: string;
+    author: string;
+    files_overlap: string[];
+    notes: string;
+  }[];
+};
+const prior: { data: HistoryData | undefined; isLoading: boolean; error: unknown } = {
+  data: { history: [] },
+  isLoading: false,
+  error: null,
+};
+
 vi.mock("@/lib/hooks/blast", () => ({
   useBlastRadius: () => ({
     data: state.data,
@@ -30,6 +46,7 @@ vi.mock("@/lib/hooks/blast", () => ({
     error: state.error,
     refetch: state.refetch,
   }),
+  usePrHistory: () => ({ data: prior.data, isLoading: prior.isLoading, error: prior.error }),
 }));
 
 const repoIntel = { mutate: vi.fn(), updatedAt: "t0", isError: false };
@@ -49,6 +66,9 @@ beforeEach(() => {
   repoIntel.mutate = vi.fn();
   repoIntel.updatedAt = "t0";
   repoIntel.isError = false;
+  prior.data = { history: [] };
+  prior.isLoading = false;
+  prior.error = null;
 });
 afterEach(cleanup);
 
@@ -275,6 +295,58 @@ describe("BlastRadiusBlock", () => {
       renderBlock();
       fireEvent.click(screen.getByRole("button", { name: blast.view.graph }));
       expect(screen.getByText(blast.graph.empty)).toBeInTheDocument();
+    });
+  });
+
+  describe("prior PRs", () => {
+    const ITEM = {
+      pr_number: 77,
+      title: "Harden foo",
+      merged_at: "2026-02-01T00:00:00Z",
+      author: "dana",
+      files_overlap: ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"],
+      notes: "n",
+    };
+
+    it("shows the count collapsed, then the PRs with GitHub links when expanded", () => {
+      state.data = DATA;
+      prior.data = { history: [ITEM] };
+      renderBlock();
+      const toggle = screen.getByRole("button", { name: new RegExp(blast.priorPrs.title) });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(toggle).toHaveTextContent("1");
+      expect(screen.queryByTestId("blast-prior-pr")).not.toBeInTheDocument();
+
+      fireEvent.click(toggle);
+      expect(screen.getByRole("link", { name: "#77" })).toHaveAttribute(
+        "href",
+        "https://github.com/o/r/pull/77",
+      );
+      expect(screen.getByText("Harden foo")).toBeInTheDocument();
+      expect(screen.getByText("a.ts")).toBeInTheDocument();
+      expect(screen.queryByText("d.ts")).not.toBeInTheDocument();
+      expect(screen.getByText("+2 more")).toBeInTheDocument();
+    });
+
+    it("shows an empty message when no earlier PR touched these files", () => {
+      state.data = DATA;
+      renderBlock();
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(blast.priorPrs.title) }));
+      expect(screen.getByText(blast.priorPrs.empty)).toBeInTheDocument();
+    });
+
+    it("renders nothing while loading and a message on error", () => {
+      state.data = DATA;
+      prior.isLoading = true;
+      renderBlock();
+      expect(screen.queryByTestId("blast-prior-prs")).not.toBeInTheDocument();
+      cleanup();
+      prior.isLoading = false;
+      prior.data = undefined;
+      prior.error = new Error("x");
+      renderBlock();
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(blast.priorPrs.title) }));
+      expect(screen.getByText(blast.priorPrs.error)).toBeInTheDocument();
     });
   });
 });

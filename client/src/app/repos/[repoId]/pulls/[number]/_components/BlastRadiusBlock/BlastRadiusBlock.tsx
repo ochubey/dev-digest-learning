@@ -6,6 +6,7 @@ import { SectionLabel, Card, Skeleton, ErrorState, EmptyState, Icon } from "@dev
 import { useBlastRadius } from "@/lib/hooks/blast";
 import { BlastGraph } from "./BlastGraph";
 import { blastCounts, canResync, degradedReasonKey } from "./helpers";
+import { PriorPrs } from "./PriorPrs";
 import { ResyncButton } from "./ResyncButton";
 import { SymbolRow } from "./SymbolRow";
 import { s } from "./styles";
@@ -118,6 +119,8 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
           ))}
         </div>
       )}
+
+      <PriorPrs prId={prId} repoFullName={repoFullName} />
     </Card>
   );
 }

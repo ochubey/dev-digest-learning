@@ -184,6 +184,80 @@ export const s = {
     border: "2px solid var(--accent)",
   } as React.CSSProperties,
 
+  priorWrap: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTop: "1px solid var(--border)",
+  } as React.CSSProperties,
+
+  priorHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: 0,
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    textAlign: "left",
+    font: "inherit",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+  } as React.CSSProperties,
+
+  priorCount: {
+    padding: "0 6px",
+    fontSize: 12,
+    fontWeight: 400,
+    borderRadius: 4,
+    background: "var(--bg-hover)",
+    color: "var(--text-muted)",
+  } as React.CSSProperties,
+
+  priorList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    marginTop: 10,
+  } as React.CSSProperties,
+
+  priorItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+    fontSize: 13,
+    color: "var(--text-primary)",
+  } as React.CSSProperties,
+
+  priorTitleRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 8,
+  } as React.CSSProperties,
+
+  priorMeta: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } as React.CSSProperties,
+
+  priorFiles: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+  } as React.CSSProperties,
+
+  priorFile: {
+    padding: "1px 6px",
+    fontSize: 12,
+    borderRadius: 4,
+    background: "var(--bg-hover)",
+    border: "1px solid var(--border)",
+    fontFamily: "var(--font-mono, monospace)",
+    color: "var(--text-secondary)",
+  } as React.CSSProperties,
+
   muted: {
     fontSize: 12,
     color: "var(--text-muted)",

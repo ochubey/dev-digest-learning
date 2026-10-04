@@ -36,5 +36,12 @@
       "callers": "callers",
       "endpoints": "endpoints and crons affected"
     }
+  },
+  "priorPrs": {
+    "title": "Prior PRs touching these files",
+    "empty": "No earlier merged PRs touched these files.",
+    "error": "Could not load prior PRs.",
+    "mergedBy": "merged {date} by {author}",
+    "moreFiles": "+{count} more"
   }
 }

@@ -3,7 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
-import type { BlastRadius } from "@devdigest/shared";
+import type { BlastRadius, PrHistory } from "@devdigest/shared";
 
 /** Route response: the shared contract plus the repo-intel degradation flags.
    Type-only mirror of the server's `BlastResponseSchema` (server/src/modules/blast/build.ts);
@@ -17,5 +17,15 @@ export function useBlastRadius(prId: string | null | undefined) {
     queryKey: ["reviews", prId, "blast"],
     queryFn: () => api.get<BlastResponse>(`/pulls/${prId}/blast`),
     enabled: !!prId,
+  });
+}
+
+/** Prior merged PRs touching the same files (GitHub-backed; empty when unavailable). */
+export function usePrHistory(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["reviews", prId, "history"],
+    queryFn: () => api.get<PrHistory>(`/pulls/${prId}/history`),
+    enabled: !!prId,
+    staleTime: 5 * 60_000,
   });
 }
