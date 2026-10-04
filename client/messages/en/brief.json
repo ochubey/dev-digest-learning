@@ -18,6 +18,7 @@
     "sources": "Sources",
     "stale": "Intent may be stale (PR updated)",
     "rederive": "Recalculate",
+    "viewHidden": "View in Findings",
     "fetched": "Fetched",
     "unavailable": "Not found",
     "error": "Error",

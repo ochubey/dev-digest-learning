@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import brief from "../../../../../../../../messages/en/brief.json";
+import prReview from "../../../../../../../../messages/en/prReview.json";
 
 type IntentData = {
   summary: string;
@@ -22,6 +23,7 @@ const state: {
   refetch: ReturnType<typeof vi.fn>;
   isPending: boolean;
   deriveError: unknown;
+  reviews: unknown[];
 } = {
   data: undefined,
   isLoading: false,
@@ -30,6 +32,7 @@ const state: {
   refetch: vi.fn(),
   isPending: false,
   deriveError: null,
+  reviews: [],
 };
 
 vi.mock("@/lib/hooks/reviews", () => ({
@@ -40,6 +43,7 @@ vi.mock("@/lib/hooks/reviews", () => ({
     refetch: state.refetch,
   }),
   useRederiveIntent: () => ({ mutate: state.derive, isPending: state.isPending, error: state.deriveError }),
+  usePrReviews: () => ({ data: state.reviews }),
 }));
 
 import { ApiError } from "@/lib/api";
@@ -53,6 +57,7 @@ beforeEach(() => {
   state.refetch = vi.fn();
   state.isPending = false;
   state.deriveError = null;
+  state.reviews = [];
 });
 afterEach(cleanup);
 
@@ -69,7 +74,7 @@ const INTENT: IntentData = {
 
 function renderBlock() {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ brief }}>
+    <NextIntlClientProvider locale="en" messages={{ brief, prReview }}>
       <IntentBlock prId="pr1" />
     </NextIntlClientProvider>,
   );
@@ -226,5 +231,51 @@ describe("IntentBlock: reason next to an unavailable source", () => {
       screen.getByText("Run review agents to analyse the intent and scope of this pull request."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run Intent" })).toBeInTheDocument();
+  });
+
+  const finding = (id: string, scope: string | null, dismissed = false) => ({
+    id,
+    severity: "WARNING",
+    category: "bug",
+    title: id,
+    file: "a.ts",
+    start_line: 1,
+    end_line: 1,
+    rationale: "r",
+    confidence: 0.9,
+    scope,
+    accepted_at: null,
+    dismissed_at: dismissed ? "2026-01-02T00:00:00Z" : null,
+  });
+  const review = (findings: unknown[]) => ({
+    id: "r1",
+    pr_id: "pr1",
+    agent_id: "A",
+    kind: "review",
+    created_at: "2026-01-01T00:00:00Z",
+    findings,
+  });
+
+  it("shows how many findings were hidden as out of scope, with a link to the Findings tab", () => {
+    state.data = INTENT;
+    state.reviews = [review([finding("a", "out"), finding("b", "out"), finding("c", "in")])];
+    renderBlock();
+    const line = screen.getByTestId("intent-hidden-findings");
+    expect(line.textContent).toContain("2 findings hidden as out of scope");
+    expect(screen.getByRole("link", { name: "View in Findings" })).toHaveAttribute("href", "?tab=findings");
+  });
+
+  it("uses the singular for one hidden finding; dismissed and in-scope ones are not counted", () => {
+    state.data = INTENT;
+    state.reviews = [review([finding("a", "out"), finding("d", "out", true), finding("s", "signal")])];
+    renderBlock();
+    expect(screen.getByTestId("intent-hidden-findings").textContent).toContain("1 finding hidden as out of scope");
+  });
+
+  it("shows nothing about hidden findings when none are hidden", () => {
+    state.data = INTENT;
+    state.reviews = [review([finding("a", "in"), finding("b", null)])];
+    renderBlock();
+    expect(screen.queryByTestId("intent-hidden-findings")).not.toBeInTheDocument();
   });
 });

@@ -55,6 +55,20 @@ export const s = {
     color: "var(--text-primary)",
   } as React.CSSProperties,
 
+  hiddenWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    margin: "4px 0 0",
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } as React.CSSProperties,
+
+  hiddenLink: {
+    color: "var(--accent)",
+    fontWeight: 600,
+  } as React.CSSProperties,
+
   sourcesWrap: {
     display: "flex",
     flexDirection: "column",

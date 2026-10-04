@@ -15,7 +15,9 @@ import {
 } from "@devdigest/ui";
 import type { Intent } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
-import { useIntent, useRederiveIntent } from "@/lib/hooks/reviews";
+import Link from "next/link";
+import { useIntent, useRederiveIntent, usePrReviews } from "@/lib/hooks/reviews";
+import { hiddenByScope } from "@/lib/latest-findings";
 import { getSourceIcon, getSourceColor, getRetryAfterSeconds, getSourceReasonKey } from "./helpers";
 import { s } from "./styles";
 
@@ -25,7 +27,12 @@ interface IntentBlockProps {
 
 export function IntentBlock({ prId }: IntentBlockProps) {
   const t = useTranslations("brief");
+  const tp = useTranslations("prReview");
   const { data: intent, isLoading, error, refetch } = useIntent(prId);
+  // Findings the scope policy hid for this PR: shown next to the Out of scope list so the two
+  // ideas (what the PR is not about / what got hidden because of it) are visible together.
+  const { data: reviews } = usePrReviews(prId);
+  const hiddenCount = React.useMemo(() => hiddenByScope(reviews).length, [reviews]);
   const { mutate: rederive, isPending: isRederiving, error: deriveError } = useRederiveIntent(prId);
   const retryAfter = getRetryAfterSeconds(deriveError);
   const deriveErrorText = retryAfter !== null
@@ -161,6 +168,16 @@ export function IntentBlock({ prId }: IntentBlockProps) {
           )}
         </div>
       </div>
+
+      {hiddenCount > 0 && (
+        <div data-testid="intent-hidden-findings" style={s.hiddenWrap}>
+          <Icon.EyeOff size={13} />
+          <span>{tp("scope.suppressed", { count: hiddenCount })}</span>
+          <Link href="?tab=findings" style={s.hiddenLink}>
+            {t("intent.viewHidden")}
+          </Link>
+        </div>
+      )}
 
       {/* Sources chips */}
       {intent.sources && intent.sources.length > 0 && (
