@@ -7,7 +7,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DepCruiseGraph } from '../src/adapters/depgraph/index.js';
+import { resolve } from 'node:path';
+import { DepCruiseGraph, failedFileFrom } from '../src/adapters/depgraph/index.js';
 
 let root: string;
 
@@ -39,5 +40,23 @@ describe('DepCruiseGraph.buildEdges', () => {
       expect(e.from).not.toContain('\\');
       expect(e.to).not.toContain('\\');
     }
+  });
+});
+
+describe('failedFileFrom', () => {
+  const bad = 'clones/microsoft/playwright/tests/page/selectors-css.spec.ts';
+  const candidates = [resolve('clones/microsoft/playwright/src/a.ts'), resolve(bad)];
+  const message =
+    'Extracting dependencies ran afoul of...\n\n  Debug Failure. False expression: Unexpected node.\r\n' +
+    "Verbose Debug Information: Node PartiallyEmittedExpression did not pass test 'isLeftHandSideExpression'.\n" +
+    `... in ${bad}\n\n`;
+
+  it('finds the file cruise names in its failure message', () => {
+    expect(failedFileFrom(new Error(message), candidates)).toBe(resolve(bad));
+  });
+
+  it('returns null when the message names no file we passed in', () => {
+    expect(failedFileFrom(new Error('boom'), candidates)).toBeNull();
+    expect(failedFileFrom(new Error('... in some/other/file.ts'), candidates)).toBeNull();
   });
 });
