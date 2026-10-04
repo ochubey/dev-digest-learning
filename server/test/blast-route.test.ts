@@ -131,3 +131,51 @@ describe('GET /pulls/:id/blast', () => {
     });
   });
 });
+
+describe('GET /pulls/:id/history', () => {
+  async function history(rows: Rows, github: unknown) {
+    const git = { diff: async () => ({ files: [{ path: 'src/a.ts', hunks: [] }] }) };
+    const app = await buildApp({
+      config,
+      db: fakeDb(rows),
+      overrides: { auth: fakeAuth as never, git: git as never, github: github as never },
+    });
+    closeApp = () => app.close();
+    return app.inject({ method: 'GET', url: `/pulls/${PR_ID}/history` });
+  }
+  const merged = [
+    { number: 7, title: 'Touch a', author: 'x', merged_at: '2026-02-01T00:00:00Z', files: ['src/a.ts', 'z.ts'] },
+    { number: 8, title: 'Other', author: 'y', merged_at: '2026-02-02T00:00:00Z', files: ['q.ts'] },
+  ];
+
+  it('returns prior PRs overlapping the changed files', async () => {
+    const listMerged = vi.fn(async () => merged);
+    const res = await history(okRows(), { listMergedPullRequestsWithFiles: listMerged });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { history: { pr_number: number; files_overlap: string[] }[] };
+    expect(body.history).toHaveLength(1);
+    expect(body.history[0]).toMatchObject({ pr_number: 7, files_overlap: ['src/a.ts'] });
+    expect(listMerged).toHaveBeenCalledWith({ owner: 'o', name: 'n' }, expect.objectContaining({ excludeNumber: undefined }));
+  });
+
+  it('is fail-open: a GitHub error yields an empty history, not a 5xx', async () => {
+    const res = await history(okRows(), {
+      listMergedPullRequestsWithFiles: async () => {
+        throw new Error('rate limited');
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ history: [] });
+  });
+
+  it('404 for an unknown PR and 403 for another workspace', async () => {
+    expect((await history(new Map(), {})).statusCode).toBe(404);
+    await cleanupApp();
+    expect((await history(new Map([[t.pullRequests, [pr(OTHER_WS)]]]), {})).statusCode).toBe(403);
+  });
+});
+
+async function cleanupApp() {
+  await closeApp?.();
+  closeApp = null;
+}
