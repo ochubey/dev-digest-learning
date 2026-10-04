@@ -22,7 +22,10 @@ import { dirname, join } from 'node:path';
 import { runFullIndex } from '../src/modules/repo-intel/pipeline/full.js';
 import { runIncremental } from '../src/modules/repo-intel/pipeline/incremental.js';
 import type { RepoIntelRepository } from '../src/modules/repo-intel/repository.js';
-import { INDEXER_VERSION } from '../src/modules/repo-intel/constants.js';
+import {
+  INDEXER_VERSION,
+  MIN_FILES_FOR_EMPTY_GRAPH_CHECK,
+} from '../src/modules/repo-intel/constants.js';
 import type { IndexState } from '../src/modules/repo-intel/types.js';
 import type { Container } from '../src/platform/container.js';
 
@@ -204,6 +207,27 @@ describe('runFullIndex', () => {
     expect(state!.indexerVersion).toBe(INDEXER_VERSION);
     expect(state!.status).toBe('full');
     expect(state!.filesIndexed).toBe(2);
+  });
+
+  it('marks a big repo partial when the import graph comes out empty', async () => {
+    for (let i = 0; i < MIN_FILES_FOR_EMPTY_GRAPH_CHECK; i++) {
+      await writeFileAt(root, `src/f${i}.ts`, `export function fn${i}() { return ${i}; }
+`);
+    }
+    const stub = makeRepoStub({
+      basics: { id: 'r3', owner: 'acme', name: 'app', clonePath: root },
+    });
+    // makeContainer's depgraph stub returns no edges, like a silently broken graph step.
+    const container = makeContainer({
+      currentHead: async () => 'sha-head',
+      diffNameOnly: async () => [],
+    });
+
+    const result = await runFullIndex(container, stub.repo, { repoId: 'r3' });
+
+    expect(result.status).toBe('partial');
+    expect(result.reason).toBe('graph_failed');
+    expect(stub.getState()!.status).toBe('partial');
   });
 
   it('returns degraded when the repo has no clonePath (writes a degraded state row)', async () => {

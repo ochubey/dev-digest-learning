@@ -44,6 +44,7 @@ import type {
 import type { IndexResult, IndexStatus } from '../types.js';
 import { walkClone } from './walk.js';
 import { computeFileRank } from './rank.js';
+import { emptyGraphReason } from './graph-guard.js';
 import { renderRepoMap } from './repo-map.js';
 
 export interface IndexPayload {
@@ -215,6 +216,7 @@ export async function runFullIndex(
     try {
       const edges = await container.depgraph.buildEdges(repo.clonePath, walk.files);
       edgeRows = edges.map((e) => ({ fromFile: e.from, toFile: e.to }));
+      graphFailed = emptyGraphReason(edgeRows.length, walk.files.length);
     } catch (err) {
       graphFailed = asMessage(err);
     }

@@ -49,6 +49,8 @@ export const INDEX_SOFT_BUDGET_MS = 110_000;
 
 // --- [T3] Graph / hotness / repo-map ---------------------------------------
 export const BFS_DEPTH = 2;
+/** Repos at least this big must yield some import edges, else the index is marked partial. */
+export const MIN_FILES_FOR_EMPTY_GRAPH_CHECK = 20;
 export const HOTNESS_WINDOW_DAYS = 180;
 export const DEFAULT_REPO_MAP_TOKEN_BUDGET = 1500;
 /** Signatures are trimmed to this many chars in the parse phase (cache stability). */
