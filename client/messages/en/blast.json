@@ -47,7 +47,7 @@
     "scope": "Recent merged PRs only; older changes may not appear."
   },
   "idle": {
-    "title": "{count} changed symbols with no callers"
+    "title": "{count, plural, one {# changed symbol} other {# changed symbols}} with no callers"
   },
   "showAll": "Show all {count}"
 }

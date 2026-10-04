@@ -156,7 +156,7 @@ describe("BlastRadiusBlock", () => {
     );
     // the symbol is summarised on one collapsed line, not rendered as a "0 callers" row
     expect(screen.queryByTestId("blast-symbol")).not.toBeInTheDocument();
-    expect(screen.getByTestId("blast-idle")).toHaveTextContent("1 changed symbols with no callers");
+    expect(screen.getByTestId("blast-idle")).toHaveTextContent("1 changed symbol with no callers");
   });
 
   it("shows the empty state when there are no changed symbols", () => {
