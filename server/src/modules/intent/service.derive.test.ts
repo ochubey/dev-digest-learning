@@ -390,3 +390,24 @@ describe('IntentService reuseIfSameHead (review runs)', () => {
     expect(res.status).toBe('derived');
   });
 });
+
+describe('IntentService: empty description', () => {
+  const emptyBodyPull = { id: 'pr1', title: 'T', body: '', headSha: 'sha1' } as never;
+
+  it('with changed files it still derives and persists an intent, at low confidence (0.3)', async () => {
+    const { svc, upsertIntent } = makeService({ llm: () => okLlm() });
+    const res = await svc.deriveIntentDetailed(emptyBodyPull, repo, [{ path: 'a.ts', patch: '@@ -1 +1 @@' }], 'openrouter' as never, 'flash');
+    expect(res.status).toBe('derived');
+    expect(res.intent?.confidence).toBe(0.3);
+    expect(res.intent?.summary).toBe('S');
+    expect(res.meta?.warnings.join(' ')).toMatch(/only the title and changed files/);
+    expect(upsertIntent).toHaveBeenCalledTimes(1);
+  });
+
+  it('with no files and no sources the confidence is 0 (nothing to go on)', async () => {
+    const { svc } = makeService({ llm: () => okLlm() });
+    const res = await svc.deriveIntentDetailed(emptyBodyPull, repo, [], 'openrouter' as never, 'flash');
+    expect(res.intent?.confidence).toBe(0);
+  });
+});
+

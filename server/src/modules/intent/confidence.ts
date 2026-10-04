@@ -1,7 +1,8 @@
 // Intent confidence ceiling, computed in code from evidence (the model's own number is only a
 // self-assessment and used to ignore unavailable sources entirely). Result = min(model, caps).
 //
-//   empty PR description ............................ 0.4 (0 when no external source was fetched)
+//   empty PR description ............................ 0.4 (0.3 when only the title and changed files
+//                                                     are available, 0 when there is nothing at all)
 //   explicitly referenced plan / spec / ticket that
 //     is unavailable (not found or fetch error) ...... 0.5
 //   any other unavailable explicit reference
@@ -13,6 +14,8 @@
 import type { SourceStatus } from './ref-resolver.js';
 
 export const CAP_EMPTY_BODY = 0.4;
+/** Empty description, no external source, but changed files exist: a low-confidence intent is still useful. */
+export const CAP_EMPTY_BODY_FILES_ONLY = 0.3;
 export const CAP_UNAVAILABLE_EXPLICIT_SOURCE = 0.5;
 export const CAP_UNAVAILABLE_OTHER_REF = 0.7;
 
@@ -24,6 +27,8 @@ export interface ConfidenceInput {
   statuses: Record<string, SourceStatus>;
   /** True when at least one external source (issue / plan / spec) was actually fetched. */
   anyFetched: boolean;
+  /** True when the PR has changed files the intent prompt could read. */
+  hasFiles: boolean;
 }
 
 export interface ConfidenceResult {
@@ -47,11 +52,14 @@ export function applyConfidenceCaps(input: ConfidenceInput): ConfidenceResult {
   };
 
   if (input.bodyEmpty) {
-    if (!input.anyFetched) {
-      if (confidence > 0) reasons.push('confidence set to 0: empty description and no fetched source');
-      confidence = 0;
-    } else {
+    if (input.anyFetched) {
       cap(CAP_EMPTY_BODY, 'empty description');
+    } else if (input.hasFiles) {
+      // Only title + changed files to go on: keep the intent, but flag it as low confidence.
+      cap(CAP_EMPTY_BODY_FILES_ONLY, 'empty description (only the title and changed files to go on)');
+    } else {
+      if (confidence > 0) reasons.push('confidence set to 0: empty description, no changed files and no fetched source');
+      confidence = 0;
     }
   }
 

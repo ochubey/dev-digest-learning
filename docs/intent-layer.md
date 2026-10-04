@@ -64,7 +64,7 @@ flowchart LR
 6. Cache on head SHA; stale if PR updates
 7. Fail-open: log error, intent is null. If the `standard` feature-model provider cannot be set up, the main review model is used instead (warning in the run log)
 8. Confidence = `min(model, ceiling)`; the ceiling is computed in code from evidence (`confidence.ts`), the model's own number is only a self-assessment:
-   - empty description: 0.4 (0.0 when no external source was fetched)
+   - empty description: 0.4 (0.3 when no external source was fetched but changed files exist; 0.0 only when there is nothing to go on at all)
    - an explicitly referenced plan, spec or ticket that is unavailable (not found or fetch error): 0.5
    - any other unavailable explicit reference (e.g. an issue in another repository): 0.7
    - the stricter ceiling wins; a model value below the ceiling is kept; fetched sources never limit it. Every applied cap is added to the derive warnings (run log, ASCII)

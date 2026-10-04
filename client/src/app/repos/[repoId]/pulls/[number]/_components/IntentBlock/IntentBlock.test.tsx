@@ -278,4 +278,19 @@ describe("IntentBlock: reason next to an unavailable source", () => {
     renderBlock();
     expect(screen.queryByTestId("intent-hidden-findings")).not.toBeInTheDocument();
   });
+
+  it("a low-confidence intent (0 < c < 0.5) is still shown, with a low-confidence note", () => {
+    state.data = { ...INTENT, confidence: 0.3 };
+    renderBlock();
+    expect(screen.getByText("Add intent layer")).toBeInTheDocument();
+    expect(screen.getByTestId("intent-low-confidence").textContent).toContain("Low confidence");
+    expect(screen.queryByText(brief.intent.insufficientContext)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recalculate" })).toBeInTheDocument();
+  });
+
+  it("no low-confidence note at 0.5 and above", () => {
+    state.data = { ...INTENT, confidence: 0.5 };
+    renderBlock();
+    expect(screen.queryByTestId("intent-low-confidence")).not.toBeInTheDocument();
+  });
 });

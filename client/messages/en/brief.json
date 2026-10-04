@@ -19,6 +19,7 @@
     "stale": "Intent may be stale (PR updated)",
     "rederive": "Recalculate",
     "viewHidden": "View in Findings",
+    "lowConfidence": "Low confidence: the description is thin, so this intent is a best guess. Add a PR description and recalculate for a sharper one.",
     "fetched": "Fetched",
     "unavailable": "Not found",
     "error": "Error",

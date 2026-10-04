@@ -55,6 +55,15 @@ export const s = {
     color: "var(--text-primary)",
   } as React.CSSProperties,
 
+  lowConfidence: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    margin: "8px 0 0",
+    fontSize: 12,
+    color: "var(--warn)",
+  } as React.CSSProperties,
+
   hiddenWrap: {
     display: "flex",
     alignItems: "center",

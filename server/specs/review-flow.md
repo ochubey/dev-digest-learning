@@ -24,7 +24,7 @@ per-agent, isolated: one agent's failure never aborts another's run).
    empty is **omitted**, not sent as `""`.
 3. **Intent** — before the agent loop the executor derives the PR intent once
    (`IntentService`, feature model `standard`; cache hit → no LLM call;
-   failure is fail-open: no intent, no scope filtering; if the `standard` provider cannot be set up the agent's main model is used; manual POST derive is rate limited 1/30s per PR). Confidence is code-capped (empty body: 0.4 if an issue/plan was fetched, else 0.0) and source statuses come from the resolver, not the LLM. The structured `Intent`
+   failure is fail-open: no intent, no scope filtering; if the `standard` provider cannot be set up the agent's main model is used; manual POST derive is rate limited 1/30s per PR). Confidence is code-capped (empty body: 0.4 if an issue/plan was fetched, 0.3 if only changed files are available, 0.0 only with nothing to go on) and source statuses come from the resolver, not the LLM. The structured `Intent`
    is passed to the engine as `intentObj`.
 4. **LLM call** — through `container.llm(agent.provider)`, single-pass or
    chunked per `agent.strategy`. Cost comes from `reviewer-core`'s

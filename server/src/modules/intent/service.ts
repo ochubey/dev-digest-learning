@@ -255,6 +255,7 @@ export class IntentService {
         bodyEmpty: body.trim().length === 0,
         statuses: refs.sourceStatuses,
         anyFetched: refs.sources.some((x) => x.status === 'fetched'),
+        hasFiles: prFiles.length > 0,
       });
       const confidence = capped.confidence;
       warnings.push(...capped.reasons);

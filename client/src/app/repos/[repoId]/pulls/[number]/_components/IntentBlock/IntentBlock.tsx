@@ -21,6 +21,9 @@ import { hiddenByScope } from "@/lib/latest-findings";
 import { getSourceIcon, getSourceColor, getRetryAfterSeconds, getSourceReasonKey } from "./helpers";
 import { s } from "./styles";
 
+/** Below this the intent is shown, but flagged as a weak hint (matches the review-prompt threshold). */
+const LOW_CONFIDENCE = 0.5;
+
 interface IntentBlockProps {
   prId: string;
 }
@@ -201,6 +204,13 @@ export function IntentBlock({ prId }: IntentBlockProps) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {intent.confidence < LOW_CONFIDENCE && (
+        <div data-testid="intent-low-confidence" role="note" style={s.lowConfidence}>
+          <Icon.Info size={13} />
+          <span>{t("intent.lowConfidence")}</span>
         </div>
       )}
 
