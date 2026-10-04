@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Card, Skeleton, ErrorState, EmptyState, Icon } from "@devdigest/ui";
 import { useBlastRadius } from "@/lib/hooks/blast";
+import { BlastGraph } from "./BlastGraph";
 import { blastCounts, canResync, degradedReasonKey } from "./helpers";
 import { ResyncButton } from "./ResyncButton";
 import { SymbolRow } from "./SymbolRow";
@@ -20,6 +21,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   const t = useTranslations("blast");
   const { data, isLoading, error, refetch } = useBlastRadius(prId);
   const onResynced = useCallback(() => void refetch(), [refetch]);
+  const [view, setView] = useState<"tree" | "graph">("tree");
 
   if (isLoading) {
     return (
@@ -80,6 +82,19 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
             {t(`stat.${k}`)}
           </span>
         ))}
+        <div role="group" aria-label={t("title")} style={s.viewToggle}>
+          {(["tree", "graph"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+              style={{ ...s.viewBtn, ...(view === v ? s.viewBtnActive : null) }}
+            >
+              {t(`view.${v}`)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {counts.callers === 0 && (
@@ -88,17 +103,21 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
         </div>
       )}
 
-      <div style={s.list}>
-        {data.downstream.map((d, i) => (
-          <SymbolRow
-            key={d.symbol}
-            impact={d}
-            defaultOpen={i === 0}
-            repoFullName={repoFullName}
-            headSha={headSha}
-          />
-        ))}
-      </div>
+      {view === "graph" ? (
+        <BlastGraph downstream={data.downstream} />
+      ) : (
+        <div style={s.list}>
+          {data.downstream.map((d, i) => (
+            <SymbolRow
+              key={d.symbol}
+              impact={d}
+              defaultOpen={i === 0}
+              repoFullName={repoFullName}
+              headSha={headSha}
+            />
+          ))}
+        </div>
+      )}
     </Card>
   );
 }

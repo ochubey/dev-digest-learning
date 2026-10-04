@@ -130,6 +130,60 @@ export const s = {
     border: "1px solid var(--border)",
   } as React.CSSProperties,
 
+  viewToggle: {
+    display: "inline-flex",
+    marginLeft: "auto",
+    padding: 2,
+    gap: 2,
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    background: "var(--bg-hover)",
+  } as React.CSSProperties,
+
+  viewBtn: {
+    padding: "2px 10px",
+    fontSize: 12,
+    border: "none",
+    borderRadius: 4,
+    background: "transparent",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+  } as React.CSSProperties,
+
+  viewBtnActive: {
+    background: "var(--bg-card, var(--bg-base))",
+    color: "var(--text-primary)",
+    fontWeight: 600,
+  } as React.CSSProperties,
+
+  graphSvg: {
+    display: "block",
+    width: "100%",
+    height: "auto",
+  } as React.CSSProperties,
+
+  legend: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 14,
+    marginTop: 8,
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } as React.CSSProperties,
+
+  legendItem: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  } as React.CSSProperties,
+
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    border: "2px solid var(--accent)",
+  } as React.CSSProperties,
+
   muted: {
     fontSize: 12,
     color: "var(--text-muted)",

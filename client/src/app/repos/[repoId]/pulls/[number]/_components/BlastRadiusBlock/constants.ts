@@ -3,3 +3,14 @@ export const RESYNC_POLL_MAX_MS = 120_000;
 
 /** Degraded reasons where a resync can help (flag_off / repo_too_large cannot be fixed by one). */
 export const RESYNCABLE_REASONS = ["no_data", "index_failed", "index_partial", "unknown"] as const;
+
+/** Graph geometry (SVG user units; the SVG scales to the card width via viewBox). */
+export const GRAPH = {
+  nodeW: 190,
+  nodeH: 28,
+  rowGap: 10,
+  colGap: 90,
+  pad: 8,
+  /** Labels longer than this are truncated; the full text stays in the node's <title>. */
+  maxChars: 24,
+} as const;

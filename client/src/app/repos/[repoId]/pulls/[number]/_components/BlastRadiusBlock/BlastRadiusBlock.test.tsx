@@ -172,9 +172,8 @@ describe("BlastRadiusBlock", () => {
     it("expands the first symbol and collapses the rest", () => {
       state.data = TWO;
       renderBlock();
-      const [first, second] = screen.getAllByRole("button", { expanded: undefined });
-      expect(first).toHaveAttribute("aria-expanded", "true");
-      expect(second).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByRole("button", { name: /foo/ })).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("button", { name: /bar/ })).toHaveAttribute("aria-expanded", "false");
       expect(screen.getByText("src/r.ts:7")).toBeInTheDocument();
       expect(screen.queryByText("src/o.ts:3")).not.toBeInTheDocument();
     });
@@ -182,7 +181,7 @@ describe("BlastRadiusBlock", () => {
     it("toggles a symbol open and closed", () => {
       state.data = TWO;
       renderBlock();
-      const second = screen.getAllByRole("button")[1]!;
+      const second = screen.getByRole("button", { name: /bar/ });
       fireEvent.click(second);
       expect(second).toHaveAttribute("aria-expanded", "true");
       expect(screen.getByText("src/o.ts:3")).toBeInTheDocument();
@@ -243,6 +242,39 @@ describe("BlastRadiusBlock", () => {
       repoIntel.isError = true;
       renderBlock();
       expect(screen.getByRole("alert")).toHaveTextContent(blast.degraded.resyncFailed);
+    });
+  });
+
+  describe("tree / graph toggle", () => {
+    it("defaults to the tree and switches to the graph and back", () => {
+      state.data = DATA;
+      renderBlock();
+      const tree = screen.getByRole("button", { name: blast.view.tree });
+      const graph = screen.getByRole("button", { name: blast.view.graph });
+      expect(tree).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("blast-symbol")).toBeInTheDocument();
+
+      fireEvent.click(graph);
+      expect(graph).toHaveAttribute("aria-pressed", "true");
+      expect(screen.queryByTestId("blast-symbol")).not.toBeInTheDocument();
+      expect(screen.getByRole("img", { name: blast.graph.ariaLabel })).toBeInTheDocument();
+      expect(screen.getByTestId("blast-node-symbol")).toHaveTextContent("foo");
+      expect(screen.getByTestId("blast-node-caller")).toHaveTextContent("handler");
+      expect(screen.getByTestId("blast-node-endpoint")).toHaveTextContent("GET /x");
+      expect(screen.getByTestId("blast-node-cron")).toHaveTextContent("daily");
+
+      fireEvent.click(tree);
+      expect(screen.getByTestId("blast-symbol")).toBeInTheDocument();
+    });
+
+    it("shows the empty graph message when nothing is downstream", () => {
+      state.data = {
+        ...DATA,
+        downstream: [{ symbol: "foo", callers: [], endpoints_affected: [], crons_affected: [] }],
+      };
+      renderBlock();
+      fireEvent.click(screen.getByRole("button", { name: blast.view.graph }));
+      expect(screen.getByText(blast.graph.empty)).toBeInTheDocument();
     });
   });
 });
