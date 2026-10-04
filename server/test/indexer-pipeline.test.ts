@@ -209,6 +209,30 @@ describe('runFullIndex', () => {
     expect(state!.filesIndexed).toBe(2);
   });
 
+  it('an interrupted rebuild leaves a partial row with version 0, never "full"', async () => {
+    await writeFileAt(root, 'src/a.ts', 'export function a() { return 1; }\n');
+    const stub = makeRepoStub({
+      basics: { id: 'r4', owner: 'acme', name: 'app', clonePath: root },
+    });
+    // The process "dies" while the new rows are being written (after the delete).
+    (stub.repo as unknown as { insertReferences: () => Promise<void> }).insertReferences =
+      async () => {
+        throw new Error('killed mid-insert');
+      };
+    const container = makeContainer({
+      currentHead: async () => 'sha-head',
+      diffNameOnly: async () => [],
+    });
+
+    await expect(runFullIndex(container, stub.repo, { repoId: 'r4' })).rejects.toThrow(
+      'killed mid-insert',
+    );
+
+    const state = stub.getState();
+    expect(state!.status).toBe('partial');
+    expect(state!.indexerVersion).toBe(0); // forces a full rebuild on the next resync
+  });
+
   it('marks a big repo partial when the import graph comes out empty', async () => {
     for (let i = 0; i < MIN_FILES_FOR_EMPTY_GRAPH_CHECK; i++) {
       await writeFileAt(root, `src/f${i}.ts`, `export function fn${i}() { return ${i}; }

@@ -202,6 +202,20 @@ export async function runFullIndex(
   // Persist phase -------------------------------------------------------
   // Delete-then-insert is the idempotent shape blast already uses. Keeps
   // the new UNIQUE index (symbols_repo_path_name_kind_line_uq) happy.
+  // The delete + batched inserts below are not one transaction. Stamp the row BEFORE them as
+  // an unfinished rebuild (status partial, indexerVersion 0): if the process dies half-way
+  // (dev-server restart, crash), the half-written index is reported as partial instead of
+  // "full", and the version mismatch makes the next resync rebuild it from scratch (a same-SHA
+  // resync would otherwise be a no-op). The final upsert below overwrites this row.
+  await repository.upsertIndexState({
+    repoId,
+    lastIndexedSha: currentSha,
+    indexerVersion: 0,
+    status: 'partial',
+    filesIndexed: 0,
+    filesSkipped,
+    stats: { rebuildInProgress: true },
+  });
   await repository.deleteAllForRepo(repoId);
   await repository.insertSymbols(symbolsBuf);
   await repository.insertReferences(refsBuf);
