@@ -176,6 +176,76 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     ]);
   }
 
+  // ---- PR #483: finding whose start_line lies OUTSIDE every diff hunk ----
+  // A real model is gated by citation grounding and never emits this, so it must be seeded
+  // to exercise the "finding outside the patch" UI path.
+  const [pr483] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 483)));
+  if (!pr483) {
+    const [pr2] = await db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId,
+        number: 483,
+        title: 'Tweak retry delay in payments client',
+        author: 'marisa.koch',
+        branch: 'fix/retry-delay',
+        base: 'main',
+        headSha: 'f6e5d4c3b2a1',
+        additions: 2,
+        deletions: 1,
+        filesCount: 1,
+        status: 'needs_review',
+        body: 'Lower the retry delay.',
+      })
+      .returning();
+
+    await db.insert(t.prFiles).values({
+      prId: pr2!.id,
+      path: 'src/api/payments.ts',
+      additions: 2,
+      deletions: 1,
+      // single hunk: new-file lines 10-13 only
+      patch: [
+        '@@ -10,3 +10,4 @@ export async function charge() {',
+        '   const res = await client.post(url, body);',
+        '-  await sleep(1000);',
+        '+  await sleep(250);',
+        '+  // retry quickly',
+        '   return res;',
+      ].join('\n'),
+    });
+
+    const [review2] = await db
+      .insert(t.reviews)
+      .values({
+        workspaceId,
+        prId: pr2!.id,
+        kind: 'review',
+        verdict: 'comment',
+        summary: 'Small change; one finding points at a line outside the patch.',
+        score: 80,
+        model: 'seed',
+      })
+      .returning();
+
+    await db.insert(t.findings).values({
+      reviewId: review2!.id,
+      file: 'src/api/payments.ts',
+      startLine: 80, // outside the only hunk (lines 10-13)
+      endLine: 82,
+      severity: 'WARNING',
+      category: 'correctness',
+      title: 'Unbounded retry loop outside the changed hunk',
+      rationale: 'Line 80 retries forever; this line is not part of the diff.',
+      suggestion: 'Cap the number of attempts.',
+      confidence: 0.7,
+    });
+  }
+
   // ---- built-in agents (the four starter presets) ----
   // Prompt bodies live in ./seed-prompts.ts (mirrored in docs/agent-prompts/*.md).
   const seedAgents: Array<typeof t.agents.$inferInsert> = [
