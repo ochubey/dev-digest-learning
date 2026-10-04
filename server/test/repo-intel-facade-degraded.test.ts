@@ -123,3 +123,32 @@ describe('RepoIntel facade — degraded contract (flag on, but no data)', () => 
     await expect(svc.getCallerSignatures('r1', [])).resolves.toEqual([]);
   });
 });
+
+describe('RepoIntel facade — persistent blast reports an incomplete index', () => {
+  function persistentService(status: 'full' | 'partial'): RepoIntelService {
+    const container = { config: { repoIntelEnabled: true }, db: {} as never } as never;
+    const svc = new RepoIntelService(container);
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      tryGetIndexState: async () => ({ status }),
+      getSymbolRows: async (_id: string, files: string[]) =>
+        files.includes('a.ts') ? [{ path: 'a.ts', name: 'foo', kind: 'function', line: 1 }] : [],
+      getResolvedCallers: async () => [],
+      getFileFacts: async () => [],
+    };
+    return svc;
+  }
+
+  it('partial index -> degraded index_partial (never a silent "no callers")', async () => {
+    const blast = await persistentService('partial').getBlastRadius('r1', ['a.ts']);
+    expect(blast.changedSymbols).toHaveLength(1);
+    expect(blast.callers).toEqual([]);
+    expect(blast.degraded).toBe(true);
+    expect(blast.reason).toBe('index_partial');
+  });
+
+  it('full index -> not degraded', async () => {
+    const blast = await persistentService('full').getBlastRadius('r1', ['a.ts']);
+    expect(blast.degraded).toBe(false);
+    expect(blast.reason).toBeUndefined();
+  });
+});

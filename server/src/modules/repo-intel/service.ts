@@ -334,8 +334,13 @@ export class RepoIntelService implements RepoIntel {
       }
       nameSet.add(s.name);
     }
+    // A `partial` index (soft budget, failed/empty graph, parse errors) can miss callers, so
+    // report it instead of presenting "no callers" as a complete answer.
+    const incomplete: Pick<BlastResult, 'degraded' | 'reason'> =
+      state.status === 'partial' ? { degraded: true, reason: 'index_partial' } : { degraded: false };
+
     if (nameSet.size === 0) {
-      return { changedSymbols, callers: [], impactedEndpoints: [], degraded: false };
+      return { changedSymbols, callers: [], impactedEndpoints: [], ...incomplete };
     }
 
     // Resolved cross-file callers.
@@ -386,7 +391,7 @@ export class RepoIntelService implements RepoIntel {
       callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
       impactedEndpoints: [...endpoints],
       factsByFile,
-      degraded: false,
+      ...incomplete,
     };
   }
 
