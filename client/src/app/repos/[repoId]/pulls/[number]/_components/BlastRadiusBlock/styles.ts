@@ -12,36 +12,13 @@ export const s = {
     padding: "12px 0",
   } as React.CSSProperties,
 
-  summary: {
-    fontSize: 14,
-    color: "var(--text-secondary)",
-    margin: "12px 0",
-  } as React.CSSProperties,
+  summary: { fontSize: 12.5, color: "var(--text-secondary)", margin: "0 0 10px" } as React.CSSProperties,
 
-  statsRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    margin: "0 0 12px",
-  } as React.CSSProperties,
+  statsRow: { display: "flex", alignItems: "center", marginBottom: 10 } as React.CSSProperties,
 
-  stat: {
-    display: "inline-flex",
-    alignItems: "baseline",
-    gap: 6,
-    padding: "4px 10px",
-    fontSize: 12,
-    borderRadius: 5,
-    background: "var(--bg-hover)",
-    border: "1px solid var(--border)",
-    color: "var(--text-muted)",
-  } as React.CSSProperties,
+  stat: { display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-secondary)", fontSize: 12.5 } as React.CSSProperties,
 
-  statNum: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "var(--text-primary)",
-  } as React.CSSProperties,
+  statNum: { color: "var(--text-primary)", fontWeight: 650, fontVariantNumeric: "tabular-nums" } as React.CSSProperties,
 
   degraded: {
     display: "flex",
@@ -52,27 +29,9 @@ export const s = {
     color: "var(--warn)",
   } as React.CSSProperties,
 
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  } as React.CSSProperties,
+  list: { display: "flex", flexDirection: "column", gap: 2 } as React.CSSProperties,
 
-  symbolHead: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    width: "100%",
-    padding: 0,
-    border: "none",
-    background: "none",
-    cursor: "pointer",
-    textAlign: "left",
-    font: "inherit",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "var(--text-primary)",
-  } as React.CSSProperties,
+  symbolHead: { display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "5px 6px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left", font: "inherit", color: "var(--text-primary)" } as React.CSSProperties,
 
   resyncWrap: {
     display: "inline-flex",
@@ -86,80 +45,34 @@ export const s = {
     color: "var(--danger, var(--warn))",
   } as React.CSSProperties,
 
-  symbolCount: {
-    fontSize: 12,
-    fontWeight: 400,
-    color: "var(--text-muted)",
-  } as React.CSSProperties,
+  symbolCount: { fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginLeft: "auto" } as React.CSSProperties,
 
-  callers: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    margin: "6px 0 0 20px",
-  } as React.CSSProperties,
+  callers: { padding: "4px 0 8px 14px" } as React.CSSProperties,
 
-  callerRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
-    color: "var(--text-secondary)",
-  } as React.CSSProperties,
+  callerRow: { display: "flex", alignItems: "center", gap: 7, padding: "3px 0 3px 18px", position: "relative", fontSize: 12.5 } as React.CSSProperties,
 
-  callerLink: {
-    color: "var(--accent)",
-    fontFamily: "var(--font-mono, monospace)",
-  } as React.CSSProperties,
+  callerLink: { background: "none", border: "none", padding: 0, fontFamily: "var(--font-mono, monospace)", fontSize: 12, color: "var(--text-secondary)", textDecoration: "none", textUnderlineOffset: 2, cursor: "pointer" } as React.CSSProperties,
 
-  chips: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 6,
-    margin: "6px 0 0 20px",
-  } as React.CSSProperties,
+  chips: { display: "flex", gap: 6, flexWrap: "wrap", padding: "8px 0 2px 18px" } as React.CSSProperties,
 
-  chip: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "2px 8px",
-    fontSize: 12,
-    borderRadius: 5,
-    background: "var(--bg-hover)",
-    border: "1px solid var(--border)",
-  } as React.CSSProperties,
+  chip: { display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px", borderRadius: 5, fontSize: 11.5, fontWeight: 600, fontFamily: "var(--font-mono, monospace)", lineHeight: 1.4, whiteSpace: "nowrap" } as React.CSSProperties,
 
-  viewToggle: {
-    display: "inline-flex",
-    marginLeft: "auto",
-    padding: 2,
-    gap: 2,
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--bg-hover)",
-  } as React.CSSProperties,
+  viewToggle: { marginLeft: "auto", display: "flex", gap: 2, background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 7, padding: 2 } as React.CSSProperties,
 
-  viewBtn: {
-    padding: "2px 10px",
-    fontSize: 12,
-    border: "none",
-    borderRadius: 4,
-    background: "transparent",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-  } as React.CSSProperties,
+  viewBtn: { padding: "3px 10px", fontSize: 11.5, fontWeight: 600, borderRadius: 5, border: "none", textTransform: "capitalize", background: "transparent", color: "var(--text-muted)", cursor: "pointer" } as React.CSSProperties,
 
-  viewBtnActive: {
-    background: "var(--bg-card, var(--bg-base))",
-    color: "var(--text-primary)",
-    fontWeight: 600,
-  } as React.CSSProperties,
+  viewBtnActive: { background: "var(--bg-elevated)", color: "var(--text-primary)" } as React.CSSProperties,
 
   graphSvg: {
     display: "block",
     width: "100%",
     height: "auto",
+  } as React.CSSProperties,
+
+  graphNote: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "var(--text-muted)",
   } as React.CSSProperties,
 
   legend: {
@@ -184,43 +97,13 @@ export const s = {
     border: "2px solid var(--accent)",
   } as React.CSSProperties,
 
-  priorWrap: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTop: "1px solid var(--border)",
-  } as React.CSSProperties,
+  priorWrap: { border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" } as React.CSSProperties,
 
-  priorHead: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    width: "100%",
-    padding: 0,
-    border: "none",
-    background: "none",
-    cursor: "pointer",
-    textAlign: "left",
-    font: "inherit",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "var(--text-primary)",
-  } as React.CSSProperties,
+  priorHead: { display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)" } as React.CSSProperties,
 
-  priorCount: {
-    padding: "0 6px",
-    fontSize: 12,
-    fontWeight: 400,
-    borderRadius: 4,
-    background: "var(--bg-hover)",
-    color: "var(--text-muted)",
-  } as React.CSSProperties,
+  priorCount: { padding: "2px 8px", borderRadius: 5, fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: "var(--text-secondary)", background: "var(--bg-hover)" } as React.CSSProperties,
 
-  priorList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    marginTop: 10,
-  } as React.CSSProperties,
+  priorList: { display: "flex", flexDirection: "column", gap: 10, padding: "4px 12px 12px" } as React.CSSProperties,
 
   priorItem: {
     display: "flex",
@@ -299,9 +182,16 @@ export const s = {
     color: "var(--accent)",
   } as React.CSSProperties,
 
-  muted: {
-    fontSize: 12,
-    color: "var(--text-muted)",
-    margin: "4px 0 0 20px",
-  } as React.CSSProperties,
+  muted: { fontSize: 12, color: "var(--text-muted)", padding: "4px 0 8px 32px" } as React.CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 } as React.CSSProperties,
+  headerLabel: { fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)" } as React.CSSProperties,
+  statsGroup: { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" } as React.CSSProperties,
+  statIcon: { color: "var(--text-muted)" } as React.CSSProperties,
+  symbolName: { fontFamily: "var(--font-mono, monospace)", fontSize: 12.5, fontWeight: 600 } as React.CSSProperties,
+  connV: { position: "absolute", left: 8, top: 0, bottom: 0, width: 1, background: "var(--border-strong)" } as React.CSSProperties,
+  connH: { position: "absolute", left: 8, top: "50%", width: 8, height: 1, background: "var(--border-strong)" } as React.CSSProperties,
+  cronChips: { display: "flex", gap: 6, flexWrap: "wrap", padding: "6px 0 2px 18px" } as React.CSSProperties,
+  chipEndpoint: { color: "var(--accent-text)", background: "var(--accent-bg)" } as React.CSSProperties,
+  chipCron: { color: "var(--warn)", background: "var(--warn-bg)" } as React.CSSProperties,
+  divider: { height: 1, background: "var(--border)", margin: "16px 0" } as React.CSSProperties,
 } as const;

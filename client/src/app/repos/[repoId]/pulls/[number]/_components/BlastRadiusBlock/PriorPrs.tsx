@@ -30,12 +30,18 @@ export function PriorPrs({ prId, repoFullName }: PriorPrsProps) {
         onClick={() => setOpen((o) => !o)}
         style={s.priorHead}
       >
-        <Icon.History size={14} />
+        <Icon.History size={14} style={{ color: "var(--text-muted)" }} />
         {t("priorPrs.title")}
         <span style={s.priorCount}>{items.length}</span>
-        <span style={{ marginLeft: "auto" }}>
-          {open ? <Icon.ChevronDown size={14} /> : <Icon.ChevronRight size={14} />}
-        </span>
+        <Icon.ChevronDown
+          size={15}
+          style={{
+            marginLeft: "auto",
+            color: "var(--text-muted)",
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform .15s",
+          }}
+        />
       </button>
 
       {open &&

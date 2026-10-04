@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { DownstreamImpact } from "@devdigest/shared";
 import { GRAPH } from "./constants";
 import { layoutGraph, truncate, type GraphNodeKind } from "./graph";
+import { splitSymbols } from "./helpers";
 import { s } from "./styles";
 
 const STROKE: Record<GraphNodeKind, string> = {
@@ -17,7 +18,13 @@ const STROKE: Record<GraphNodeKind, string> = {
 /** Changed symbols -> callers -> endpoints/crons, as an inline SVG (no graph library). */
 export function BlastGraph({ downstream }: { downstream: DownstreamImpact[] }) {
   const t = useTranslations("blast");
-  const layout = useMemo(() => layoutGraph(downstream), [downstream]);
+  // Symbols arrive ordered by importance; a PR with dozens would draw a hundreds-of-nodes
+  // column, so draw the top few and point to the tree for the rest.
+  const { shown, total } = useMemo(() => {
+    const { active } = splitSymbols(downstream);
+    return { shown: active.slice(0, GRAPH.maxSymbols), total: active.length };
+  }, [downstream]);
+  const layout = useMemo(() => layoutGraph(shown), [shown]);
 
   if (!layout) return <div style={s.muted}>{t("graph.empty")}</div>;
 
@@ -78,6 +85,9 @@ export function BlastGraph({ downstream }: { downstream: DownstreamImpact[] }) {
           </g>
         ))}
       </svg>
+      {total > shown.length && (
+        <div style={s.graphNote}>{t("graph.truncated", { shown: shown.length, total })}</div>
+      )}
       <div style={s.legend}>
         {(["symbol", "callers", "endpoints"] as const).map((k) => (
           <span key={k} style={s.legendItem}>

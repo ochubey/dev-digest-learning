@@ -126,7 +126,7 @@ describe("BlastRadiusBlock", () => {
     expect(screen.getByTestId("blast-stats")).toHaveTextContent("1symbols");
     expect(screen.getByTestId("blast-stats")).toHaveTextContent("1callers");
     expect(screen.getByText("foo")).toBeInTheDocument();
-    expect(screen.getByText("1 callers")).toBeInTheDocument();
+    expect(screen.getByText("1 caller")).toBeInTheDocument();
     expect(screen.getByTestId("blast-endpoint")).toHaveTextContent("GET /x");
     expect(screen.getByTestId("blast-cron")).toHaveTextContent("daily");
   });
@@ -217,7 +217,7 @@ describe("BlastRadiusBlock", () => {
     it("keeps the caller count visible while collapsed", () => {
       state.data = TWO;
       renderBlock();
-      expect(screen.getAllByText("1 callers")).toHaveLength(2);
+      expect(screen.getAllByText("1 caller")).toHaveLength(2);
     });
   });
 
@@ -566,6 +566,34 @@ describe("BlastRadiusBlock", () => {
         if (literal.length < 4) continue;
         expect(all, `hardcoded English UI string: "${literal}"`).not.toContain(literal);
       }
+    });
+  });
+
+  describe("graph size", () => {
+    const sym = (i: number) => ({
+      symbol: `s${i}`,
+      callers: [{ name: `c${i}`, file: `src/c${i}.ts`, line: i + 1 }],
+      endpoints_affected: [],
+      crons_affected: [],
+    });
+
+    it("draws only the top symbols of a big PR and says so", () => {
+      state.data = {
+        ...DATA,
+        changed_symbols: Array.from({ length: 12 }, (_, i) => ({ name: `s${i}`, file: "a.ts", kind: "function" })),
+        downstream: Array.from({ length: 12 }, (_, i) => sym(i)),
+      };
+      renderBlock();
+      fireEvent.click(screen.getByRole("button", { name: blast.view.graph }));
+      expect(screen.getAllByTestId("blast-node-symbol")).toHaveLength(8);
+      expect(screen.getByText("Showing the 8 most impactful of 12 symbols. Switch to the tree for the full list.")).toBeInTheDocument();
+    });
+
+    it("shows no truncation note when everything fits", () => {
+      state.data = DATA;
+      renderBlock();
+      fireEvent.click(screen.getByRole("button", { name: blast.view.graph }));
+      expect(screen.queryByText(/most impactful/)).not.toBeInTheDocument();
     });
   });
 });

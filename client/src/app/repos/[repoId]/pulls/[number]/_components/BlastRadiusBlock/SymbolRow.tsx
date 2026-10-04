@@ -10,22 +10,40 @@ import { s } from "./styles";
 interface SymbolRowProps {
   impact: DownstreamImpact;
   defaultOpen: boolean;
+  /** Kind of the changed symbol; functions and methods are shown as `name()`. */
+  kind?: string;
   repoFullName?: string | null;
   headSha?: string | null;
 }
 
+const CALLABLE = new Set(["function", "method"]);
+
 /** One changed symbol: a toggle header (name + caller count) over its callers and chips. */
-export function SymbolRow({ impact: d, defaultOpen, repoFullName, headSha }: SymbolRowProps) {
+export function SymbolRow({ impact: d, defaultOpen, kind, repoFullName, headSha }: SymbolRowProps) {
   const t = useTranslations("blast");
   const [open, setOpen] = useState(defaultOpen);
-  const Chevron = open ? Icon.ChevronDown : Icon.ChevronRight;
 
   return (
-    <div data-testid="blast-symbol">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} style={s.symbolHead}>
-        <Chevron size={13} />
-        <Icon.Code size={13} />
-        {d.symbol}
+    <div data-testid="blast-symbol" style={{ borderRadius: 6 }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        style={{ ...s.symbolHead, background: open ? "var(--bg-hover)" : "transparent" }}
+      >
+        <Icon.ChevronRight
+          size={13}
+          style={{
+            color: "var(--text-muted)",
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform .12s",
+          }}
+        />
+        <Icon.Code size={13} style={{ color: "var(--accent)" }} />
+        <span style={s.symbolName}>
+          <span>{d.symbol}</span>
+          {kind && CALLABLE.has(kind) && <span>()</span>}
+        </span>
         <span style={s.symbolCount}>{t("callerCount", { count: d.callers.length })}</span>
       </button>
 
@@ -39,9 +57,10 @@ export function SymbolRow({ impact: d, defaultOpen, repoFullName, headSha }: Sym
                 const href = callerHref(repoFullName, headSha, c.file, c.line);
                 const label = `${c.file}:${c.line}`;
                 return (
-                  <div key={`${c.file}:${c.line}:${c.name}`} style={s.callerRow}>
-                    <Icon.CornerDownRight size={12} />
-                    <span>{c.name}</span>
+                  <div key={`${c.file}:${c.line}:${c.name}`} style={s.callerRow} title={c.name}>
+                    <span style={s.connV} />
+                    <span style={s.connH} />
+                    <Icon.CornerDownRight size={13} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
                     {href ? (
                       <a href={href} target="_blank" rel="noopener noreferrer" style={s.callerLink}>
                         {label}
@@ -55,17 +74,21 @@ export function SymbolRow({ impact: d, defaultOpen, repoFullName, headSha }: Sym
             </div>
           )}
 
-          {(d.endpoints_affected.length > 0 || d.crons_affected.length > 0) && (
+          {d.endpoints_affected.length > 0 && (
             <div style={s.chips}>
               {d.endpoints_affected.map((e) => (
-                <span key={`e:${e}`} data-testid="blast-endpoint" style={s.chip}>
-                  <Icon.Globe size={12} />
+                <span key={`e:${e}`} data-testid="blast-endpoint" style={{ ...s.chip, ...s.chipEndpoint }}>
+                  <Icon.Globe size={12} style={{ flexShrink: 0 }} />
                   {e}
                 </span>
               ))}
+            </div>
+          )}
+          {d.crons_affected.length > 0 && (
+            <div style={s.cronChips}>
               {d.crons_affected.map((c) => (
-                <span key={`c:${c}`} data-testid="blast-cron" style={s.chip}>
-                  <Icon.Clock size={12} />
+                <span key={`c:${c}`} data-testid="blast-cron" style={{ ...s.chip, ...s.chipCron }}>
+                  <Icon.Clock size={12} style={{ flexShrink: 0 }} />
                   {c}
                 </span>
               ))}

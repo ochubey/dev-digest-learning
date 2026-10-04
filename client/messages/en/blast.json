@@ -10,7 +10,7 @@
     "tree": "tree",
     "graph": "graph"
   },
-  "callerCount": "{count} callers",
+  "callerCount": "{count, plural, one {# caller} other {# callers}}",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
   "noCallers": "No callers found",
   "empty": "No changed symbols found in this PR.",
@@ -35,7 +35,8 @@
       "symbol": "changed symbol",
       "callers": "callers",
       "endpoints": "endpoints and crons affected"
-    }
+    },
+    "truncated": "Showing the {shown} most impactful of {total} symbols. Switch to the tree for the full list."
   },
   "priorPrs": {
     "title": "Prior PRs touching these files",

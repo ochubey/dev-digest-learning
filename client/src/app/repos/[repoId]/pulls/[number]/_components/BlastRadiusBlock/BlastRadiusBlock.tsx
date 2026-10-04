@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
-import { SectionLabel, Card, Skeleton, ErrorState, EmptyState, Icon } from "@devdigest/ui";
+import { Card, Skeleton, ErrorState, EmptyState, Icon } from "@devdigest/ui";
 import { useBlastRadius } from "@/lib/hooks/blast";
 import { BlastGraph } from "./BlastGraph";
 import { SYMBOLS_INITIAL } from "./constants";
@@ -12,6 +12,22 @@ import { PriorPrs } from "./PriorPrs";
 import { ResyncButton } from "./ResyncButton";
 import { SymbolRow } from "./SymbolRow";
 import { s } from "./styles";
+
+const STAT_ICONS = {
+  symbols: Icon.Code,
+  callers: Icon.CornerDownRight,
+  endpoints: Icon.Globe,
+  crons: Icon.Clock,
+} as const;
+
+function Header({ title }: { title: string }) {
+  return (
+    <div style={s.header}>
+      <Icon.Workflow size={14} style={{ color: "var(--text-muted)" }} />
+      <span style={s.headerLabel}>{title}</span>
+    </div>
+  );
+}
 
 interface BlastRadiusBlockProps {
   prId: string;
@@ -30,7 +46,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   if (isLoading) {
     return (
       <Card style={s.wrap}>
-        <SectionLabel icon="Code">{t("title")}</SectionLabel>
+        <Header title={t("title")} />
         <div style={s.loadingWrap}>
           <Skeleton width="60%" height={16} />
           <Skeleton width="100%" height={14} />
@@ -42,7 +58,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   if (error || !data) {
     return (
       <Card style={s.wrap}>
-        <SectionLabel icon="Code">{t("title")}</SectionLabel>
+        <Header title={t("title")} />
         <ErrorState
           title={t("loadError")}
           body={t("loadErrorBody")}
@@ -65,7 +81,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   if (data.changed_symbols.length === 0) {
     return (
       <Card style={s.wrap}>
-        <SectionLabel icon="Code">{t("title")}</SectionLabel>
+        <Header title={t("title")} />
         {degradedNode}
         {!data.degraded && <EmptyState icon="Info" title={t("empty")} />}
       </Card>
@@ -75,19 +91,27 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
   const counts = blastCounts(data.changed_symbols.length, data.downstream);
   const { active, idle } = splitSymbols(data.downstream);
   const visible = showAll ? active : active.slice(0, SYMBOLS_INITIAL);
+  const kindByName = new Map<string, string>();
+  for (const c of data.changed_symbols) if (!kindByName.has(c.name)) kindByName.set(c.name, c.kind);
 
   return (
     <Card style={s.wrap}>
-      <SectionLabel icon="Code">{t("title")}</SectionLabel>
+      <Header title={t("title")} />
       {degradedNode}
 
-      <div data-testid="blast-stats" style={s.statsRow}>
-        {(["symbols", "callers", "endpoints", "crons"] as const).map((k) => (
-          <span key={k} style={s.stat}>
-            <span style={s.statNum}>{counts[k]}</span>
-            {t(`stat.${k}`)}
-          </span>
-        ))}
+      <div style={s.statsRow}>
+        <div data-testid="blast-stats" style={s.statsGroup}>
+          {(["symbols", "callers", "endpoints", "crons"] as const).map((k) => {
+            const StatIcon = STAT_ICONS[k];
+            return (
+              <span key={k} style={s.stat}>
+                <StatIcon size={13} style={s.statIcon} />
+                <b style={s.statNum}>{counts[k]}</b>
+                {t(`stat.${k}`)}
+              </span>
+            );
+          })}
+        </div>
         <div role="group" aria-label={t("title")} style={s.viewToggle}>
           {(["tree", "graph"] as const).map((v) => (
             <button
@@ -117,6 +141,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
             <SymbolRow
               key={d.symbol}
               impact={d}
+              kind={kindByName.get(d.symbol)}
               defaultOpen={i === 0}
               repoFullName={repoFullName}
               headSha={headSha}
@@ -131,6 +156,7 @@ export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastR
         </div>
       )}
 
+      <div style={s.divider} />
       <PriorPrs prId={prId} repoFullName={repoFullName} />
     </Card>
   );
