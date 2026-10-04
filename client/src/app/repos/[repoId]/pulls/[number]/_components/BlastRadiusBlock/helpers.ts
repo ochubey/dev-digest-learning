@@ -1,5 +1,6 @@
 import type { DownstreamImpact } from "@devdigest/shared";
 import { githubBlobUrl } from "@/lib/github-urls";
+import { RESYNCABLE_REASONS } from "./constants";
 
 const KNOWN_REASONS = [
   "no_data",
@@ -12,6 +13,11 @@ const KNOWN_REASONS = [
 /** Message key (under `degraded.`) for a repo-intel degraded reason; unknown -> generic. */
 export function degradedReasonKey(reason: string | null | undefined): string {
   return (KNOWN_REASONS as readonly string[]).includes(reason ?? "") ? (reason as string) : "unknown";
+}
+
+/** Whether re-syncing the repo index can fix this degraded reason. */
+export function canResync(reason: string | null | undefined): boolean {
+  return (RESYNCABLE_REASONS as readonly string[]).includes(degradedReasonKey(reason));
 }
 
 /** Totals for the summary row. Endpoints/crons are unioned across symbols. */

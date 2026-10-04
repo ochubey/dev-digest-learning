@@ -9,15 +9,21 @@ import { s } from "./styles";
 interface OverviewTabProps {
   prId: string;
   prBody: string | null | undefined;
+  repoId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
 }
 
-export function OverviewTab({ prId, prBody, repoFullName, headSha }: OverviewTabProps) {
+export function OverviewTab({ prId, prBody, repoId, repoFullName, headSha }: OverviewTabProps) {
   return (
     <>
       <IntentBlock prId={prId} />
-      <BlastRadiusBlock prId={prId} repoFullName={repoFullName} headSha={headSha} />
+      <BlastRadiusBlock
+        prId={prId}
+        repoId={repoId}
+        repoFullName={repoFullName}
+        headSha={headSha}
+      />
       {prBody && (
         <section>
           <SectionLabel icon="MessageSquare">Description</SectionLabel>

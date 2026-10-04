@@ -18,6 +18,9 @@
   "loadErrorBody": "The request failed. Try again.",
   "degraded": {
     "title": "Blast radius is incomplete",
+    "resync": "Resync index",
+    "resyncing": "Resyncing…",
+    "resyncFailed": "Resync failed. Try again.",
     "no_data": "The repository has no usable index yet, so callers could not be determined.",
     "flag_off": "Repository indexing is turned off, so callers could not be determined.",
     "index_failed": "The last index run failed, so callers could not be determined.",

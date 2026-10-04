@@ -32,6 +32,13 @@ vi.mock("@/lib/hooks/blast", () => ({
   }),
 }));
 
+const repoIntel = { mutate: vi.fn(), updatedAt: "t0", isError: false };
+
+vi.mock("@/lib/hooks/repo-intel", () => ({
+  useResyncRepoIntel: () => ({ mutate: repoIntel.mutate, isError: repoIntel.isError }),
+  useRepoIntelStatus: () => ({ data: { updatedAt: repoIntel.updatedAt } }),
+}));
+
 import { BlastRadiusBlock } from "./BlastRadiusBlock";
 
 beforeEach(() => {
@@ -39,6 +46,9 @@ beforeEach(() => {
   state.isLoading = false;
   state.error = null;
   state.refetch = vi.fn();
+  repoIntel.mutate = vi.fn();
+  repoIntel.updatedAt = "t0";
+  repoIntel.isError = false;
 });
 afterEach(cleanup);
 
@@ -57,15 +67,19 @@ const DATA: BlastData = {
   reason: null,
 };
 
-function renderBlock(props: { repoFullName?: string | null; headSha?: string | null } = {
-  repoFullName: "o/r",
-  headSha: "abc123",
-}) {
-  return render(
-    <NextIntlClientProvider locale="en" messages={{ blast }}>
-      <BlastRadiusBlock prId="pr1" {...props} />
-    </NextIntlClientProvider>,
-  );
+type BlockProps = { repoId?: string | null; repoFullName?: string | null; headSha?: string | null };
+
+const tree = (props: BlockProps) => (
+  <NextIntlClientProvider locale="en" messages={{ blast }}>
+    <BlastRadiusBlock prId="pr1" {...props} />
+  </NextIntlClientProvider>
+);
+
+function renderBlock(
+  props: BlockProps = { repoId: "repo1", repoFullName: "o/r", headSha: "abc123" },
+) {
+  const view = render(tree(props));
+  return { ...view, rerenderBlock: () => view.rerender(tree(props)) };
 }
 
 describe("BlastRadiusBlock", () => {
@@ -139,5 +153,96 @@ describe("BlastRadiusBlock", () => {
     renderBlock();
     expect(screen.getByTestId("blast-degraded")).toHaveTextContent(blast.degraded.no_data);
     expect(screen.queryByText(blast.empty)).not.toBeInTheDocument();
+  });
+
+  describe("tree", () => {
+    const TWO: BlastData = {
+      ...DATA,
+      downstream: [
+        DATA.downstream[0]!,
+        {
+          symbol: "bar",
+          callers: [{ name: "other", file: "src/o.ts", line: 3 }],
+          endpoints_affected: ["POST /y"],
+          crons_affected: [],
+        },
+      ],
+    };
+
+    it("expands the first symbol and collapses the rest", () => {
+      state.data = TWO;
+      renderBlock();
+      const [first, second] = screen.getAllByRole("button", { expanded: undefined });
+      expect(first).toHaveAttribute("aria-expanded", "true");
+      expect(second).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByText("src/r.ts:7")).toBeInTheDocument();
+      expect(screen.queryByText("src/o.ts:3")).not.toBeInTheDocument();
+    });
+
+    it("toggles a symbol open and closed", () => {
+      state.data = TWO;
+      renderBlock();
+      const second = screen.getAllByRole("button")[1]!;
+      fireEvent.click(second);
+      expect(second).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText("src/o.ts:3")).toBeInTheDocument();
+      expect(screen.getByText("POST /y")).toBeInTheDocument();
+      fireEvent.click(second);
+      expect(screen.queryByText("src/o.ts:3")).not.toBeInTheDocument();
+    });
+
+    it("keeps the caller count visible while collapsed", () => {
+      state.data = TWO;
+      renderBlock();
+      expect(screen.getAllByText("1 callers")).toHaveLength(2);
+    });
+  });
+
+  describe("resync", () => {
+    const degraded = (reason: string): BlastData => ({ ...DATA, degraded: true, reason });
+
+    it("offers a resync for a partial index", () => {
+      state.data = degraded("index_partial");
+      renderBlock();
+      expect(screen.getByRole("button", { name: blast.degraded.resync })).toBeInTheDocument();
+    });
+
+    it("does not offer a resync when it cannot help or repoId is unknown", () => {
+      state.data = degraded("flag_off");
+      renderBlock();
+      expect(screen.queryByRole("button", { name: blast.degraded.resync })).not.toBeInTheDocument();
+      cleanup();
+      state.data = degraded("index_partial");
+      renderBlock({ repoFullName: "o/r", headSha: "abc123" });
+      expect(screen.queryByRole("button", { name: blast.degraded.resync })).not.toBeInTheDocument();
+    });
+
+    it("does not offer a resync when the index is fine", () => {
+      state.data = DATA;
+      renderBlock();
+      expect(screen.queryByRole("button", { name: blast.degraded.resync })).not.toBeInTheDocument();
+    });
+
+    it("starts the resync and refetches once the index state advances", () => {
+      state.data = degraded("index_partial");
+      const { rerenderBlock } = renderBlock();
+      fireEvent.click(screen.getByRole("button", { name: blast.degraded.resync }));
+      expect(repoIntel.mutate).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: blast.degraded.resyncing })).toBeInTheDocument();
+
+      rerenderBlock();
+      expect(state.refetch).not.toHaveBeenCalled();
+
+      repoIntel.updatedAt = "t1";
+      rerenderBlock();
+      expect(state.refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows an error when the resync request fails", () => {
+      state.data = degraded("index_partial");
+      repoIntel.isError = true;
+      renderBlock();
+      expect(screen.getByRole("alert")).toHaveTextContent(blast.degraded.resyncFailed);
+    });
   });
 });

@@ -1,21 +1,25 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Card, Skeleton, ErrorState, EmptyState, Icon } from "@devdigest/ui";
 import { useBlastRadius } from "@/lib/hooks/blast";
-import { blastCounts, callerHref, degradedReasonKey } from "./helpers";
+import { blastCounts, canResync, degradedReasonKey } from "./helpers";
+import { ResyncButton } from "./ResyncButton";
+import { SymbolRow } from "./SymbolRow";
 import { s } from "./styles";
 
 interface BlastRadiusBlockProps {
   prId: string;
+  repoId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
 }
 
-export function BlastRadiusBlock({ prId, repoFullName, headSha }: BlastRadiusBlockProps) {
+export function BlastRadiusBlock({ prId, repoId, repoFullName, headSha }: BlastRadiusBlockProps) {
   const t = useTranslations("blast");
   const { data, isLoading, error, refetch } = useBlastRadius(prId);
+  const onResynced = useCallback(() => void refetch(), [refetch]);
 
   if (isLoading) {
     return (
@@ -48,6 +52,7 @@ export function BlastRadiusBlock({ prId, repoFullName, headSha }: BlastRadiusBlo
       <span>
         <strong>{t("degraded.title")}</strong> {t(`degraded.${degradedReasonKey(data.reason)}`)}
       </span>
+      {repoId && canResync(data.reason) && <ResyncButton repoId={repoId} onDone={onResynced} />}
     </div>
   ) : null;
 
@@ -84,55 +89,14 @@ export function BlastRadiusBlock({ prId, repoFullName, headSha }: BlastRadiusBlo
       )}
 
       <div style={s.list}>
-        {data.downstream.map((d) => (
-          <div key={d.symbol} data-testid="blast-symbol">
-            <div style={s.symbolHead}>
-              <Icon.Code size={13} />
-              {d.symbol}
-              <span style={s.symbolCount}>{t("callerCount", { count: d.callers.length })}</span>
-            </div>
-
-            {d.callers.length === 0 ? (
-              <div style={s.muted}>{t("noCallers")}</div>
-            ) : (
-              <div style={s.callers}>
-                {d.callers.map((c) => {
-                  const href = callerHref(repoFullName, headSha, c.file, c.line);
-                  const label = `${c.file}:${c.line}`;
-                  return (
-                    <div key={`${c.file}:${c.line}:${c.name}`} style={s.callerRow}>
-                      <Icon.CornerDownRight size={12} />
-                      <span>{c.name}</span>
-                      {href ? (
-                        <a href={href} target="_blank" rel="noopener noreferrer" style={s.callerLink}>
-                          {label}
-                        </a>
-                      ) : (
-                        <span style={s.callerLink}>{label}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {(d.endpoints_affected.length > 0 || d.crons_affected.length > 0) && (
-              <div style={s.chips}>
-                {d.endpoints_affected.map((e) => (
-                  <span key={`e:${e}`} data-testid="blast-endpoint" style={s.chip}>
-                    <Icon.Globe size={12} />
-                    {e}
-                  </span>
-                ))}
-                {d.crons_affected.map((c) => (
-                  <span key={`c:${c}`} data-testid="blast-cron" style={s.chip}>
-                    <Icon.Clock size={12} />
-                    {c}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+        {data.downstream.map((d, i) => (
+          <SymbolRow
+            key={d.symbol}
+            impact={d}
+            defaultOpen={i === 0}
+            repoFullName={repoFullName}
+            headSha={headSha}
+          />
         ))}
       </div>
     </Card>

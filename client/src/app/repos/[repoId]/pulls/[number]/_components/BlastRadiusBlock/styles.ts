@@ -62,9 +62,28 @@ export const s = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    width: "100%",
+    padding: 0,
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    textAlign: "left",
+    font: "inherit",
     fontSize: 13,
     fontWeight: 600,
     color: "var(--text-primary)",
+  } as React.CSSProperties,
+
+  resyncWrap: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: "auto",
+  } as React.CSSProperties,
+
+  resyncError: {
+    fontSize: 12,
+    color: "var(--danger, var(--warn))",
   } as React.CSSProperties,
 
   symbolCount: {
