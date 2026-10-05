@@ -23,8 +23,13 @@ export interface JobRunnerOptions {
 
 export interface EnqueuedJob {
   id: string;
-  /** Resolves when the job finishes (or rejects if it ultimately fails). */
+  /** Resolves when the job finishes (or rejects if it ultimately fails). Awaiting it is optional. */
   done: Promise<void>;
+}
+
+/** Strip credentials from URLs in an error message before it is stored in `jobs.error`. */
+export function redactSecrets(message: string): string {
+  return message.replace(/(https?:\/\/)([^/\s:@]+):([^@\s/]+)@/g, '$1$2:***@');
 }
 
 export class JobRunner {
@@ -90,12 +95,18 @@ export class JobRunner {
           .set({
             status: 'failed',
             finishedAt: new Date(),
-            error: (err as Error).message,
+            error: redactSecrets((err as Error).message),
           })
           .where(eq(t.jobs.id, jobId));
         throw err;
       }
     }) as Promise<void>;
+
+    // Most callers fire and forget (`await jobs.enqueue(...)` without awaiting `done`). The failure
+    // is already persisted on the job row above, so mark the promise handled: otherwise a failing
+    // job (e.g. cloning a repo that does not exist) is an unhandled rejection and Node exits.
+    // Callers that DO await `done` still receive the rejection.
+    done.catch(() => undefined);
 
     return { id: jobId, done };
   }

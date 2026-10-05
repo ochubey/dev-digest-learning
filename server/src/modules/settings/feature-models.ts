@@ -11,7 +11,8 @@ import { rowsToSettings } from './helpers.js';
 /**
  * Per-feature model configuration.
  *
- * System LLM features (onboarding, intent, risk brief, conformance, conventions)
+ * System LLM features (onboarding, standard, risk brief, conformance, eval reference,
+ * conventions, memory learning)
  * read their provider/model from the workspace's Settings instead of a hardcoded
  * module constant. When the workspace hasn't chosen one, we fall back to the
  * registry default in `FEATURE_MODELS` — which mirrors each module's old
@@ -44,7 +45,13 @@ export async function getFeatureModelOverride(
     .where(eq(t.settings.workspaceId, workspaceId));
   const fm = (rowsToSettings(rows) as { feature_models?: Record<string, unknown> }).feature_models;
   const parsed = FeatureModelChoice.safeParse(fm?.[id]);
-  return parsed.success ? parsed.data : undefined;
+  if (parsed.success) return parsed.data;
+  // `standard` replaced the Intent-only `review_intent` slot: honour an override saved there.
+  if (id === 'standard') {
+    const legacy = FeatureModelChoice.safeParse(fm?.review_intent);
+    if (legacy.success) return legacy.data;
+  }
+  return undefined;
 }
 
 /** Resolve `id` to a concrete provider+model: workspace override, else registry default. */

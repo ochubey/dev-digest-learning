@@ -18,7 +18,8 @@
     "testing": "Testing…",
     "testFailed": "Test failed",
     "configured": "Configured",
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "invalid": "Invalid token"
   },
   "models": {
     "title": "Feature Models",

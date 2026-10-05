@@ -5,11 +5,15 @@ import type {
   Review,
   RunEventKind,
   UnifiedDiff,
+  Intent,
 } from '@devdigest/shared';
-import { Review as ReviewSchema } from '@devdigest/shared';
+import { ModelReviewSchema, type ModelReviewOut } from './output-schema.js';
 import { assemblePrompt } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
+import type { Logger } from '../logging/prompt-logger.js';
+import { applyScopePolicy, deriveScopedVerdict, formatScopeStats, type ScopeStats } from './scope.js';
+import { changedLines } from './changed-lines.js';
 
 /**
  * reviewPullRequest — the review engine entry point.
@@ -71,6 +75,17 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /**
+   * Optional derived intent (summary, in/out scope, confidence). Untrusted
+   * (derived from PR title/body/issue/specs). Rendered after PR description.
+   * Empty/undefined → section omitted.
+   */
+  intent?: string;
+  /**
+   * Optional derived intent object (structured). Drives the code-owned scope
+   * policy (applyScopePolicy). Omitted/low-confidence → filter inactive.
+   */
+  intentObj?: Intent;
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -90,10 +105,17 @@ export interface ReviewInput {
    * type, e.g. the server's RunCancelledError); the engine stays agnostic.
    */
   checkCancelled?: () => void;
+  /** Optional injected logger for structured prompt assembly logging (pino-like). */
+  logger?: Logger;
+  /** Optional correlation ID for tracing prompt assembly across logs. */
+  correlationId?: string;
 }
 
 export interface ReviewOutcome {
-  /** The reduced, GROUNDED review (findings that survived the citation gate). */
+  /**
+   * The reduced, GROUNDED review. `review.findings` = scope 'in' findings ONLY
+   * (what drives score, verdict and counters); out/signal are NOT here.
+   */
   review: Review;
   /** Human-readable grounding summary, e.g. "3/4 passed". */
   grounding: string;
@@ -110,6 +132,12 @@ export interface ReviewOutcome {
   costUsd: number | null;
   /** Joined raw model outputs (for the run trace). */
   raw: string;
+  /** EVERY grounded finding annotated in/out/signal (incl. the signal): persist THIS, not review.findings. */
+  allFindings: Finding[];
+  /** Scope policy counters (single source, incl. `overridesTotal`). */
+  scope: ScopeStats;
+  /** Structured LLM calls made, summed over attempts (reprompts included). */
+  llmCalls: number;
 }
 
 function selectMode(strategy: ReviewStrategy, diff: UnifiedDiff, threshold: number): ReviewMode {
@@ -135,11 +163,18 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
+    intentObj: input.intentObj,
     task: input.task,
   };
 
   // Whole-diff assembly is the trace default; overwritten below for single-pass.
-  let assembly: PromptAssembly = assemblePrompt({ ...promptParts, diff: input.diff.raw }).assembly;
+  let assembly: PromptAssembly = assemblePrompt(
+    { ...promptParts, diff: input.diff.raw },
+    input.logger,
+    input.model,
+    input.correlationId,
+  ).assembly;
 
   const chunks =
     mode === 'map-reduce'
@@ -158,6 +193,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   let tokensOut = 0;
   let costUsd: number | null = 0;
   const raws: string[] = [];
+  let llmCalls = 0;
 
   for (const chunk of chunks) {
     // Cancellation checkpoint — stop before the next (expensive) LLM call.
@@ -169,11 +205,16 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
       mode === 'map-reduce' ? `map: reviewing ${chunk.label}` : `Reviewing ${chunk.label} in one pass`,
       { file: chunk.label },
     );
-    const a = assemblePrompt({ ...promptParts, diff: chunk.diffText });
+    const a = assemblePrompt(
+      { ...promptParts, diff: chunk.diffText },
+      input.logger,
+      input.model,
+      input.correlationId,
+    );
     if (mode === 'single-pass') assembly = a.assembly;
-    const res = await input.llm.completeStructured<Review>({
+    const res = await input.llm.completeStructured<ModelReviewOut>({
       model: input.model,
-      schema: ReviewSchema,
+      schema: ModelReviewSchema,
       schemaName: 'Review',
       messages: a.messages,
       maxRetries,
@@ -183,6 +224,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     tokensOut += res.tokensOut;
     costUsd = costUsd == null || res.costUsd == null ? null : costUsd + res.costUsd;
     raws.push(res.raw);
+    llmCalls += res.attempts ?? 1;
     partials.push(res.data);
     emit('result', `${chunk.label}: ${res.data.findings.length} candidate finding(s)`);
   }
@@ -201,11 +243,26 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   }
   emit('result', `Citation grounding: ${grounding}`);
 
-  // Score is derived from the findings that SURVIVED grounding (not the model's
-  // self-reported number, and not the pre-grounding set) so the score, the
-  // findings list, and the deterministic event always agree.
+  // Code-owned scope policy: ONCE over ALL grounded findings (never per chunk).
+  const scoped = applyScopePolicy(ground.kept, {
+    intent: input.intentObj,
+    changedLines: changedLines(input.diff),
+  });
+  const st = scoped.stats;
+  emit('result', formatScopeStats(st));
+  for (const o of scoped.overrideLog) {
+    emit('info', `scope override "${o.title}": model=out -> in (${o.reason})`);
+  }
+
+  // Score + verdict come from scope=in findings ONLY (see deriveScopedVerdict).
+  const finalFindings = scoped.visible;
+  const verdict = deriveScopedVerdict(merged.verdict, scoped);
+
+  // Score is derived from the findings that SURVIVED grounding+scope (not the model's
+  // self-reported number) so the score, the findings list, and the deterministic
+  // event always agree.
   return {
-    review: { ...merged, findings: ground.kept, score: scoreFromFindings(ground.kept) },
+    review: { ...merged, verdict, findings: finalFindings, score: scoreFromFindings(finalFindings) },
     grounding,
     dropped: ground.dropped,
     mode,
@@ -215,5 +272,8 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     tokensOut,
     costUsd,
     raw: raws.join('\n---\n'),
+    allFindings: scoped.all,
+    scope: st,
+    llmCalls,
   };
 }

@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { pathToFileURL } from 'node:url';
 import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
@@ -176,6 +177,201 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     ]);
   }
 
+  // ---- PR #483: finding whose start_line lies OUTSIDE every diff hunk ----
+  // A real model is gated by citation grounding and never emits this, so it must be seeded
+  // to exercise the "finding outside the patch" UI path.
+  const [pr483] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 483)));
+  if (!pr483) {
+    const [pr2] = await db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId,
+        number: 483,
+        title: 'Tweak retry delay in payments client',
+        author: 'marisa.koch',
+        branch: 'fix/retry-delay',
+        base: 'main',
+        headSha: 'f6e5d4c3b2a1',
+        additions: 2,
+        deletions: 1,
+        filesCount: 1,
+        status: 'needs_review',
+        body: 'Lower the retry delay.',
+      })
+      .returning();
+
+    await db.insert(t.prFiles).values({
+      prId: pr2!.id,
+      path: 'src/api/payments.ts',
+      additions: 2,
+      deletions: 1,
+      // single hunk: new-file lines 10-13 only
+      patch: [
+        '@@ -10,3 +10,4 @@ export async function charge() {',
+        '   const res = await client.post(url, body);',
+        '-  await sleep(1000);',
+        '+  await sleep(250);',
+        '+  // retry quickly',
+        '   return res;',
+      ].join('\n'),
+    });
+
+    const [review2] = await db
+      .insert(t.reviews)
+      .values({
+        workspaceId,
+        prId: pr2!.id,
+        kind: 'review',
+        verdict: 'comment',
+        summary: 'Small change; one finding points at a line outside the patch.',
+        score: 80,
+        model: 'seed',
+      })
+      .returning();
+
+    await db.insert(t.findings).values({
+      reviewId: review2!.id,
+      file: 'src/api/payments.ts',
+      startLine: 80, // outside the only hunk (lines 10-13)
+      endLine: 82,
+      severity: 'WARNING',
+      category: 'correctness',
+      title: 'Unbounded retry loop outside the changed hunk',
+      rationale: 'Line 80 retries forever; this line is not part of the diff.',
+      suggestion: 'Cap the number of attempts.',
+      confidence: 0.7,
+    });
+  }
+
+  // ---- PR #482 demo extras: diff patches for every file ----
+  // Applied as idempotent top-ups (not inside the insert above) so databases seeded by an
+  // older version pick them up on the next run. Only files WITHOUT a patch are touched, so a
+  // real GitHub refresh (or a hand edit) is never overwritten.
+  //
+  // The seeded PRs deliberately have NO Intent: the Intent card starts as "Intent not yet
+  // analysed" and the demo clicks Run Intent. Finding scope is likewise left unset (legacy =
+  // in scope); scoped findings come from real review runs against a derived intent.
+  const [pr482] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 482)));
+  if (pr482) {
+    // Stats match the patch excerpts below. Finding lines (config.ts:12, users.ts:45-52) sit
+    // inside their hunks.
+    const patches: Record<string, { additions: number; deletions: number; patch: string }> = {
+      'src/config.ts': {
+        additions: 5,
+        deletions: 0,
+        patch: [
+          '@@ -9,4 +9,9 @@ export const config = {',
+          '   port: 3000,',
+          '   env: process.env.NODE_ENV,',
+          '   logLevel: "info",',
+          "+  stripeSecretKey: 'sk_live_EXAMPLE_NOT_A_REAL_KEY',",
+          '+  rateLimit: {',
+          '+    windowMs: 60_000,',
+          '+    max: 100,',
+          '+  },',
+          ' };',
+        ].join('\n'),
+      },
+      'src/api/users.ts': {
+        additions: 7,
+        deletions: 2,
+        patch: [
+          '@@ -44,4 +44,9 @@ export async function listUsers() {',
+          '   const users = await db.select().from(usersTable);',
+          '-  const orders = await db.select().from(ordersTable);',
+          '-  return users.map((u) => ({ ...u, orders: orders.filter((o) => o.userId === u.id) }));',
+          '+  // one orders query per user',
+          '+  const out = [];',
+          '+  for (const u of users) {',
+          '+    const orders = await db.select().from(ordersTable).where(eq(ordersTable.userId, u.id));',
+          '+    out.push({ ...u, orders });',
+          '+  }',
+          '+  return out;',
+          ' }',
+        ].join('\n'),
+      },
+      'src/middleware/ratelimit.ts': {
+        additions: 22,
+        deletions: 0,
+        patch: [
+          '@@ -0,0 +1,22 @@',
+          '+import type { FastifyReply, FastifyRequest } from "fastify";',
+          '+import { config } from "../config";',
+          '+',
+          '+const buckets = new Map<string, { tokens: number; updatedAt: number }>();',
+          '+',
+          '+/** Token-bucket limiter keyed by client IP. */',
+          '+export async function rateLimit(req: FastifyRequest, reply: FastifyReply) {',
+          '+  const { max, windowMs } = config.rateLimit;',
+          '+  const now = Date.now();',
+          '+  const bucket = buckets.get(req.ip) ?? { tokens: max, updatedAt: now };',
+          '+  const refill = ((now - bucket.updatedAt) / windowMs) * max;',
+          '+  bucket.tokens = Math.min(max, bucket.tokens + refill);',
+          '+  bucket.updatedAt = now;',
+          '+  if (bucket.tokens < 1) {',
+          '+    buckets.set(req.ip, bucket);',
+          '+    return reply.code(429).header("Retry-After", Math.ceil(windowMs / 1000)).send({ error: "rate_limited" });',
+          '+  }',
+          '+  bucket.tokens -= 1;',
+          '+  buckets.set(req.ip, bucket);',
+          '+}',
+          '+',
+          '+export const _buckets = buckets; // exposed for tests',
+        ].join('\n'),
+      },
+      'src/api/public/webhooks.ts': {
+        additions: 7,
+        deletions: 2,
+        patch: [
+          '@@ -1,5 +1,10 @@',
+          ' import type { FastifyInstance } from "fastify";',
+          '+import { rateLimit } from "../../middleware/ratelimit";',
+          '+import crypto from "node:crypto";',
+          ' ',
+          '-export async function webhooks(app: FastifyInstance) {',
+          '-  app.post("/webhooks/stripe", async (req) => handle(req.body));',
+          '+export async function webhooks(app: FastifyInstance) {',
+          '+  // public endpoint: rate limited per client IP',
+          '+  app.addHook("onRequest", rateLimit);',
+          '+  app.post("/webhooks/stripe", async (req) => handle(req.body));',
+          '+  app.post("/webhooks/github", async (req) => handle(req.body));',
+          ' }',
+        ].join('\n'),
+      },
+    };
+    for (const [path, { patch, additions, deletions }] of Object.entries(patches)) {
+      await db
+        .update(t.prFiles)
+        .set({ patch, additions, deletions })
+        .where(and(eq(t.prFiles.prId, pr482.id), eq(t.prFiles.path, path), isNull(t.prFiles.patch)));
+    }
+
+    // Clean up what older seed versions added: a pre-made Intent (the demo starts empty now) and
+    // scoped sample findings. Only rows the seed itself wrote (model = 'seed') are touched, so an
+    // Intent derived by a real model, or findings from real runs, are never removed.
+    await db.delete(t.prIntent).where(and(eq(t.prIntent.prId, pr482.id), eq(t.prIntent.model, 'seed')));
+    const seedReviews = await db
+      .select({ id: t.reviews.id })
+      .from(t.reviews)
+      .where(and(eq(t.reviews.prId, pr482.id), eq(t.reviews.model, 'seed')));
+    for (const { id } of seedReviews) {
+      await db
+        .delete(t.findings)
+        .where(and(eq(t.findings.reviewId, id), eq(t.findings.title, 'Unused import in webhooks handler')));
+      await db
+        .update(t.findings)
+        .set({ scope: null, scopeReason: null })
+        .where(eq(t.findings.reviewId, id));
+    }
+  }
+
   // ---- built-in agents (the four starter presets) ----
   // Prompt bodies live in ./seed-prompts.ts (mirrored in docs/agent-prompts/*.md).
   const seedAgents: Array<typeof t.agents.$inferInsert> = [
@@ -278,7 +474,8 @@ Flag route/handler signature changes that remove or rename a required parameter,
 }
 
 // CLI entrypoint
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL keeps the check true on Windows (`file:///C:/…` vs `C:\…`).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error('DATABASE_URL is required');

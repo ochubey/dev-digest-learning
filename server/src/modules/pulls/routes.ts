@@ -11,6 +11,7 @@ import { PullsService } from './service.js';
  *   GET /repos/:id/pulls → list PRs for a repo (open + recently merged/closed,
  *                          synced from GitHub, persisted). `status` is GitHub's
  *                          merge state (open/merged/closed).
+ *   GET /repos/:id/sync-status → outcome of the last GitHub sync (ok / reason / message)
  *   GET /pulls/:id       → full PR detail (diff/files, commits, body, linked issue)
  *
  * Import is idempotent (unique repo_id+number). Review trigger is MANUAL
@@ -24,6 +25,11 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
   app.get('/repos/:id/pulls', { schema: { params: IdParams } }, async (req): Promise<PrMeta[]> => {
     const { workspaceId } = await getContext(container, req);
     return service.listPulls(workspaceId, req.params.id, app.log);
+  });
+
+  app.get('/repos/:id/sync-status', { schema: { params: IdParams } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    return service.getSyncStatus(workspaceId, req.params.id);
   });
 
   app.get('/pulls/:id', { schema: { params: IdParams } }, async (req): Promise<PrDetail> => {

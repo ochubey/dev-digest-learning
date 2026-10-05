@@ -18,7 +18,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readdirSync, readFileSync, mkdirSync } from "node:fs";
+import { readdirSync, readFileSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
@@ -94,6 +94,9 @@ async function runFlow(file: string, flow: Flow): Promise<FlowResult> {
 
 async function main(): Promise<void> {
   console.log(`DevDigest e2e — base=${BASE} bin=${BIN}`);
+  // Start from a clean slate: failure screenshots are only written on failure, so without this
+  // an old run's artifacts would sit next to a passing run and look like current failures.
+  rmSync(RESULTS_DIR, { recursive: true, force: true });
   const flows = loadFlows();
   if (flows.length === 0) {
     console.error(`No specs found in ${SPECS_DIR}`);

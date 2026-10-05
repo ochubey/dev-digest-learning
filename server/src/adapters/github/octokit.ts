@@ -369,4 +369,40 @@ export class OctokitGitHubClient implements GitHubClient {
     );
     return res.data.login;
   }
+
+  /**
+   * Read a repository file at a specific ref (SHA/branch). Returns null when it does not exist
+   * (404/410) or is not a regular file. Any other failure (auth, rate limit, network, timeout)
+   * THROWS so callers can tell "no such file" from "could not check" (status 'error').
+   * Timeout (30s) + retry (429/5xx/network) are applied here.
+   */
+  async readRepoFile(repo: RepoRef, path: string, ref: string): Promise<string | null> {
+    let res;
+    try {
+      res = await withRetry(() =>
+        withTimeout(
+          this.octokit.rest.repos.getContent({
+            owner: repo.owner,
+            repo: repo.name,
+            path,
+            ref,
+          }),
+          TIMEOUT,
+        ),
+      );
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      if (status === 404 || status === 410) return null;
+      throw err;
+    }
+    if (Array.isArray(res.data) || res.data.type !== 'file') {
+      return null;
+    }
+    const content = res.data.content;
+    if (typeof content === 'string') {
+      // GitHub returns base64-encoded content
+      return Buffer.from(content, 'base64').toString('utf-8');
+    }
+    return null;
+  }
 }

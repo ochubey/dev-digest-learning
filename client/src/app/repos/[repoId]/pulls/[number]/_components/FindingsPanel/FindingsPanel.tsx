@@ -6,6 +6,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
 import type { FindingRecord, Severity } from "@devdigest/shared";
+import { isInScope, isVisibleScope } from "@/lib/latest-findings";
 import { FindingCard } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
 import { KEY_TO_ACTION } from "./constants";
@@ -34,16 +35,28 @@ export function FindingsPanel({
   const t = useTranslations("prReview");
   const action = useFindingAction();
   const [hideLow, setHideLow] = React.useState(false);
+  const [showOut, setShowOut] = React.useState(false);
   const [focusIdx, setFocusIdx] = React.useState(0);
 
   const shown = React.useMemo(
-    () => visibleFindings(findings, hideLow, severityFilter),
-    [findings, hideLow, severityFilter],
+    () => visibleFindings(findings, hideLow, severityFilter, showOut),
+    [findings, hideLow, severityFilter, showOut],
+  );
+  // Out-of-scope findings suppressed by the scope policy (dismissed ones don't count).
+  const hiddenCount = React.useMemo(
+    () => findings.filter((f) => !isVisibleScope(f.scope) && !f.dismissed_at).length,
+    [findings],
+  );
+  // Reported count = what the run's verdict numbers mean: in-scope findings only
+  // (revealed `out` cards and the separate `signal` are not part of it).
+  const reportedCount = React.useMemo(
+    () => shown.filter((f) => isInScope(f.scope)).length,
+    [shown],
   );
 
   React.useEffect(() => {
-    onVisibleCountChange?.(shown.length);
-  }, [shown.length, onVisibleCountChange]);
+    onVisibleCountChange?.(reportedCount);
+  }, [reportedCount, onVisibleCountChange]);
 
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
@@ -63,6 +76,17 @@ export function FindingsPanel({
   return (
     <div>
       <div style={s.toolbar}>
+        {hiddenCount > 0 && (
+          <>
+            <span data-testid="scope-suppressed" style={s.hiddenCounter}>
+              {t("scope.suppressed", { count: hiddenCount })}
+            </span>
+            <label style={s.revealGroup}>
+              {showOut ? t("scope.conceal") : t("scope.reveal")}
+              <Toggle on={showOut} onChange={setShowOut} size={16} />
+            </label>
+          </>
+        )}
         <div style={s.toggleGroup}>
           {t("panel.hideLowConfidence")}
           <Toggle on={hideLow} onChange={setHideLow} size={16} />
@@ -79,6 +103,7 @@ export function FindingsPanel({
               f={f}
               focused={i === focusIdx}
               defaultExpanded={i === 0}
+              muted={f.scope === "out"}
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}

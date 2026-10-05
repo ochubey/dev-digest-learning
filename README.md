@@ -149,6 +149,22 @@ Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers
 Postgres); everything else is hermetic. The browser e2e flows live in
 [`e2e/`](e2e/README.md) and run deterministically (no LLM).
 
+## Claude Code agents
+
+Seven subagents in `.claude/agents/` support the development pipeline. These are **development tools** (not the app's own review agents in `docs/agent-prompts/`). Each is read-only or write-scoped:
+
+| Agent | Purpose | Tools | Writes to | Input |
+|-------|---------|-------|-----------|-------|
+| **researcher** | Find code or external docs | Grep, Glob, Read, WebFetch, WebSearch | — | "Where is X?" or "Research Y" |
+| **brainstorm** | Compare implementation options | Read, Grep, Glob | — | "How should we build X?" |
+| **architecture-reviewer** | Check layer boundaries, coupling, cycles | Read, Grep, Glob | — | Diff or new files |
+| **security-reviewer** | Find exploitable issues (≥80% confidence) | Read, Grep, Glob | — | Diff or new files |
+| **plan-verifier** | Map code to plan requirements (PASS/PARTIAL/MISSING) | Read, Grep, Glob | — | Plan path + branch |
+| **test-writer** | Write unit & integration tests | Read, Grep, Glob, Write, Edit, Bash | `client/src/**/*.test.*`, `server/test/**` | "Test this component/route" |
+| **doc-writer** | Convert plans & code into docs + diagrams | Read, Grep, Glob, Write, Edit | `docs/**` | "Document this feature" |
+
+Path restrictions are enforced via PreToolUse hooks in `scripts/hooks/restrict-write-paths.mjs`. Test-writer and doc-writer can only write to their scoped paths; read-only agents have no Write/Edit tools.
+
 ## Troubleshooting
 
 - **`relation ... does not exist` / API errors on first run** — migrations weren't

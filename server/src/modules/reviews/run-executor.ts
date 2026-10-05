@@ -1,6 +1,6 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
-import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
+import type { Intent, Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import { reviewPullRequest, countBlockers, type ReviewOutcome } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
@@ -9,6 +9,11 @@ import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { rollupSeverities } from '../pulls/status.js';
+import { IntentService } from '../intent/service.js';
+import { loadLine, resolveRefsLine, llmDetails, llmCallsLine, reviewIntentPolicy } from '../intent/log-lines.js';
+import { intentFilesFromDiff } from '../intent/diff-files.js';
+import { resolveFeatureModel } from '../settings/feature-models.js';
+import { randomUUID } from 'node:crypto';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -25,6 +30,103 @@ export type Logger = {
   error: (obj: unknown, msg?: string) => void;
   debug: (obj: unknown, msg?: string) => void;
 };
+
+/** How the run's intent was obtained (drives the llm.calls log line). */
+export type IntentStatus = 'derived' | 'cached' | 'failed';
+
+/** Result of the once-per-run intent step (fail-open: `intent` is absent on failure). */
+export interface IntentOutcome {
+  intent?: Intent;
+  status: IntentStatus;
+  /** Structured LLM attempts actually made for intent (0 for cache hit / failed before the call). */
+  attempts: number;
+}
+
+interface DeriveIntentParams {
+  workspaceId: string;
+  pull: PullRow;
+  repo: typeof schema.repos.$inferSelect;
+  /** The diff this run loaded: the single source of files + hunk headers for the intent. */
+  diff: UnifiedDiff;
+  runLog: RunLogger;
+  correlationId: string;
+  logger?: Logger;
+  /** Main review model: used (with a warning) if the standard feature model is unavailable. */
+  fallback?: { provider: Provider; model: string };
+}
+
+interface RunOneAgentParams {
+  workspaceId: string;
+  pull: PullRow;
+  repo: typeof schema.repos.$inferSelect;
+  diff: UnifiedDiff;
+  agent: AgentRow;
+  runId: string;
+  /** The fanned-out pre-work logger; narrowed to this run inside. */
+  parentLog: RunLogger;
+  intent: IntentOutcome;
+  correlationId: string;
+  logger?: Logger;
+}
+
+/** Prompt sections that may be absent (null) in the assembly; system + user are always present. */
+const OPTIONAL_PROMPT_SECTIONS = [
+  'skills',
+  'memory',
+  'specs',
+  'repo_map',
+  'callers',
+  'pr_description',
+  'intent',
+] as const;
+const ALWAYS_PRESENT_SECTIONS = 2;
+
+/**
+ * The three per-run observability blocks. Human lines go to runLog (Live Log +
+ * trace); `scope.apply` is structured pino meta ONLY — the human scope line is
+ * the engine's own `Scope policy:` event (forwarded by runLog.event), not repeated.
+ */
+function logRunMetrics(
+  runLog: RunLogger,
+  logger: Logger | undefined,
+  m: {
+    runId: string;
+    model: string;
+    outcome: ReviewOutcome;
+    reviewDurationMs: number;
+    intent: IntentOutcome;
+    correlationId: string;
+  },
+): void {
+  const { outcome, intent, correlationId } = m;
+
+  const estimatedTokens = outcome.assembly.user?.length ? Math.ceil(outcome.assembly.user.length / 3) : 0;
+  const sectionsCount =
+    OPTIONAL_PROMPT_SECTIONS.filter((k) => outcome.assembly[k] !== null).length + ALWAYS_PRESENT_SECTIONS;
+  runLog.info(
+    `review.assemble: model=${m.model}, estimated_tokens=${estimatedTokens}, duration=${m.reviewDurationMs}ms, sections=${sectionsCount}`,
+    {
+      step: 'review.assemble',
+      model: m.model,
+      durationMs: m.reviewDurationMs,
+      estimatedTokens,
+      sectionsCount,
+      correlationId,
+      costUsd: outcome.costUsd,
+    },
+  );
+
+  logger?.info({ step: 'scope.apply', runId: m.runId, ...outcome.scope, correlationId }, 'scope.apply');
+
+  // intent= distinguishes attempts from successes (ok / cached / skipped / failed), see intentCallsLabel.
+  runLog.info(llmCallsLine(intent, outcome.llmCalls), {
+    step: 'llm.calls',
+    intent: intent.status,
+    intentCalls: intent.attempts,
+    review: outcome.llmCalls,
+    correlationId,
+  });
+}
 
 // A reduced "Review per file" — same schema as Review (the model returns a small
 // Review per file; we merge findings + take the worst verdict / mean score).
@@ -60,6 +162,9 @@ export class ReviewRunExecutor {
     jobs: { agent: AgentRow; runId: string }[],
     logger?: Logger,
   ): Promise<void> {
+    // Correlation ID for tracing this PR's prompt assembly across logs (intent + all agents).
+    const correlationId = randomUUID();
+
     // ONE logger fanned out over every queued run: shared pre-work (diff +
     // intent) is streamed into each target agent's Live Log and persisted into
     // each run's trace. Per-agent work below narrows it to a single run.
@@ -67,7 +172,7 @@ export class ReviewRunExecutor {
       this.container.runBus,
       jobs.map((j) => j.runId),
       logger,
-      { prId: pull.id },
+      { prId: pull.id, correlationId },
     );
 
     // Pre-work failure (e.g. diff load) fails EVERY queued run. The error was
@@ -105,6 +210,20 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Derive intent when none exists or the PR head SHA changed; otherwise reuse it.
+    // Re-deriving is the manual Regenerate button only (POST /pulls/:id/intent/derive).
+    const firstAgent = jobs[0]?.agent;
+    const intent = await this.deriveIntent({
+      workspaceId,
+      pull,
+      repo,
+      diff,
+      runLog,
+      correlationId,
+      logger,
+      fallback: firstAgent ? { provider: firstAgent.provider, model: firstAgent.model } : undefined,
+    });
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -112,16 +231,27 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent({
+          workspaceId,
+          pull,
+          repo,
+          diff,
+          agent,
+          runId,
+          parentLog: runLog,
+          intent,
+          correlationId,
+          logger,
+        });
         logger?.info(
           {
             runId,
             agent: agent.name,
-            findings: outcome.findings.length,
+            findings: outcome.raw.findings.length,
             grounding: outcome.grounding,
             durationMs: Date.now() - agentStart,
           },
-          `review: agent "${agent.name}" done — ${outcome.findings.length} finding(s)`,
+          `review: agent "${agent.name}" done — ${outcome.raw.findings.length} finding(s)`,
         );
       } catch (err) {
         // runOneAgent already persisted the failure/cancel (status + error +
@@ -135,53 +265,157 @@ export class ReviewRunExecutor {
     }
   }
 
+  /**
+   * Derive (or load the cached) PR intent.
+   * Fail-open: never throws; a failure is emitted to runLog (Live Log + trace)
+   * as well as stdout, and the review proceeds without intent.
+   */
+  private async deriveIntent(p: DeriveIntentParams): Promise<IntentOutcome> {
+    const { workspaceId, pull, repo, diff, runLog, correlationId, logger, fallback } = p;
+    // load / resolve_refs are logged exactly once, whatever the outcome.
+    let stepsLogged = false;
+    try {
+      const github = await this.container.github();
+      const intentService = new IntentService(this.container, github);
+      const featureModel = await resolveFeatureModel(this.container, workspaceId, 'standard');
+      const fullModel = `${featureModel.provider}/${featureModel.model}`;
+
+      const intentStartTime = Date.now();
+      // Files + hunk headers come from the diff this run loaded (not the pr_files table,
+      // which can be empty: see intentFilesFromDiff for the root cause).
+      const prFiles = intentFilesFromDiff(diff);
+      const fullDiffTokens = Math.ceil((diff.raw?.length ?? 0) / 4);
+      const result = await runLog.step(
+        'Deriving PR intent',
+        () =>
+          intentService.deriveIntentDetailed(
+            pull,
+            { owner: repo.owner, name: repo.name },
+            prFiles,
+            featureModel.provider,
+            featureModel.model,
+            {
+              fallback,
+              reuseIfSameHead: true,
+              onLlmCall: ({ provider, model, estPromptTokens }) => {
+                runLog.info(
+                  `Intent input: ~${estPromptTokens} est. tokens (vs ~${fullDiffTokens} for full diff)`,
+                  { step: 'intent.input', correlationId },
+                );
+                runLog.info(`Intent: calling ${provider}/${model}`, { step: 'intent.call', correlationId });
+              },
+            },
+          ),
+        { kind: 'tool' },
+      );
+      const intentDurationMs = Date.now() - intentStartTime;
+
+      const meta = result.meta;
+      // Everything below goes to runLog (Live Log + persisted trace log): the message text
+      // carries the data because event `data` is not persisted.
+      {
+        const reason = result.status === 'failed' ? result.error : undefined;
+        runLog.info(loadLine(meta, reason), { step: 'intent.load', cache: meta?.cache, correlationId });
+        runLog.info(resolveRefsLine(meta, reason), {
+          step: 'intent.resolve_refs',
+          statuses: meta?.refStatuses ?? {},
+          correlationId,
+        });
+        stepsLogged = true;
+      }
+      if (meta) {
+        for (const w of meta.warnings) {
+          runLog.info(`intent.derive warning: ${w}`, { step: 'intent.derive', correlationId });
+          logger?.warn({ prId: pull.id, correlationId, step: 'intent.derive', warning: w }, w);
+        }
+      }
+
+      if (result.status === 'failed') {
+        // RunLogger has no warn level; `error` is the only visible-in-Live-Log kind
+        // for a degraded step. The run itself continues.
+        runLog.error(`intent.derive failed (continuing without intent): ${result.error}`, {
+          step: 'intent.derive',
+          model: fullModel,
+          durationMs: intentDurationMs,
+          correlationId,
+          success: false,
+        });
+        return { status: 'failed', attempts: result.attempts };
+      }
+
+      const intent = result.intent;
+      const usedModel = meta?.model ?? fullModel;
+      const usedProvider = usedModel.split('/')[0];
+      const details = meta ? llmDetails(meta) : '';
+      const origin =
+        result.status === 'cached'
+          ? `intent.derive: cache hit (no LLM call), confidence=${intent.confidence}`
+          : `intent.derive: derived via LLM, provider=${usedProvider}, model=${usedModel}` +
+            (meta?.fallbackFrom ? ` (fell back from ${meta.fallbackFrom})` : '') +
+            `, duration=${intentDurationMs}ms, confidence=${intent.confidence}` +
+            (details ? `, ${details}` : '');
+      runLog.info(origin, {
+        step: 'intent.derive',
+        model: usedModel,
+        durationMs: intentDurationMs,
+        confidence: intent.confidence,
+        cached: result.status === 'cached',
+        tokens: meta?.tokens,
+        costUsd: meta?.costUsd,
+        correlationId,
+        success: true,
+      });
+      runLog.info(
+        result.status === 'cached'
+          ? 'Intent reused (head SHA unchanged) — injecting into review prompt'
+          : 'Intent derived — injecting into review prompt',
+        { step: 'intent.inject', correlationId },
+      );
+      const policy = reviewIntentPolicy(intent);
+      if (policy.line) {
+        runLog.info(policy.line, {
+          step: intent.confidence === 0 ? 'intent.skip' : 'intent.low_confidence',
+          confidence: intent.confidence,
+          correlationId,
+        });
+      }
+      return { intent, status: result.status, attempts: result.attempts };
+    } catch (err) {
+      // Fail-open (setup failure: github client, feature model, file load)
+      const errorMsg = (err as Error).message;
+      if (!stepsLogged) {
+        runLog.info(loadLine(undefined, errorMsg), { step: 'intent.load', correlationId });
+        runLog.info(resolveRefsLine(undefined, errorMsg), { step: 'intent.resolve_refs', correlationId });
+      }
+      runLog.error(`intent.derive failed (continuing without intent): ${errorMsg}`, {
+        step: 'intent.derive',
+        correlationId,
+        success: false,
+      });
+      logger?.warn(
+        { err: errorMsg, prId: pull.id, correlationId, step: 'intent.derive', success: false },
+        'Failed to derive intent; continuing without it',
+      );
+      return { status: 'failed', attempts: 0 };
+    }
+  }
+
   /** Execute a single agent's review against a PR, streaming progress. */
-  private async runOneAgent(
-    workspaceId: string,
-    pull: PullRow,
-    repo: typeof schema.repos.$inferSelect,
-    diff: UnifiedDiff,
-    agent: AgentRow,
-    runId: string,
-    parentLog: RunLogger,
-  ): Promise<RunOutcome> {
+  private async runOneAgent(p: RunOneAgentParams): Promise<RunOutcome> {
+    const { workspaceId, pull, repo, diff, agent, runId, intent, correlationId, logger } = p;
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
     // events are already in this run's buffer, so the persisted trace below
     // (built from the buffer) includes them too.
-    const runLog = parentLog.forRun(runId, { agent: agent.name });
+    const runLog = p.parentLog.forRun(runId, { agent: agent.name });
 
     runLog.info(`Starting review with agent "${agent.name}" (${agent.provider}/${agent.model})`);
 
     try {
-      // Resolve the agent's LLM provider. (container.llm throws if the provider
-      // key is missing — caught below and persisted as a failed run.)
-      const llm = await runLog.step(
-        `Resolving ${agent.provider} provider`,
-        () => this.container.llm(agent.provider as Provider),
-        { kind: 'tool' },
-      );
-
-      // Per-agent repo-intel toggle (Agent editor). When an agent opts out we
-      // skip all enrichment entirely so its prompt is identical to the
-      // repo-intel-off baseline — independent of the global REPO_INTEL_ENABLED
-      // flag, which still gates the facade internally.
-      const repoIntelOn = agent.repoIntel !== false;
-      if (!repoIntelOn) runLog.info('Repo intel disabled for this agent — skipping context enrichment');
-
-      // T1.3 — callers-in-prompt. Best-effort: when repo-intel is off the facade
-      // returns []; we omit the section and behavior is identical to the
-      // pre-T1.3 prompt (acceptance #10).
-      const callersDigest = repoIntelOn
-        ? await this.buildCallersDigest(pull.repoId, diff, runLog)
-        : undefined;
-
-      // T3 — repo skeleton + "changed files are top-5%" framing. Both best-
-      // effort: when repo-intel is off / unindexed the facade degrades and the
-      // prompt is identical to the pre-T3 shape.
-      const repoMap = repoIntelOn ? await this.buildRepoMapDigest(pull.repoId, runLog) : undefined;
-      const rankNote = repoIntelOn ? await this.buildRankNote(pull.repoId, diff, runLog) : '';
-
+      // (container.llm throws if the provider key is missing — caught below and
+      // persisted as a failed run.)
+      const llm = await this.resolveProvider(agent, runLog);
+      const { callersDigest, repoMap, rankNote } = await this.gatherRepoContext(agent, pull, diff, runLog);
       const task = taskLine(pull) + rankNote;
 
       // Skills — agent's linked, enabled skills, sorted by agent_skills.order
@@ -200,6 +434,7 @@ export class ReviewRunExecutor {
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
       // above, and persistence + observability below.
+      const reviewStartTime = Date.now();
       const outcome = await reviewPullRequest({
         systemPrompt: agent.systemPrompt,
         model: agent.model,
@@ -219,108 +454,37 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Structured intent (summary + in/out scope): reviewer-core renders the
+        // prompt section and applies the code-owned scope policy. Omitted when
+        // not available (fail-open, no scope filtering).
+        // Confidence 0 (no description/files/sources): omitted, so no Intent section and no
+        // scope instructions. Low confidence: passed, rendered as a weak hint; the scope
+        // filter stays inactive below MIN_INTENT_CONFIDENCE (applyScopePolicy).
+        ...(reviewIntentPolicy(intent.intent).include ? { intentObj: intent.intent } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
         checkCancelled: () => {
           if (this.container.runBus.isCancelled(runId)) throw new RunCancelledError();
         },
+        // Pass injected logger and correlation ID for structured prompt logging
+        logger: logger,
+        correlationId,
       });
-      // reviewer-core already computes costUsd per LLM call (summed across
-      // map-reduce chunks, preferring OpenRouter's live billed cost over our
-      // own price-book estimate when the provider reports one) — use it
-      // directly rather than re-estimating from the totals here.
-      const { tokensIn, tokensOut, grounding, costUsd } = outcome;
 
-      const keptFindings = outcome.review.findings;
-
-      // ---- Persist review + findings ----------------------------------------
-      const review = await this.repo.insertReview({
-        workspaceId,
-        prId: pull.id,
-        agentId: agent.id,
+      logRunMetrics(runLog, logger, {
         runId,
-        kind: 'review',
-        verdict: outcome.review.verdict,
-        summary: outcome.review.summary,
-        score: outcome.review.score,
         model: agent.model,
+        outcome,
+        reviewDurationMs: Date.now() - reviewStartTime,
+        intent,
+        correlationId,
       });
-      const findingRows = await this.repo.insertFindings(review.id, keptFindings);
-      runLog.result(`Persisted review ${review.id} with ${findingRows.length} finding(s)`);
 
-      // Mark the commit this review ran against so the PR list can tell
-      // reviewed / needs-review (head moved) / stale apart.
-      await this.repo.markReviewed(pull.id, pull.headSha);
+      const { review, findingRows } = await this.persistReview(workspaceId, pull, agent, runId, outcome, runLog);
+      await this.finishRun(runId, pull, agent, outcome, start, runLog, skillsMeta);
 
-      const durationMs = Date.now() - start;
-
-      // Deterministic blocker count (severity ≥ the agent's gate) — the signal
-      // the timeline colors on, NOT the model's self-reported verdict.
-      const blockers = countBlockers(keptFindings, agent.ciFailOn);
-      const severityCounts = rollupSeverities(keptFindings);
-
-      // ---- Observability: ONE run_traces document, THEN agent_runs status ---
-      // Trace is saved BEFORE the status flip to 'done' — callers (including
-      // this repo's own tests) poll agent_runs.status to know a run finished,
-      // then immediately fetch its trace. If the status flip happened first,
-      // there's a window where the run reads as "done" but GET /runs/:id/trace
-      // 404s or (worse) returns a stale/partial document. Saving the trace
-      // first makes "done" mean "trace is readable", not just "reviews row
-      // exists" — a strict widening of what "done" guarantees, not a behavior
-      // change for anything that only checked status before.
-      const trace: RunTrace = {
-        config: {
-          agent: agent.name,
-          version: String(agent.version),
-          provider: agent.provider,
-          model: agent.model,
-          pr: pull.number,
-          source: 'local',
-        },
-        stats: {
-          duration_ms: durationMs,
-          tokens_in: tokensIn,
-          tokens_out: tokensOut,
-          cost_usd: costUsd,
-          findings: findingRows.length,
-          grounding,
-        },
-        prompt_assembly: {
-          ...outcome.assembly,
-          skills_meta: skillsMeta.length > 0 ? skillsMeta : null,
-        },
-        tool_calls: outcome.chunks.map((c) => ({
-          tool: 'review_file',
-          args: c.label,
-          meta: outcome.mode,
-          ms: Math.round(durationMs / Math.max(outcome.chunks.length, 1)),
-        })),
-        raw_output: outcome.raw,
-        memory_pulled: [],
-        specs_read: [],
-        // Persisted log = the run's FULL event buffer (incl. shared pre-work:
-        // diff load + intent), not just events recorded inside this method.
-        log: runLog.logFor(runId),
-      };
-      runLog.info('Run complete; trace persisted');
-      await this.repo.saveRunTrace(runId, trace);
-      await this.repo.completeAgentRun(runId, {
-        status: 'done',
-        durationMs,
-        tokensIn,
-        tokensOut,
-        costUsd,
-        findingsCount: findingRows.length,
-        grounding,
-        score: outcome.review.score,
-        blockers,
-        severityCounts,
-        error: null,
-      });
-      this.container.runBus.complete(runId);
-
-      return { review, findings: findingRows, grounding, raw: outcome.review };
+      return { review, findings: findingRows, grounding: outcome.grounding, raw: outcome.review };
     } catch (err) {
       // Failure/cancel: persist status + the error text + the log-so-far so the
       // run (and WHY it failed) is visible on the UI after a reload.
@@ -345,6 +509,155 @@ export class ReviewRunExecutor {
       this.container.runBus.complete(runId);
       throw err;
     }
+  }
+
+  /** Resolve the agent's LLM provider (throws if its key is missing). */
+  private resolveProvider(agent: AgentRow, runLog: RunLogger) {
+    return runLog.step(
+      `Resolving ${agent.provider} provider`,
+      () => this.container.llm(agent.provider as Provider),
+      { kind: 'tool' },
+    );
+  }
+
+  /**
+   * Repo-intel prompt context (callers digest, repo map, rank note). Per-agent
+   * toggle (Agent editor): when an agent opts out all enrichment is skipped so its
+   * prompt is identical to the repo-intel-off baseline — independent of the global
+   * REPO_INTEL_ENABLED flag, which still gates the facade internally. Every part is
+   * best-effort: when repo-intel is off / unindexed the facade degrades and the
+   * prompt is identical to the pre-T1.3/T3 shape.
+   */
+  private async gatherRepoContext(
+    agent: AgentRow,
+    pull: PullRow,
+    diff: UnifiedDiff,
+    runLog: RunLogger,
+  ): Promise<{ callersDigest?: string; repoMap?: string; rankNote: string }> {
+    if (agent.repoIntel === false) {
+      runLog.info('Repo intel disabled for this agent — skipping context enrichment');
+      return { rankNote: '' };
+    }
+    const callersDigest = await this.buildCallersDigest(pull.repoId, diff, runLog);
+    const repoMap = await this.buildRepoMapDigest(pull.repoId, runLog);
+    const rankNote = await this.buildRankNote(pull.repoId, diff, runLog);
+    return { callersDigest, repoMap, rankNote };
+  }
+
+  /**
+   * Persist the review + ALL findings (in/out/signal; the scope column keeps them
+   * apart) and mark the commit reviewed so the PR list can tell reviewed /
+   * needs-review (head moved) / stale apart.
+   */
+  private async persistReview(
+    workspaceId: string,
+    pull: PullRow,
+    agent: AgentRow,
+    runId: string,
+    outcome: ReviewOutcome,
+    runLog: RunLogger,
+  ) {
+    const review = await this.repo.insertReview({
+      workspaceId,
+      prId: pull.id,
+      agentId: agent.id,
+      runId,
+      kind: 'review',
+      verdict: outcome.review.verdict,
+      summary: outcome.review.summary,
+      score: outcome.review.score,
+      model: agent.model,
+    });
+    const findingRows = await this.repo.insertFindings(review.id, outcome.allFindings);
+    runLog.result(
+      `Persisted review ${review.id} with ${findingRows.length} finding(s) (${outcome.review.findings.length} in scope)`,
+    );
+    await this.repo.markReviewed(pull.id, pull.headSha);
+    return { review, findingRows };
+  }
+
+  /**
+   * Stats rollup + observability: agent_runs row + ONE run_traces document, then
+   * close the bus. Counts use scope='in' findings only (`outcome.review.findings`):
+   * they drive blockers, severity counts and findingsCount.
+   */
+  private async finishRun(
+    runId: string,
+    pull: PullRow,
+    agent: AgentRow,
+    outcome: ReviewOutcome,
+    start: number,
+    runLog: RunLogger,
+    skillsMeta: ReadonlyArray<unknown> = [],
+  ): Promise<void> {
+    // reviewer-core already computes costUsd per LLM call (summed across
+    // map-reduce chunks, preferring OpenRouter's live billed cost over our
+    // own price-book estimate when the provider reports one) — use it
+    // directly rather than re-estimating from the totals here.
+    const { tokensIn, tokensOut, grounding, costUsd } = outcome;
+    const keptFindings = outcome.review.findings;
+    const durationMs = Date.now() - start;
+
+    // Deterministic blocker count (severity ≥ the agent's gate) — the signal
+    // the timeline colors on, NOT the model's self-reported verdict.
+    const blockers = countBlockers(keptFindings, agent.ciFailOn);
+    const severityCounts = rollupSeverities(keptFindings);
+
+    // ---- Observability: ONE run_traces document, THEN agent_runs status ---
+    // Trace is saved BEFORE the status flip to 'done': callers (including this
+    // repo's own tests) poll agent_runs.status to know a run finished and then
+    // immediately fetch its trace. Saving the trace first makes "done" mean
+    // "trace is readable", not just "reviews row exists".
+    const trace: RunTrace = {
+      config: {
+        agent: agent.name,
+        version: String(agent.version),
+        provider: agent.provider,
+        model: agent.model,
+        pr: pull.number,
+        source: 'local',
+      },
+      stats: {
+        duration_ms: durationMs,
+        tokens_in: tokensIn,
+        tokens_out: tokensOut,
+        cost_usd: costUsd,
+        findings: keptFindings.length,
+        grounding,
+      },
+      prompt_assembly: {
+        ...outcome.assembly,
+        skills_meta: skillsMeta.length > 0 ? skillsMeta : null,
+      } as RunTrace['prompt_assembly'],
+      tool_calls: outcome.chunks.map((c) => ({
+        tool: 'review_file',
+        args: c.label,
+        meta: outcome.mode,
+        ms: Math.round(durationMs / Math.max(outcome.chunks.length, 1)),
+      })),
+      raw_output: outcome.raw,
+      memory_pulled: [],
+      specs_read: [],
+      // Persisted log = the run's FULL event buffer (incl. shared pre-work:
+      // diff load + intent), not just events recorded inside this method.
+      log: runLog.logFor(runId),
+    };
+    runLog.info('Run complete; trace persisted');
+    await this.repo.saveRunTrace(runId, trace);
+    await this.repo.completeAgentRun(runId, {
+      status: 'done',
+      durationMs,
+      tokensIn,
+      tokensOut,
+      costUsd,
+      findingsCount: keptFindings.length,
+      grounding,
+      score: outcome.review.score,
+      blockers,
+      severityCounts,
+      error: null,
+    });
+    this.container.runBus.complete(runId);
   }
 
   /**

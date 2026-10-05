@@ -9,6 +9,7 @@ import type { Container } from '../../platform/container.js';
 import * as t from '../../db/schema.js';
 import { GITHUB_PROVIDER, SECRET_KEY_BY_PROVIDER } from './constants.js';
 import { rowsToSettings } from './helpers.js';
+import { classifyGithubError, type SyncReason } from '../pulls/sync-status.js';
 
 /**
  * F1 — settings service. Owns the `settings` key/value table (non-secret
@@ -16,6 +17,14 @@ import { rowsToSettings } from './helpers.js';
  * the test-connection flow. Secrets themselves are never persisted here —
  * only read/written via `container.secrets`.
  */
+export interface GithubStatus {
+  configured: boolean;
+  ok: boolean;
+  login?: string;
+  reason?: SyncReason;
+  message?: string;
+}
+
 export class SettingsService {
   constructor(private container: Container) {}
 
@@ -51,6 +60,22 @@ export class SettingsService {
       ),
     );
     return Object.fromEntries(entries) as SecretsStatus;
+  }
+
+  /**
+   * REAL GitHub token check (calls GitHub; `secrets-status` only says a value exists).
+   * `ok:false` + reason when the token is missing, rejected (401) or otherwise unusable.
+   */
+  async getGithubStatus(): Promise<GithubStatus> {
+    const configured = Boolean(await this.container.secrets.get('GITHUB_TOKEN'));
+    if (!configured) return { configured, ok: false, reason: 'no_token', message: 'GITHUB_TOKEN is not configured' };
+    try {
+      const gh = await this.container.github();
+      return { configured, ok: true, login: await gh.currentLogin() };
+    } catch (err) {
+      const { reason, message } = classifyGithubError(err);
+      return { configured, ok: false, reason, message };
+    }
   }
 
   async testConnection(req: ConnTestRequestType): Promise<ConnTestResult> {

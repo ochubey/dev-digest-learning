@@ -1,0 +1,1 @@
+export { IntentBlock } from "./IntentBlock";

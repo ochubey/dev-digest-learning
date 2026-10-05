@@ -44,6 +44,22 @@ export const s = {
     fontWeight: 600,
     color: "var(--text-muted)",
   } satisfies CSSProperties,
+  outBadge: {
+    fontSize: 11,
+    fontWeight: 600,
+    padding: "1px 6px",
+    borderRadius: 4,
+    color: "var(--text-muted)",
+    border: "1px solid var(--border)",
+  } satisfies CSSProperties,
+  signalTag: { fontSize: 12, fontWeight: 700, color: "var(--warn)" } satisfies CSSProperties,
+  scopeReason: {
+    marginTop: 4,
+    fontSize: 12.5,
+    color: "var(--text-secondary)",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  } satisfies CSSProperties,
   metaRow: {
     display: "flex",
     alignItems: "center",

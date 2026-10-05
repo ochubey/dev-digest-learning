@@ -52,6 +52,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
         message = body.error.message ?? message;
         details = body.error.details;
       }
+      // Rate-limit style bodies ({ error: string, retry_after }) carry the wait outside `error`.
+      if (typeof body?.retry_after === "number") details = { retry_after: body.retry_after };
     } catch {
       /* non-JSON error body */
     }

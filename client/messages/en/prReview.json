@@ -26,6 +26,13 @@
     "blockers": " · {count} blockers",
     "prScore": "PR SCORE"
   },
+  "scope": {
+    "suppressed": "{count, plural, one {# finding} other {# findings}} hidden as out of scope",
+    "reveal": "Show out-of-scope findings",
+    "conceal": "Hide out-of-scope findings",
+    "signal": "Out of scope · serious",
+    "outBadge": "Out of scope"
+  },
   "panel": {
     "hideLowConfidence": "Hide low confidence",
     "noMatchTitle": "No findings match",
@@ -51,16 +58,57 @@
     "blockers": " · {count} blockers"
   },
   "smartDiff": {
-    "coreLabel": "Core",
+    "coreLabel": "Core logic",
+    "coreDescription": "The substance of the change — review closely",
+    "testsDescription": "Test files and fixtures",
+    "wiringDescription": "Hooks the core into the app",
+    "docsDescription": "Documentation and licensing",
+    "boilerplateDescription": "Generated / mechanical — skim",
+    "testsLabel": "Tests",
     "wiringLabel": "Wiring",
+    "docsLabel": "Docs",
     "boilerplateLabel": "Boilerplate",
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
-    "filesCount": "{count} files",
+    "filesCount": "{count, plural, one {# file} other {# files}}",
+    "filesChanged": "Files changed · {count, plural, one {# file} other {# files}}",
+    "smartOrder": "Smart order",
+    "originalOrder": "Original order",
+    "hideFindings": "Hide findings ({count})",
+    "showFindings": "Show findings ({count})",
+    "reviewNotRun": "Review hasn't been run yet — run agents to see findings here.",
+    "expandFiles": "Expand all files",
+    "collapseFiles": "Collapse all files",
+    "groupFindings": "{count, plural, one {# finding} other {# findings}}",
+    "fileFindings": "{count, plural, one {# finding} other {# findings}} in this file",
+    "suggestedFix": "Suggested fix",
+    "confidence": "{pct}% conf",
     "findingLines": "{count} finding-lines",
-    "groupedByRole": "Smart Diff · grouped by role"
+    "outOfScopeHidden": "{count, plural, one {# out-of-scope finding hidden} other {# out-of-scope findings hidden}}",
+    "groupedByRole": "Smart Diff · grouped by role",
+    "hideComments": "Hide comments ({count})",
+    "showComments": "Show comments ({count})",
+    "filesWithFindings": "{count, plural, one {# file} other {# files}} with findings",
+    "fileHasFindings": "Has findings",
+    "groupingUnavailable": "Grouping by role is unavailable; showing files in the original order.",
+    "unmatchedFindings": "Findings outside the diff",
+    "severity": {
+      "blocker": "blocker",
+      "warning": "warning",
+      "suggestion": "suggestion"
+    }
   },
   "list": {
+    "sync": {
+      "title": "Couldn't sync pull requests from GitHub",
+      "no_token": "No GitHub token is configured. Add GITHUB_TOKEN in server/.env or Settings → API keys, then restart the server.",
+      "bad_credentials": "GitHub rejected the token (bad credentials, it may be expired or revoked). Create a new token, update GITHUB_TOKEN in server/.env and Settings → API keys, then restart the server.",
+      "no_access": "The token can't see this repository (not found or no permission). Check the repository name and the token's repository access.",
+      "rate_limited": "GitHub rate limit reached. Try again in a few minutes.",
+      "error": "GitHub request failed.",
+      "showingSaved": "Showing the pull requests saved earlier (may be out of date).",
+      "settings": "Open API key settings"
+    },
     "breadcrumb": "Pull Requests",
     "title": "Pull Requests",
     "summary": "{open} open · {needsReview} need review",
@@ -98,7 +146,6 @@
       "status": "Status",
       "updated": "Updated"
     },
-    "filesCount": "{count} files",
     "errorTitle": "Couldn’t load pull requests",
     "errorBody": "The engine returned an error.",
     "emptyTitle": "No pull requests",

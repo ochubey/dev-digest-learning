@@ -7,6 +7,7 @@ import {
   Risks,
   PrHistory,
   SmartDiff,
+  SmartDiffRole,
   Conformance,
   Onboarding,
   EvalRun,
@@ -67,7 +68,13 @@ describe('AI contracts parse fixtures', () => {
 
   it('Intent / BlastRadius / Risks / PrHistory', () => {
     expect(() =>
-      Intent.parse({ intent: 'x', in_scope: ['a'], out_of_scope: ['b'] }),
+      Intent.parse({
+        summary: 'x',
+        in_scope: ['a'],
+        out_of_scope: ['b'],
+        confidence: 0.5,
+        sources: [],
+      }),
     ).not.toThrow();
     expect(() =>
       BlastRadius.parse({
@@ -115,6 +122,13 @@ describe('AI contracts parse fixtures', () => {
       split_suggestion: { too_big: false, total_lines: 285, proposed_splits: [] },
     });
     expect(d.groups[0]!.role).toBe('core');
+  });
+
+  it('SmartDiffRole accepts the five roles and rejects unknown ones', () => {
+    for (const role of ['core', 'tests', 'wiring', 'docs', 'boilerplate']) {
+      expect(SmartDiffRole.safeParse(role).success).toBe(true);
+    }
+    expect(SmartDiffRole.safeParse('other').success).toBe(false);
   });
 
   it('Conformance / Onboarding / EvalRun / MemoryItem', () => {

@@ -125,6 +125,13 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /**
+   * Repo file contents by path for readRepoFile: a string is the content, `null` is
+   * not-found, an Error is thrown (auth / rate limit / network). Unlisted paths are null.
+   */
+  files?: Record<string, string | null | Error>;
+  /** Issues by number for getIssue: an Error is thrown, `null` is not-found (throws a 404). */
+  issues?: Record<number, IssueMeta | null | Error>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -231,11 +238,23 @@ export class MockGitHubClient implements GitHubClient {
   }
 
   async getIssue(_repo: RepoRef, n: number): Promise<IssueMeta> {
+    const configured = this.opts.issues?.[n];
+    if (configured instanceof Error) throw configured;
+    if (this.opts.issues && n in this.opts.issues && configured === null) {
+      throw Object.assign(new Error('Not Found'), { status: 404 });
+    }
+    if (configured) return configured;
     return { number: n, title: `Issue #${n}`, body: 'mock issue', state: 'open' };
   }
 
   async currentLogin(): Promise<string> {
     return this.opts.login ?? 'mock-user';
+  }
+
+  async readRepoFile(_repo: RepoRef, path: string, _sha: string): Promise<string | null> {
+    const configured = this.opts.files?.[path];
+    if (configured instanceof Error) throw configured;
+    return configured ?? null;
   }
 }
 

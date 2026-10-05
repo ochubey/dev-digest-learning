@@ -59,6 +59,29 @@ d('Settings: feature models + secrets status (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('standard model: default, then a legacy review_intent override, then its own choice wins', async () => {
+    const app = await buildApp({ config: config(), db: pg.handle.db, overrides: {} });
+    const put = (feature_models: unknown) =>
+      app.inject({ method: 'PUT', url: '/settings', payload: { feature_models } });
+
+    await put({});
+    expect(await resolveFeatureModel(app.container, workspaceId, 'standard')).toEqual({
+      provider: 'openrouter',
+      model: 'google/gemini-2.5-flash-lite',
+    });
+
+    const legacy = { provider: 'openrouter', model: 'legacy/intent-model' };
+    expect((await put({ review_intent: legacy })).statusCode).toBe(200);
+    expect(await resolveFeatureModel(app.container, workspaceId, 'standard')).toEqual(legacy);
+
+    const own = { provider: 'openrouter', model: 'own/standard-model' };
+    await put({ review_intent: legacy, standard: own });
+    expect(await resolveFeatureModel(app.container, workspaceId, 'standard')).toEqual(own);
+
+    await put({});
+    await app.close();
+  });
+
   it('GET /settings/secrets-status returns booleans only — never the key values', async () => {
     const secrets: SecretsProvider = {
       get: async (k) => (k === 'OPENROUTER_API_KEY' ? 'sk-or-secret-value' : undefined),

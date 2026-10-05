@@ -15,6 +15,9 @@
 export {
   assemblePrompt,
   wrapUntrusted,
+  renderIntent,
+  INJECTION_GUARD,
+  SCOPE_INSTRUCTIONS,
   type PromptParts,
   type AssembledPrompt,
 } from './prompt.js';
@@ -33,6 +36,10 @@ export {
 
 // Map-reduce helpers (reduce partials, slice a file's diff).
 export { reduceReviews, sliceDiff } from './review/reduce.js';
+
+// Model-facing output schema (Review + per-finding scope label) and changed-line index.
+export { ModelFinding, ModelReview } from './review/output-schema.js';
+export { changedLines } from './review/changed-lines.js';
 
 // The engine entry point: given (diff + resolved agent inputs + LLM) → grounded Review.
 export {
@@ -53,6 +60,23 @@ export {
   countBlockers,
   type ToReviewOptions,
 } from './output/to-review.js';
+
+// Intent derivation (summary + in/out scope from PR metadata).
+export {
+  assembleIntentPrompt,
+  type IntentPromptInput,
+  type AssembledIntentPrompt,
+  type IntentPromptStats,
+} from './intent/prompt-builder.js';
+
+// Code-owned scope policy (model labels, code decides; no extra LLM call).
+export {
+  applyScopePolicy,
+  MIN_INTENT_CONFIDENCE,
+  type ScopeStats,
+  type ScopeLabel,
+  type ScopePolicyResult,
+} from './review/scope.js';
 
 // The single OpenAI-compatible structured provider (OpenRouter), shared by the
 // CI runner and the server's openrouter path. Owns session grouping + guards.

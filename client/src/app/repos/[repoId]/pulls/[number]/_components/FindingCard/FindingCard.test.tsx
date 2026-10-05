@@ -58,3 +58,36 @@ describe("FindingCard (smoke, both themes)", () => {
     expect(onAction).toHaveBeenCalledWith("dismiss");
   });
 });
+
+describe("FindingCard scope", () => {
+  it("renders the signal marker and the reason as literal plain text", () => {
+    const reason = "Touches **auth** <b>x</b> [link](http://evil.test)";
+    renderWithIntl(
+      <FindingCard f={{ ...FINDING, scope: "signal", scope_reason: reason }} />,
+    );
+    expect(screen.getByText("Out of scope · serious")).toBeInTheDocument();
+    const el = screen.getByTestId("finding-scope-reason");
+    expect(el.textContent).toBe(reason);
+    expect(el.querySelector("b, a, strong")).toBeNull();
+    expect(el.innerHTML).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+
+  it("signal without a reason shows only the marker", () => {
+    renderWithIntl(<FindingCard f={{ ...FINDING, scope: "signal", scope_reason: null }} />);
+    expect(screen.getByText("Out of scope · serious")).toBeInTheDocument();
+    expect(screen.queryByTestId("finding-scope-reason")).not.toBeInTheDocument();
+  });
+
+  it("shows a small 'Out of scope' badge for out findings, no signal marker", () => {
+    renderWithIntl(<FindingCard f={{ ...FINDING, scope: "out" }} muted />);
+    expect(screen.getByText("Out of scope")).toBeInTheDocument();
+    expect(screen.queryByText("Out of scope · serious")).not.toBeInTheDocument();
+  });
+
+  it("in-scope and legacy (null) findings show neither marker nor badge", () => {
+    renderWithIntl(<FindingCard f={{ ...FINDING, scope: "in" }} />);
+    cleanup();
+    renderWithIntl(<FindingCard f={{ ...FINDING, scope: null }} />);
+    expect(screen.queryByText(/Out of scope/)).not.toBeInTheDocument();
+  });
+});
