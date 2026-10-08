@@ -225,7 +225,7 @@ Server tests live in `server/test/` (same as `blast-*`). Client tests sit next t
 
 ### P1: Contract (`brief.ts` x2)
 
-- [ ] T1 Write failing tests in `server/test/contracts.test.ts`, new `describe('PrBrief v2')`:
+- [x] T1 Write failing tests in `server/test/contracts.test.ts`, new `describe('PrBrief v2')`:
   - a full fixture parses
   - `intent: null`, `blast: null` with `history` omitted parses
   - missing `summary`, `review_focus` or `meta` is rejected
@@ -237,9 +237,9 @@ Server tests live in `server/test/` (same as `blast-*`). Client tests sit next t
   - `meta.schema_attempts` is required
   - an unknown `meta.missing` value is rejected
   -> AC-24, AC-45, AC-70, AC-71, AC-79, AC-84 -> `contracts.test.ts > PrBrief v2 *`
-- [ ] T2 Edit `server/src/vendor/shared/contracts/brief.ts` to the frozen shape in section 2. Keep other exports unchanged. -> AC-24 -> `contracts.test.ts > PrBrief v2 *`
-- [ ] T3 Copy it byte-identically to `client/src/vendor/shared/contracts/brief.ts`. If the `index.ts` doc comments are touched, keep both `index.ts` copies identical too. -> AC-24 -> `contracts-parity.test.ts > brief.ts is byte-identical on server and client`
-- [ ] T4 Grep for `Risk`, `Risks` and `PrBrief` consumers (`server/src`, `client/src`, `reviewer-core/src`) and fix any compile breaks. Expected: none. -> AC-24 -> typecheck
+- [x] T2 Edit `server/src/vendor/shared/contracts/brief.ts` to the frozen shape in section 2. Keep other exports unchanged. -> AC-24 -> `contracts.test.ts > PrBrief v2 *`
+- [x] T3 Copy it byte-identically to `client/src/vendor/shared/contracts/brief.ts`. If the `index.ts` doc comments are touched, keep both `index.ts` copies identical too. -> AC-24 -> `contracts-parity.test.ts > brief.ts is byte-identical on server and client`
+- [x] T4 Grep for `Risk`, `Risks` and `PrBrief` consumers (`server/src`, `client/src`, `reviewer-core/src`) and fix any compile breaks. Expected: none. -> AC-24 -> typecheck
 
 Done when:
 - `server`: `pnpm typecheck` and `pnpm exec vitest run test/contracts.test.ts test/contracts-parity.test.ts` pass.
@@ -248,13 +248,13 @@ Done when:
 
 ### P2: Server pure functions (`server/src/modules/brief/`, all files new)
 
-- [ ] T5 `constants.ts` and `schema.ts`. Tests:
+- [x] T5 `constants.ts` and `schema.ts`. Tests:
   - `BriefModelOutput` rejects a missing `review_focus` and an unknown `kind`
   - `toJsonSchema(BriefModelOutput, 'PrBriefOutput')` has no `maxLength`, `minLength`, `maxItems` or `minItems`, and lists every property as required
   - the emitted schema has `additionalProperties: false` on every object and no `line_adjusted` property (AC-69)
   - a `kind` outside the 7 `RISK_KINDS` is rejected (AC-79)
   -> AC-23, AC-69, AC-79 -> `server/test/brief-schema.test.ts > model output schema is strict-mode safe`
-- [ ] T6 `diff-facts.ts`. Tests:
+- [x] T6 `diff-facts.ts`. Tests:
   - ranges come from `newStart`/`newLines`
   - no `status` key on any fact (AC-20)
   - a file whose hunks all have `newLines = 0` (deleted, `pr_files` fallback) is excluded (AC-60)
@@ -266,7 +266,7 @@ Done when:
   - a sentinel placed in `raw` (body line and hunk-header context) is absent from `JSON.stringify(diffFacts(d))`
   - `diffStats` totals and `by_role`
   -> AC-16, AC-20, AC-55, AC-60, AC-61, AC-63 -> `server/test/brief-diff-facts.test.ts`
-- [ ] T7 `prompt.ts`. Tests first:
+- [x] T7 `prompt.ts`. Tests first:
   - the sentinel never appears in the messages
   - worst-case fixtures (2,000 files with 200-char paths, a 100 KB description of `<>&"`, a 64 KB spec, 200 callers, a 256-char title, every marker) give `estimateTokens` <= 8,000, computed on the exact `JSON.stringify(messages)` plus the schema (AC-19)
   - one test per truncation step (only that section oversize -> `truncated` equals that section; all oversize -> the spec order)
@@ -278,7 +278,7 @@ Done when:
   - with an inflated framing (via `opts`), the post-assembly re-measure cuts more in the same order until the input fits
   - no hunk-header context text (sentinel after `@@ … @@`) and no `status` field appear (AC-20)
   -> AC-19, AC-20, AC-21, AC-22, AC-45 -> `server/test/brief-prompt.test.ts`
-- [ ] T8 `grounding.ts`. Tests first:
+- [x] T8 `grounding.ts`. Tests first:
   - one valid and one invented risk ref -> only the valid one survives
   - a risk whose refs are all invalid is dropped
   - a blast-only focus item and an invented focus item are both dropped
@@ -293,7 +293,7 @@ Done when:
   - clamping enforces summary 600, 8 risks, explanation 400, 7 focus items, reason 200
   - a risk in the output always has `file_refs.length >= 1`
   -> AC-8, AC-13, AC-14, AC-15, AC-16, AC-17, AC-60, AC-61, AC-62, AC-63, AC-69 -> `server/test/brief-grounding.test.ts`
-- [ ] T9 `log-line.ts`. Tests:
+- [x] T9 `log-line.ts`. Tests:
   - `briefCallsLabel` for all 6 outcomes: `brief=1 ok|invalid_output|provider_error|timeout` and `brief=0 provider_unavailable|input_over_budget` (D-7: one call, never "N calls")
   - `briefLogFields` contains:
     - pr_id, the `calls` label and `schema_attempts` (null when `brief=0`)
@@ -304,14 +304,14 @@ Done when:
   - no prompt, document or body text is included
   -> AC-17, AC-18, AC-26 -> `server/test/brief-log-line.test.ts`
 
-- [ ] T36 `paths.ts`: `isSafeRepoPath` and `normalizeRef`. Cases: NUL, `/a`, ``, `C:`, `c:/a`, `a/../b`, `..`, `./a` (safe after normalize), `a..b` (safe). Used by diff-facts (T6), the blast caller list in the prompt (T7) and grounding (T8). -> AC-63 -> `server/test/brief-paths.test.ts`
-- [ ] T37 `PrBriefStored` in `schema.ts`. Tests: rejects a risk with `file_refs: []`; accepts a full grounded fixture; the shared `Risk` still accepts `[]`. -> AC-68, AC-84, AC-8 -> `server/test/brief-schema.test.ts > stored schema`
-- [ ] T38 `wrapBlock(label: BlockLabel, text)` in `prompt.ts`. Labels come from a fixed union (`pr_title`, `pr_description`, `linked_issue`, `spec_doc`, `intent`, `blast`, `diff_stats`). The content is entity-escaped (`&` -> `&amp;`, `<` -> `&lt;`, `>` -> `&gt;`), so no literal `<untrusted`, `</untrusted>` or tag can appear inside it. Tests:
+- [x] T36 `paths.ts`: `isSafeRepoPath` and `normalizeRef`. Cases: NUL, `/a`, ``, `C:`, `c:/a`, `a/../b`, `..`, `./a` (safe after normalize), `a..b` (safe). Used by diff-facts (T6), the blast caller list in the prompt (T7) and grounding (T8). -> AC-63 -> `server/test/brief-paths.test.ts`
+- [x] T37 `PrBriefStored` in `schema.ts`. Tests: rejects a risk with `file_refs: []`; accepts a full grounded fixture; the shared `Risk` still accepts `[]`. -> AC-68, AC-84, AC-8 -> `server/test/brief-schema.test.ts > stored schema`
+- [x] T38 `wrapBlock(label: BlockLabel, text)` in `prompt.ts`. Labels come from a fixed union (`pr_title`, `pr_description`, `linked_issue`, `spec_doc`, `intent`, `blast`, `diff_stats`). The content is entity-escaped (`&` -> `&amp;`, `<` -> `&lt;`, `>` -> `&gt;`), so no literal `<untrusted`, `</untrusted>` or tag can appear inside it. Tests:
   - the escaped form of `</untrusted>` and `<untrusted source="system">` in every untrusted field (AC-65)
   - an adversarial fixture with fake closing and opening tags plus "ignore previous instructions" in the description, issue, spec and a file path -> parsing the user message with `/<untrusted source="([a-z_]+)">/g` gives exactly the expected label list in order, and each injected sentinel sits between its own block's open and close (AC-66)
   -> AC-65, AC-66 -> `server/test/brief-prompt.test.ts > adversarial delimiters`
-- [ ] T39 Over-budget path in `buildBriefPrompt`: with `opts.budgetTokens` below framing plus protected content, it returns `{ok: false, reason: 'input_over_budget'}`, does not throw, and every truncatable section has been cut to its minimum before giving up. -> AC-64 -> `server/test/brief-prompt.test.ts > protected content over budget`
-- [ ] T40 `classifyLlmError(err)` in `log-line.ts` returns `{outcome, error_class, error_message}`:
+- [x] T39 Over-budget path in `buildBriefPrompt`: with `opts.budgetTokens` below framing plus protected content, it returns `{ok: false, reason: 'input_over_budget'}`, does not throw, and every truncatable section has been cut to its minimum before giving up. -> AC-64 -> `server/test/brief-prompt.test.ts > protected content over budget`
+- [x] T40 `classifyLlmError(err)` in `log-line.ts` returns `{outcome, error_class, error_message}`:
   - `TimeoutError` -> `timeout`
   - a message matching `/structured output failed schema validation/` -> `invalid_output`
   - `ConfigError` -> `provider_unavailable`
@@ -322,15 +322,15 @@ Done when: `server`: `pnpm typecheck` and `pnpm exec vitest run test/brief-` pas
 
 ### P3: Server service, repository, routes, registration (depends on P1 and P2)
 
-- [ ] T10 Refactor `server/src/modules/blast/files.ts`: add `changedDiffForPr(container, ws, pr, log): Promise<DiffLoadResult>`, where `DiffLoadResult = {status: 'loaded', diff} | {status: 'unavailable', reason}`. It is shared in flight and imports the PR detail once. Classification:
+- [x] T10 Refactor `server/src/modules/blast/files.ts`: add `changedDiffForPr(container, ws, pr, log): Promise<DiffLoadResult>`, where `DiffLoadResult = {status: 'loaded', diff} | {status: 'unavailable', reason}`. It is shared in flight and imports the PR detail once. Classification:
   - (1) first `loadDiff` has >= 1 file -> `loaded`
   - (2) otherwise `getPullDetail`, then `loadDiff` again: >= 1 file -> `loaded`
   - (3) still 0 files and the PR has >= 1 `pr_files` row (every file deleted, pure-rename, binary or patch-less) -> `loaded` with 0 files (AC-59)
   - (4) 0 `pr_files` rows, no repo row, or any throw -> `unavailable` (AC-48)
   `changedFilesForPr` maps `loaded` to paths and `unavailable` to `[]` (blast behaviour unchanged). Existing tests stay green, plus new tests covering each of (1)-(4).
   -> AC-48, AC-59 -> `server/test/blast-files.test.ts > changedDiffForPr *`
-- [ ] T11 `repository.ts` (`BriefRepository`). -> AC-27 -> covered by T15
-- [ ] T12 `service.ts`. Tests first in `server/test/brief-service.test.ts`, using stub repos, a `MockLLMProvider` spy, a repoIntel stub and a `MockGitHubClient`:
+- [x] T11 `repository.ts` (`BriefRepository`). -> AC-27 -> covered by T15
+- [x] T12 `service.ts`. Tests first in `server/test/brief-service.test.ts`, using stub repos, a `MockLLMProvider` spy, a repoIntel stub and a `MockGitHubClient`:
   - exactly one `completeStructured` call, `maxRetries: 1`, model from the arguments. `meta.schema_attempts` comes from the result `attempts` (AC-18)
   - invented paths are dropped (end to end through the service)
   - no `pr_intent` -> `missing` includes `intent`, and the intent repo's write and derive are never called
@@ -347,7 +347,7 @@ Done when: `server`: `pnpm typecheck` and `pnpm exec vitest run test/brief-` pas
   - a stub that never resolves plus fake timers advanced by 50 s -> `outcome: 'timeout'` and no upsert; at 49.9 s it is still pending (AC-82)
   - the stored JSON has `sources` with labels and statuses only; a sentinel from the spec content is absent
   -> AC-13, AC-14, AC-15, AC-17, AC-18, AC-23, AC-25, AC-27, AC-33, AC-43, AC-44, AC-46, AC-47, AC-48, AC-55, AC-59, AC-60, AC-64, AC-68, AC-70, AC-71, AC-82
-- [ ] T13 `routes.ts`. Tests first in `server/test/brief-routes.test.ts` (fakeDb, same approach as `intent-routes.test.ts`, with `vi.mock('../src/modules/brief/log-line.js')` spying on `logBriefGeneration`; fake clock via `vi.setSystemTime`):
+- [x] T13 `routes.ts`. Tests first in `server/test/brief-routes.test.ts` (fakeDb, same approach as `intent-routes.test.ts`, with `vi.mock('../src/modules/brief/log-line.js')` spying on `logBriefGeneration`; fake clock via `vi.setSystemTime`):
   - GET: 404 when there is no PR or no row (AC-49)
   - GET: 403 for a PR in another workspace with a seeded brief; the body has no brief fields (AC-56)
   - GET: 404 plus a warning when the stored JSON fails to parse
@@ -371,8 +371,8 @@ Done when: `server`: `pnpm typecheck` and `pnpm exec vitest run test/brief-` pas
   - POST: loaded diff with 0 files -> `diff` not in missing, `review_focus: []` (AC-59)
   - POST twice (after advancing time) -> a new LLM call and the brief replaced (AC-30)
   -> AC-17, AC-18, AC-23, AC-25, AC-26, AC-28, AC-29, AC-30, AC-31, AC-33, AC-43, AC-44, AC-48, AC-49, AC-56, AC-57, AC-58, AC-59, AC-64, AC-67, AC-72, AC-77, AC-81, AC-82
-- [ ] T14 Register `brief` in `server/src/modules/index.ts`. -> AC-49 -> `brief-routes.test.ts` (routes reachable)
-- [ ] T15 `server/test/brief.it.test.ts` (new, testcontainers):
+- [x] T14 Register `brief` in `server/src/modules/index.ts`. -> AC-49 -> `brief-routes.test.ts` (routes reachable)
+- [x] T15 `server/test/brief.it.test.ts` (new, testcontainers):
   - POST stores one `pr_brief` row whose JSON has `meta.generated_from_head_sha` (AC-27)
   - seed a brief, make the stub throw -> 502 and the row is unchanged (AC-33)
   - the stored row contains no sentinel from the issue body or the spec doc (AC-46)
@@ -385,8 +385,8 @@ Done when:
 
 ### P4: Client hooks, i18n, card core states (depends on P1)
 
-- [ ] T16 `client/src/lib/hooks/brief.ts` (new) and the export in `client/src/lib/hooks/index.ts`. Tests: 404 is not retried; a 429 error invalidates `["pr-brief", prId]`; success sets the query data. -> AC-1, AC-2, AC-28, AC-32 -> `client/src/lib/hooks/brief.test.tsx`
-- [ ] T17 `client/messages/en/brief.json`.
+- [x] T16 `client/src/lib/hooks/brief.ts` (new) and the export in `client/src/lib/hooks/index.ts`. Tests: 404 is not retried; a 429 error invalidates `["pr-brief", prId]`; success sets the query data. -> AC-1, AC-2, AC-28, AC-32 -> `client/src/lib/hooks/brief.test.tsx`
+- [x] T17 `client/messages/en/brief.json`.
   - Reuse `block.intent`, `block.blast`, `block.risks`, `noRisks`, `unavailable` and `unavailableHint`. Update the `unavailableHint` text to describe generating a brief; it has no current consumers.
   - Add:
     - `card.title`, `card.generate`, `card.regenerate`, `card.regenerating`, `card.summary`, `card.reviewFocus`, `card.noFocus`
@@ -395,7 +395,7 @@ Done when:
     - `missingInput.{intent,blast,description,linked_issue,specs,diff}`, `severity.{high,medium,low}`, `riskKind.{security,db_migration,breaking_api,perf,deps,correctness,other}`
     - `stats.files`, `stats.sources`, `stats.role.{core,tests,wiring,docs,boilerplate}`
   -> AC-54 -> `PrBriefCard.test.tsx` (renders with the real `brief.json`)
-- [ ] T18 `_components/PrBriefCard/` core: `PrBriefCard.tsx`, `RiskList.tsx`, `ReviewFocusList.tsx`, `index.ts`, `styles.ts`, `constants.ts`. Tests first in `PrBriefCard.test.tsx` (mock `@/lib/hooks/brief` and `@/lib/toast`):
+- [x] T18 `_components/PrBriefCard/` core: `PrBriefCard.tsx`, `RiskList.tsx`, `ReviewFocusList.tsx`, `index.ts`, `styles.ts`, `constants.ts`. Tests first in `PrBriefCard.test.tsx` (mock `@/lib/hooks/brief` and `@/lib/toast`):
   - GET 404 -> empty state and a "Generate brief" button (AC-1)
   - click -> one POST (AC-2)
   - pending -> button disabled and `aria-busy` on the wrapper (AC-3)
@@ -410,7 +410,7 @@ Done when:
   - 502 -> alert with Retry, previous brief still shown (AC-34)
   - model text is rendered as text, never as HTML
   -> AC-1, AC-2, AC-3, AC-4, AC-8, AC-9, AC-10, AC-11, AC-12, AC-29, AC-30, AC-32, AC-34, AC-54
-- [ ] T19 `helpers.ts` with `helpers.test.ts`:
+- [x] T19 `helpers.ts` with `helpers.test.ts`:
   - `missingLabels`, `isInDiff(path, diffPaths)`, `focusLabel`
   - `riskKindIcon` (unknown kind -> generic icon, AC-80)
   - `inputsChanged(brief, liveIntent, liveBlast)` compares Intent presence, summary and in/out scope items, and Blast presence, summary and the caller-file SET. Order is ignored. Tests: a null snapshot with live Intent -> true; the same callers reordered -> false (AC-78)
@@ -418,20 +418,20 @@ Done when:
 
 Done when: `client`: `pnpm typecheck` and `pnpm test` pass; a grep for English string literals in `PrBriefCard/*.tsx` finds none (AC-54).
 
-- [ ] T42 Interface handoff checkpoint (orchestrator, no code). Freeze and record in the PR description the interfaces listed in section 9. The P5 and P6 agents get them as input. -> AC-35, AC-41, AC-54 (interfaces those ACs depend on) -> `client pnpm typecheck` after P4
+- [x] T42 Interface handoff checkpoint (orchestrator, no code). Freeze and record in the PR description the interfaces listed in section 9. The P5 and P6 agents get them as input. -> AC-35, AC-41, AC-54 (interfaces those ACs depend on) -> `client pnpm typecheck` after P4
 
 ### P5: Card details and wishes (depends on P4)
 
-- [ ] T20 Missing-data note: `missing.length > 0` -> `card.missing` listing the localized inputs, `role="status"`. -> AC-7 -> `PrBriefCard.test.tsx > missing note names intent and blast`
-- [ ] T21 `BriefStats.tsx`: file count, +additions/-deletions, files per role, and source chips with statuses (reuses `getSourceIcon`/`getSourceColor` from `../IntentBlock/helpers`). `diff_stats.files === 0` renders an empty stats row; `diff_stats: null` hides it. -> AC-55, AC-59 -> `PrBriefCard.test.tsx > stats and sources`
-- [ ] T22 `BriefSkeleton.tsx`, regenerate behaviour and risk expand:
+- [x] T20 Missing-data note: `missing.length > 0` -> `card.missing` listing the localized inputs, `role="status"`. -> AC-7 -> `PrBriefCard.test.tsx > missing note names intent and blast`
+- [x] T21 `BriefStats.tsx`: file count, +additions/-deletions, files per role, and source chips with statuses (reuses `getSourceIcon`/`getSourceColor` from `../IntentBlock/helpers`). `diff_stats.files === 0` renders an empty stats row; `diff_stats: null` hides it. -> AC-55, AC-59 -> `PrBriefCard.test.tsx > stats and sources`
+- [x] T22 `BriefSkeleton.tsx`, regenerate behaviour and risk expand:
   - first generation in flight -> two-column skeleton (AC-52)
   - regeneration in flight -> previous brief dimmed with "Regenerating..." (AC-53)
   - the risk chevron is its own `<button>` with `aria-expanded` (flips on toggle), `aria-controls` = the id of the explanation region, and an accessible name containing the risk title (`card.expandRisk`). It toggles the explanation and all refs (AC-51)
   - `kind: 'custom'` renders the generic icon plus the text label (AC-80)
   - severity shown as text or icon, never colour alone
   -> AC-51, AC-52, AC-53, AC-80 -> `PrBriefCard.test.tsx > skeleton / regenerating / expand`
-- [ ] T23 Navigation callbacks. The card takes `diffPaths: Set<string>` and `onOpenInDiff(file, line | null)`.
+- [x] T23 Navigation callbacks. The card takes `diffPaths: Set<string>` and `onOpenInDiff(file, line | null)`.
   - focus items are `<button>`s whose accessible name includes `file:line`
   - a click on a focus item whose file is in the diff calls `onOpenInDiff`
   - each risk file ref is its own navigate `<button>` (`card.openRef`), separate from the chevron. Click, Enter and Space on navigate never toggle expansion, and the same on the chevron never navigates (AC-73). Navigate follows the same rules (AC-42)
@@ -442,14 +442,14 @@ Done when: `client`: `pnpm typecheck` and `pnpm test` pass.
 
 ### P6: Files changed navigation and URL state (depends on P4 for `card.notInDiff`; can run alongside P5)
 
-- [ ] T24 `client/src/app/repos/[repoId]/pulls/[number]/navigation.ts` (new): `buildPrHref`, `usePrNavigation`. Tests in `navigation.test.tsx` with `vi.mock('next/navigation')`:
+- [x] T24 `client/src/app/repos/[repoId]/pulls/[number]/navigation.ts` (new): `buildPrHref`, `usePrNavigation`. Tests in `navigation.test.tsx` with `vi.mock('next/navigation')`:
   - `openInDiff('src/a b.ts', 12)` -> `router.replace` with `?tab=diff&file=src%2Fa%20b.ts&line=12` (AC-36)
   - `setTab('overview')` removes `file` and `line` (AC-40)
   - `target` is parsed from search params. An invalid `line` gives `null`; an unsafe `file` (NUL, absolute, `..`) gives `target: null` (AC-63)
   - `openInDiff` calls `router.replace` and never `push` (AC-76)
   -> AC-36, AC-40, AC-63, AC-76
 - (T25 moved to P7: P7 owns `page.tsx`.)
-- [ ] T26 `client/src/components/diff-viewer/{DiffViewer,FileCard,CodeLine}`:
+- [x] T26 `client/src/components/diff-viewer/{DiffViewer,FileCard,CodeLine}`:
   - `DiffViewer({target})` passes `forceOpen` and `highlightLine` to the matching `FileCard`
   - `FileCard` adds `data-testid="file-card"`, `data-path`, opens when `forceOpen`, and in an effect calls `scrollIntoView` on the matching `newNo` row (highlighted, `data-highlighted`) or on the header
   - `CodeLine` accepts `highlighted` and `rowRef`
@@ -459,42 +459,42 @@ Done when: `client`: `pnpm typecheck` and `pnpm test` pass.
     - a large file over `AUTO_EXPAND_MAX_LINES` is still forced open (AC-35)
     - scrolling goes through `scrollToTarget` (T41), and `document.activeElement` is unchanged (AC-74)
   -> AC-35, AC-38, AC-39, AC-74, AC-75
-- [ ] T27 `DiffTab.tsx`, `SmartDiffGroup.tsx`: accept `target`. In smart order, the group holding the target opens even if collapsed by default. A URL `file` that is not a PR file -> `notify.info(card.notInDiff)` once per distinct unknown path (a ref keeps the last toasted path). Tests in `DiffTab.test.tsx`:
+- [x] T27 `DiffTab.tsx`, `SmartDiffGroup.tsx`: accept `target`. In smart order, the group holding the target opens even if collapsed by default. A URL `file` that is not a PR file -> `notify.info(card.notInDiff)` once per distinct unknown path (a ref keeps the last toasted path). Tests in `DiffTab.test.tsx`:
   - target file expanded in flat mode (AC-37)
   - target in a docs group -> the group opens
   - unknown A -> one toast; a re-render with A -> no new toast; a change to unknown B -> a second toast (AC-83)
   -> AC-35, AC-37, AC-41, AC-83
 
-- [ ] T41 `client/src/components/diff-viewer/scroll.ts`: `scrollToTarget(el)` calls `el.scrollIntoView({block: 'center', behavior: reduced ? 'auto' : 'smooth'})`, where `reduced = matchMedia('(prefers-reduced-motion: reduce)').matches`. It never calls `focus()`. Tests: mocked reduce -> `'auto'`, otherwise `'smooth'`; `document.activeElement` is unchanged. Used by T26. -> AC-74, AC-75 -> `client/src/components/diff-viewer/scroll.test.ts`
+- [x] T41 `client/src/components/diff-viewer/scroll.ts`: `scrollToTarget(el)` calls `el.scrollIntoView({block: 'center', behavior: reduced ? 'auto' : 'smooth'})`, where `reduced = matchMedia('(prefers-reduced-motion: reduce)').matches`. It never calls `focus()`. Tests: mocked reduce -> `'auto'`, otherwise `'smooth'`; `document.activeElement` is unchanged. Used by T26. -> AC-74, AC-75 -> `client/src/components/diff-viewer/scroll.test.ts`
 
 Done when: `client`: `pnpm typecheck` and `pnpm test` pass (existing `DiffTab*`, `FileCard` and `SmartFindingCard` tests stay green).
 
 ### P7: Overview integration (depends on P5 and P6; sole owner of `page.tsx` and `OverviewTab.tsx`)
 
-- [ ] T25 `page.tsx`: use `usePrNavigation`; pass `target` to `DiffTab`. The trace param still works. -> AC-37, AC-40 -> `navigation.test.tsx`
+- [x] T25 `page.tsx`: use `usePrNavigation`; pass `target` to `DiffTab`. The trace param still works. -> AC-37, AC-40 -> `navigation.test.tsx`
 
-- [ ] T28 `OverviewTab.tsx`: new props `diffPaths`, `onOpenInDiff`, `latestReview`. Render VerdictBanner (only when a `kind === 'review'` run exists; findings count and CRITICAL blockers taken from that run), then `PrBriefCard` with `IntentBlock` and `BlastRadiusBlock` inside it in every state, then Description. Tests in `OverviewTab.test.tsx` (new; hooks mocked):
+- [x] T28 `OverviewTab.tsx`: new props `diffPaths`, `onOpenInDiff`, `latestReview`. Render VerdictBanner (only when a `kind === 'review'` run exists; findings count and CRITICAL blockers taken from that run), then `PrBriefCard` with `IntentBlock` and `BlastRadiusBlock` inside it in every state, then Description. Tests in `OverviewTab.test.tsx` (new; hooks mocked):
   - banner shown with a review, hidden without (AC-50)
   - an intent fixture renders the summary and scope inside the card (AC-5)
   - a blast fixture renders the summary line and callers inside the card (AC-6)
   - the old standalone blocks are not duplicated
   -> AC-5, AC-6, AC-50
-- [ ] T29 `page.tsx`: pass `diffPaths` (from `pr.files`), `onOpenInDiff = openInDiff` and the latest review to `OverviewTab`. Test in `OverviewTab.test.tsx`: clicking a focus item calls the navigation with (file, line); a blast-only risk ref shows the toast. -> AC-35, AC-41, AC-42
-- [ ] T30 Inputs-changed hint (D-2): when `inputsChanged` (T19) is true, show the advisory `card.inputsChanged` (`role="status"`) with Regenerate. It never blocks or hides the brief. Tests: a null snapshot with live Intent -> hint; reordered callers -> no hint. -> AC-78 -> `PrBriefCard.test.tsx > inputs changed hint`
-- [ ] T31 Accessibility pass: Generate and Regenerate have accessible names; the stale badge, missing note, 429 and 502 messages have `role="status"` or `role="alert"`; risk and focus items are keyboard-focusable buttons. -> AC-3, AC-7, AC-9 -> `PrBriefCard.test.tsx > a11y roles`
+- [x] T29 `page.tsx`: pass `diffPaths` (from `pr.files`), `onOpenInDiff = openInDiff` and the latest review to `OverviewTab`. Test in `OverviewTab.test.tsx`: clicking a focus item calls the navigation with (file, line); a blast-only risk ref shows the toast. -> AC-35, AC-41, AC-42
+- [x] T30 Inputs-changed hint (D-2): when `inputsChanged` (T19) is true, show the advisory `card.inputsChanged` (`role="status"`) with Regenerate. It never blocks or hides the brief. Tests: a null snapshot with live Intent -> hint; reordered callers -> no hint. -> AC-78 -> `PrBriefCard.test.tsx > inputs changed hint`
+- [x] T31 Accessibility pass: Generate and Regenerate have accessible names; the stale badge, missing note, 429 and 502 messages have `role="status"` or `role="alert"`; risk and focus items are keyboard-focusable buttons. -> AC-3, AC-7, AC-9 -> `PrBriefCard.test.tsx > a11y roles`
 
 Done when: `client`: `pnpm typecheck` and `pnpm test` pass.
 
 ### P8: e2e and docs (depends on P3 and P7)
 
-- [ ] T32 `e2e/specs/08-pr-brief.flow.json` (new):
+- [x] T32 `e2e/specs/08-pr-brief.flow.json` (new):
   - PR #482 -> Overview -> wait for the text "PR Brief" and "Generate brief" (AC-1; the seed has no brief, so no model call)
   - Then, if agent-browser's `eval` command is available: set `location.search='?tab=diff&file=src%2Fconfig.ts&line=<new-side line in the seeded patch>'` and wait for the `file-card` with `data-path="src/config.ts"` to be expanded and highlighted (AC-37, AC-38). If `eval` is not available, drop those steps and record that component tests cover them.
   - Run `05-pr-diff` and `02` again as regression (the Overview layout changed).
   -> AC-1, AC-37, AC-38
-- [ ] T33 `e2e/README.md` coverage table row and `e2e/specs/flows.md` entry. -> AC-1 -> docs
-- [ ] T34 `server/README.md`: add `brief` to the API map (`GET/POST /pulls/:id/brief`) and a short "PR Brief" note (one call, 8k budget, grounding, 30 s limiter, no hunk bodies). Add one line to the `client/README.md` route map. -> housekeeping (no AC) -> docs
-- [ ] T35 Final run:
+- [x] T33 `e2e/README.md` coverage table row and `e2e/specs/flows.md` entry. -> AC-1 -> docs
+- [x] T34 `server/README.md`: add `brief` to the API map (`GET/POST /pulls/:id/brief`) and a short "PR Brief" note (one call, 8k budget, grounding, 30 s limiter, no hunk bodies). Add one line to the `client/README.md` route map. -> housekeeping (no AC) -> docs
+- [x] T35 Final run:
   - server: `pnpm typecheck`, `pnpm test`
   - client: `pnpm typecheck`, `pnpm test`
   - reviewer-core: `pnpm typecheck`

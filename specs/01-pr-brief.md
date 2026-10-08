@@ -76,10 +76,10 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* component test asserts rendered text and order.
 - **AC-10 (P1, G1).** ПОКИ a brief is shown, the system (shall) offer a Regenerate (refresh) control in the PR Brief card header that requests a new brief.
   *Verify:* component test clicks Regenerate and asserts a POST.
-- **AC-11 (P1, G1).** ЯКЩО the stored brief has no risks after grounding, ТОДІ the system (shall) show the `noRisks` label ("No notable risks flagged.") in place of the Risk areas list.
-  *Verify:* component test with `risks: []`.
-- **AC-12 (P1, G1).** ЯКЩО the stored brief has no Review focus items after grounding, ТОДІ the system (shall) show an explicit empty message for Review focus instead of hiding the section.
-  *Verify:* component test with `review_focus: []`.
+- **AC-11 (P1, G1).** ЯКЩО the stored brief has no risks after grounding and `meta.missing` does not include `diff`, ТОДІ the system (shall) show the `noRisks` label ("No notable risks flagged.") in place of the Risk areas list. ЯКЩО the stored brief has no risks and `meta.missing` includes `diff`, ТОДІ the system (shall) instead show a single notice that risks could not be assessed because the PR diff was unavailable (i18n key `card.risksNotAssessed`), and not the `noRisks` label.
+  *Verify:* component test with `risks: []` and `missing: []` asserts the `noRisks` text; component test with `risks: []` and `missing` containing `diff` asserts the `card.risksNotAssessed` notice and no `noRisks` text.
+- **AC-12 (P1, G1).** ЯКЩО the stored brief has no Review focus items after grounding and `meta.missing` does not include `diff`, ТОДІ the system (shall) show an explicit empty message for Review focus instead of hiding the section. ЯКЩО the stored brief has no Review focus items and `meta.missing` includes `diff`, ТОДІ the system (shall) not render the Review focus section (no empty message).
+  *Verify:* component test with `review_focus: []` and `missing: []` asserts the empty message; component test with `review_focus: []` and `missing` containing `diff` asserts that neither the Review focus section nor its empty message is rendered.
 
 ### Grounding: no invented paths (G2)
 
@@ -112,8 +112,8 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* typecheck in both packages. A unit test parses one fixture with both copies, or a diff check between the two files.
 - **AC-25 (P2, G3).** The system (shall) select the provider and model from the workspace's `risk_brief` feature-model setting (default `openai` / `gpt-4.1`), never from a hard-coded value.
   *Verify:* route test with a workspace override asserts the LLM was called with the overridden model. The stored metadata records `provider` and `model`.
-- **AC-26 (P2, G3).** КОЛИ generation completes (success or any failure, including failures before a provider call), the system (shall) emit one log line with: PR id, call count (`brief=0|1`) and `schema_attempts`, provider/model (when resolved), estimated input tokens (when computed), provider-reported tokens in/out (or null), cost (or null), truncated sections, grounding drop counts (when grounding ran), and outcome, one of: `ok`; `invalid_output` (the model output fails the output schema, AC-23, or the post-grounding brief fails the stored schema, AC-68); `input_over_budget` (AC-64); `timeout` (AC-82); `provider_unavailable` (AC-81); `provider_error` (any other provider call failure, AC-33).
-  *Verify:* route tests capture the logger output for success, provider-unavailable, provider error, invalid model output, post-grounding validation failure, timeout and input-over-budget, and assert the matching outcome value.
+- **AC-26 (P2, G3).** КОЛИ generation completes (success or any failure, including failures before a provider call), the system (shall) emit one log line with: PR id, call count (`brief=0|1`) and `schema_attempts`, provider/model (when resolved), estimated input tokens (when computed), provider-reported tokens in/out (or null), cost (or null), truncated sections, grounding drop counts (when grounding ran), and outcome, one of: `ok`; `invalid_output` (the model output fails the output schema, AC-23, or the post-grounding brief fails the stored schema, AC-68); `input_over_budget` (AC-64); `timeout` (AC-82); `provider_unavailable` (AC-81); `provider_error` (any other provider call failure, AC-33, and also a database failure while storing the brief, which is reported as a `provider_error`-class failure with the fixed text "The brief could not be stored"; there is no separate outcome value for it).
+  *Verify:* route tests capture the logger output for success, provider-unavailable, provider error, invalid model output, post-grounding validation failure, timeout and input-over-budget, and assert the matching outcome value. A service test with a throwing brief repository write asserts outcome `provider_error` and the error text "The brief could not be stored".
 
 ### Cache, staleness, refresh (G4)
 
@@ -161,8 +161,8 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* route test with a degraded `getBlastRadius` stub.
 - **AC-45 (P2, G6).** The system (shall) record a deterministic `missing` list per brief, containing only values from {`intent`, `blast`, `description`, `linked_issue`, `specs`, `diff`} and always in this canonical order: `intent, blast, description, linked_issue, specs, diff`. The model input states the same list in the same order.
   *Verify:* builder unit test feeds the missing inputs in shuffled detection order and asserts the canonical order in metadata and in the prompt.
-- **AC-46 (P2, G6).** The system (shall) resolve the linked issue and referenced spec/plan docs live through RefResolver at generation time, and store only their labels and statuses (`fetched` / `unavailable` / `error`), never their content.
-  *Verify:* integration test asserts the stored JSON has `sources` and no document body. A sentinel string from the spec fixture is absent from the row.
+- **AC-46 (P2, G6).** The system (shall) resolve the linked issue and referenced spec/plan docs live through RefResolver at generation time, and store only code-owned source labels with a status (`fetched` / `unavailable` / `error`), never contents, titles or URLs. The labels are the fixed strings "PR title", "PR body", "Changed files", and for resolved references "Linked issue #<number>", "Spec at <repo-relative path>", "Plan at <repo-relative path>" and "Issue #<number> (other repository)" (D-12).
+  *Verify:* integration test asserts the stored JSON has `sources` whose labels match these patterns and no document body, title or URL. A sentinel string from the spec fixture is absent from the row.
 - **AC-47 (P2, G6).** ЯКЩО resolving the linked issue or a referenced doc fails, ТОДІ the system (shall) continue generation and record that source's status as `error` or `unavailable`.
   *Verify:* service test with a throwing GitHub stub.
 - **AC-48 (P2, G6).** ЯКЩО the PR diff is unavailable (it cannot be loaded), ТОДІ the system (shall) generate without diff stats, record `diff` as missing, and ground only against blast caller files. Review focus is then empty per AC-15. A diff that loads with zero files is not unavailable (AC-59).
@@ -179,8 +179,8 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* component test with and without reviews.
 - **AC-51 (P3, G1).** КОЛИ the reviewer activates a risk's expand control, the system (shall) show its explanation and all of its file references. The expand control (shall) be a chevron button with `aria-expanded`, `aria-controls` pointing at the expanded region, and an accessible name that includes the risk title.
   *Verify:* component test toggles the chevron and asserts `aria-expanded` flips, `aria-controls` matches the region id, and the accessible name.
-- **AC-52 (P3, G1).** ПОКИ the first generation is in flight, the system (shall) show a two-column skeleton in place of the empty state.
-  *Verify:* component test.
+- **AC-52 (P3, G1).** ПОКИ the first generation is in flight, the system (shall) show a two-column skeleton below the empty state, with the "Generate brief" button still visible but disabled.
+  *Verify:* component test with a pending first generation asserts the skeleton is rendered after the empty state, and the "Generate brief" button is present and disabled.
 - **AC-53 (P3, G1).** ПОКИ a regeneration is in flight, the system (shall) keep the previous brief visible and dimmed, with a "Regenerating…" indicator, instead of a skeleton.
   *Verify:* component test.
 - **AC-54 (P3, G1).** The system (shall) take all brief UI labels from the `brief` message namespace (`client/messages/en/brief.json`), reusing the existing keys (`block.intent`, `block.blast`, `block.risks`, `noRisks`, `unavailable`, `unavailableHint`) and adding new keys for the new strings.
@@ -325,8 +325,8 @@ Decisions turned into ACs
 | Changed files, +/− counts, hunk new-side line ranges (context included, D-9), load status (`loaded` / `unavailable`) | [deterministic: `reviews/diff-loader` `loadDiff`, as Intent uses] | `pr_files` may be empty until PR detail is opened, so the diff loader is the source. Deleted, pure-rename and binary files are excluded from the diff facts by the brief: the git path drops them in the parser, while the `pr_files` fallback keeps deleted files, so the diff facts filter out any file with no new-side hunk (AC-60). No change status is derived. Hunk bodies are never forwarded. |
 | Smart Diff role per file | [deterministic: `reviews/smart-diff/classify`] | Path rules, no model. The only per-file classification sent or shown. |
 | PR title, description | [reused: `pull_requests` row] | Untrusted. |
-| Linked issue | [deterministic: RefResolver `extractIssueRef` + GitHub fetch] | Resolved live. Label (`#<number>`) and status only persisted (D-12). Untrusted. |
-| Referenced spec/plan docs | [deterministic: RefResolver, `intent/ref-resolver.ts`, ≤ 32 KB per doc before budget] | Resolved live. Label (repo-relative path) and status only persisted (D-12). Untrusted. |
+| Linked issue | [deterministic: RefResolver `extractIssueRef` + GitHub fetch] | Resolved live. Only the code-owned label ("Linked issue #<number>" or "Issue #<number> (other repository)") and status are persisted (D-12). Untrusted. |
+| Referenced spec/plan docs | [deterministic: RefResolver, `intent/ref-resolver.ts`, ≤ 32 KB per doc before budget] | Resolved live. Only the code-owned label ("Spec at <repo-relative path>" or "Plan at <repo-relative path>") and status are persisted (D-12). Untrusted. |
 | Missing-data list (canonical order), input estimate, truncation list | [deterministic: brief input builder] | |
 | Delimiter escaping | [deterministic: brief input builder] | |
 | Path validation (NUL, absolute, `..`) | [deterministic: brief path validator] | |
@@ -387,9 +387,16 @@ The user accepted the proposed defaults for OQ-1..OQ-6 and OQ-7..OQ-12. They are
 - **D-9 (was OQ-7). Navigable line ranges.** The navigable ranges are the hunk new-side ranges, context lines included. A focus line inside any hunk range of its file is kept; a line outside every hunk range is snapped (AC-16). The same hunk ranges are what the diff facts send to the model (AC-20).
 - **D-10 (was OQ-8). Degraded brief replaces a complete one.** A brief generated with `diff` or `blast` missing replaces a complete prior brief; the last successful write wins (AC-27). The missing-data note makes the degradation visible (AC-7, AC-45).
 - **D-11 (was OQ-9). Healthy index with no callers.** A healthy repo-intel index that reports zero callers means Blast radius is available with no callers; `blast` is not added to `missing`. Only a degraded index makes Blast missing (AC-44).
-- **D-12 (was OQ-10). Source labels.** A source label is `#<number>` for the linked issue or the repo-relative path for a spec/plan doc, stored with its status (`fetched` / `unavailable` / `error`). No titles, URLs or content are stored (AC-46).
+- **D-12 (was OQ-10). Source labels.** Stored source labels are code-owned strings: "PR title", "PR body", "Changed files", and for resolved references "Linked issue #<number>", "Spec at <repo-relative path>", "Plan at <repo-relative path>" and "Issue #<number> (other repository)". Each is stored with its status (`fetched` / `unavailable` / `error`). No contents, titles or URLs are stored (AC-46).
 - **D-13 (was OQ-11). Absent vs failed sources in the note.** The missing-data note lists absent and failed sources alike under "Generated without"; the source chips (AC-55) show the difference through their status (AC-46, AC-47).
 - **D-14 (was OQ-12). Retention of prompt and RefResolver content.** No local tracing or logging of prompt bodies or RefResolver content (consistent with AC-46 and AC-67). Provider-side retention follows the workspace's provider settings and is not controlled by this feature.
+
+### Known limitations accepted for this iteration
+
+- The brief routes access the database and hold the in-memory rate limiter themselves, following the same pattern as the existing Intent routes. Extracting this into a service and sharing the cooldown is future work.
+- An in-flight guard rejects a second POST for the same PR with 429 while a generation for it is still running, even after the 30 s cooldown has elapsed; in that case `retry_after` (AC-31, AC-72) is at least 1.
+- Classification of failures into the 502 outcomes currently matches the LLM adapter's error message text.
+- The e2e checks for AC-28 (reload shows the same brief), AC-38 (highlighted line row) and AC-76 (Back navigation) are not automated; component and unit tests cover these behaviors.
 
 ## Open questions
 
