@@ -1,2 +1,2 @@
 export { SmartFindingCard } from "./SmartFindingCard";
-export { FileFindingsDot, FileFindingsSummary, UnmatchedFindings } from "./FindingsParts";
+export { FileFindingsDot, UnmatchedFindings } from "./FindingsParts";

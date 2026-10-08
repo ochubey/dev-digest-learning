@@ -4,9 +4,9 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Icon, SEV, type Severity } from "@devdigest/ui";
+import { SEV, type Severity } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
-import { fs, knownSeverity } from "../findings";
+import { fs } from "../findings";
 import { SmartFindingCard } from "./SmartFindingCard";
 
 /** Number-less dot in the file header; colour = highest severity in the file. */
@@ -41,42 +41,5 @@ export function UnmatchedFindings({
         <SmartFindingCard key={f.id} finding={f} prId={prId} />
       ))}
     </div>
-  );
-}
-
-const SUMMARY_SEVERITIES: readonly Severity[] = ["CRITICAL", "WARNING"];
-
-/** File header: the top-severity dot plus an icon + count per blocker / warning. */
-export function FileFindingsSummary({
-  findings,
-  severity,
-}: {
-  findings: readonly FindingRecord[];
-  severity: Severity;
-}) {
-  const t = useTranslations("prReview");
-  return (
-    <>
-      <FileFindingsDot severity={severity} />
-      {SUMMARY_SEVERITIES.map((sev) => {
-        const n = findings.filter((f) => knownSeverity(f.severity) === sev).length;
-        if (n === 0) return null;
-        const SevIcon = Icon[SEV[sev].icon];
-        const label = t("smartDiff.fileFindings", { count: n });
-        return (
-          <span
-            key={sev}
-            data-testid="file-findings-count"
-            data-severity={sev}
-            title={label}
-            aria-label={label}
-            style={fs.countChip(SEV[sev].c)}
-          >
-            <SevIcon size={13} />
-            {n}
-          </span>
-        );
-      })}
-    </>
   );
 }

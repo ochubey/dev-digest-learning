@@ -1,5 +1,5 @@
 /* SmartDiffGroup — one role group of the Smart Diff: a collapsible header (colour
-   square, role label + description, findings by severity, file count, expand/collapse-all
+   square, role label + description, files-with-findings badge, file count, expand/collapse-all
    files button) and a DiffViewer body for the group's files. */
 "use client";
 
@@ -19,7 +19,7 @@ interface SmartDiffGroupProps {
   findings?: DiffFindingsApi;
   /** Number of files in the group that have findings. */
   findingFiles?: number;
-  /** Findings in the group by severity (summed, may exceed the file count). */
+  /** Findings in the group by severity; only used to colour the badge by the top severity. */
   findingCounts?: SeverityCounts;
 }
 
@@ -35,6 +35,7 @@ export function SmartDiffGroup({
 }: SmartDiffGroupProps) {
   const t = useTranslations("prReview");
   const empty = files.length === 0;
+  const topSev = findingCounts ? SEVERITIES.find((sev) => findingCounts[sev as keyof SeverityCounts] > 0) : undefined;
   const [open, setOpen] = React.useState(!empty && !COLLAPSED_BY_DEFAULT.has(role));
   // Files start collapsed; the button toggles them all. `version` remounts the viewer so
   // every FileCard picks up the new default.
@@ -61,25 +62,17 @@ export function SmartDiffGroup({
           <span>{t(`smartDiff.${role}Label`)}</span>
           <span style={s.description}>{t(`smartDiff.${role}Description`)}</span>
         </button>
-        {findingFiles > 0 && findingCounts && (
-          <span style={s.badges}>
-            {SEVERITIES.filter((sev) => findingCounts[sev as keyof SeverityCounts] > 0).map((sev) => {
-              const n = findingCounts[sev as keyof SeverityCounts];
-              return (
-                <span
-                  key={sev}
-                  data-testid="group-findings-dot"
-                  data-severity={sev}
-                  role="img"
-                  aria-label={t("smartDiff.groupFindings", { count: n })}
-                  title={t("smartDiff.groupFindings", { count: n })}
-                  style={s.findingsBadge}
-                >
-                  <span style={s.findingsDot(SEV[sev].c)} />
-                  {n}
-                </span>
-              );
-            })}
+        {findingFiles > 0 && topSev && (
+          <span
+            data-testid="group-findings-dot"
+            data-severity={topSev}
+            role="img"
+            aria-label={t("smartDiff.filesWithFindings", { count: findingFiles })}
+            title={t("smartDiff.filesWithFindings", { count: findingFiles })}
+            style={s.findingsBadge}
+          >
+            <span style={s.findingsDot(SEV[topSev].c)} />
+            {findingFiles}
           </span>
         )}
         <span style={s.count}>{t("smartDiff.filesCount", { count: files.length })}</span>

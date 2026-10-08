@@ -160,14 +160,6 @@ export const fs = {
     letterSpacing: "0.06em",
     color: "var(--text-muted)",
   } satisfies CSSProperties,
-  countChip: (color: string): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 3,
-    fontSize: 12,
-    fontWeight: 600,
-    color,
-  }),
   /** Header dot on a file card: a filled circle, no number. */
   dot: (color: string): CSSProperties => ({
     display: "inline-block",

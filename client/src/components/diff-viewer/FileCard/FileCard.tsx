@@ -19,7 +19,7 @@ import {
 import { s, chevronFor } from "../styles";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
-import { FileFindingsSummary, UnmatchedFindings } from "../SmartFindingCard";
+import { FileFindingsDot, UnmatchedFindings } from "../SmartFindingCard";
 import {
   findingsForFile,
   partitionFindings,
@@ -104,7 +104,7 @@ export function FileCard({
         <span className="mono" style={s.filePath}>
           {file.path}
         </span>
-        {topSev && <FileFindingsSummary findings={fileFindings} severity={topSev} />}
+        {topSev && <FileFindingsDot severity={topSev} />}
         <span className="mono tnum" style={s.fileStat}>
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>

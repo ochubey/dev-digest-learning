@@ -31,7 +31,6 @@ export const s = {
     flexShrink: 0,
   }),
   description: { color: "var(--text-muted)", fontWeight: 400 } satisfies CSSProperties,
-  badges: { display: "inline-flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
   findingsBadge: {
     display: "inline-flex",
     alignItems: "center",
