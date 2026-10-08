@@ -15,7 +15,7 @@ JSON file: what must stay true about how they run **together**, per
    `01-app-boot` itself — every other flow starts with an explicit `open`
    step to a known URL rather than relying on wherever the previous flow's
    last step left the browser.
-3. **Flows 02/04/05 assume the seeded repo (`acme/payments-api`, PR #482) is
+3. **Flows 02/04/05/08 assume the seeded repo (`acme/payments-api`, PR #482) is
    the only repo in the DB** — this is a real, documented precondition
    (`README.md`'s precondition callout), not an accident. Adding a repo via
    the UI (as a manual test, or a prior flow) and then running these flows
@@ -25,9 +25,11 @@ JSON file: what must stay true about how they run **together**, per
    precondition on every run.
 4. **One step's failure stops the whole suite**, not just its own flow file
    — there's no per-flow isolation/continue-on-failure. A flow added at
-   position `03` that's flaky blocks `04`-`07` from running at all, not just
+   position `03` that's flaky blocks `04`-`08` from running at all, not just
    from being reported as failed.
 5. **No flow may trigger a real LLM call** — the suite exists specifically
    as the read-only, key-free counterpart to the LLM-backed review flow; a
    new flow that clicks "Run Review" against a real agent would silently
-   turn a deterministic, free CI job into a flaky, billed one.
+   turn a deterministic, free CI job into a flaky, billed one. `08-pr-brief`
+   only asserts the empty PR Brief card (the seed stores no brief) and never
+   clicks "Generate brief", which would call the model.

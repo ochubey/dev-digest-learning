@@ -69,6 +69,7 @@ flowchart TB
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
+    brief["brief<br/>GET/POST /pulls/:id/brief"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
   subgraph Agents["Agents"]
@@ -131,6 +132,26 @@ What the reviewer actually sends to the model is assembled in
 - **Grounding is mandatory.** Every finding must cite a line that exists in the
   diff or it is dropped (`groundFindings`), and the score is recomputed from the
   surviving findings — the model's self-reported score is ignored.
+
+## PR Brief
+
+`modules/brief` serves the Overview "PR brief" card: `GET /pulls/:id/brief`
+returns the stored brief (`404` if none, `403` for another workspace's PR) and
+`POST /pulls/:id/brief` generates one (`429 {error, retry_after}` + `Retry-After`
+when rate limited, `502 {error, retry_after}` when generation fails; nothing is
+written on failure).
+
+- **One model call.** A single `completeStructured` call with `maxRetries: 1` and
+  a 50 s cap; the model comes from the `risk_brief` feature-model setting.
+- **Token budget.** The exact payload is limited to 8000 tokens, with a 1500-token
+  reserve for prompt framing.
+- **Grounding.** File and line refs in the result are checked against the PR diff;
+  refs outside it are flagged and lines are snapped to the nearest changed line.
+- **Limiter.** 30 s per PR (in-process), independent of the global rate limit.
+- **No hunk bodies to the model.** Only diff facts (paths, stats, roles), never
+  patch text.
+- **Cache and staleness.** `pr_brief` stores the head SHA the brief was built from;
+  `stale` is computed on read by comparing it with the PR's current head SHA.
 
 ## Testing
 

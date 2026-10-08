@@ -5,6 +5,8 @@ import {
   Intent,
   BlastRadius,
   Risks,
+  Risk,
+  PrBrief,
   PrHistory,
   SmartDiff,
   SmartDiffRole,
@@ -220,5 +222,91 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+});
+
+describe('PrBrief v2', () => {
+  const meta = {
+    generated_from_head_sha: 'abc123',
+    generated_at: '2026-01-01T00:00:00Z',
+    provider: 'anthropic',
+    model: 'claude-x',
+    schema_attempts: 1,
+    tokens_in: 100,
+    tokens_out: 50,
+    cost_usd: 0.01,
+    missing: ['intent', 'blast'],
+    sources: [{ label: 'PR description', status: 'fetched' }],
+    diff_stats: { files: 2, additions: 10, deletions: 3, by_role: { core: 1, tests: 1, wiring: 0, docs: 0, boilerplate: 0 } },
+    input: { estimated_tokens: 1000, budget_tokens: 8000, truncated: ['diff_stats'], blast_degraded_reason: null },
+    grounding: { dropped_risks: 0, dropped_refs: 1, dropped_focus: 0, adjusted_lines: 1 },
+  };
+  const intent = {
+    summary: 's',
+    in_scope: ['a'],
+    out_of_scope: [],
+    confidence: 0.8,
+    sources: [{ label: 'PR description', status: 'fetched' }],
+  };
+  const blast = { changed_symbols: [], downstream: [], summary: 'none' };
+  const full = {
+    summary: 'Does a thing.',
+    intent,
+    blast,
+    risks: { risks: [{ kind: 'security', title: 't', explanation: 'e', severity: 'high', file_refs: ['src/a.ts'] }] },
+    review_focus: [{ file: 'src/a.ts', line: 3, reason: 'r', line_adjusted: true }],
+    history: { history: [] },
+    meta,
+  };
+  const withMeta = (patch: Record<string, unknown>) => ({ ...full, meta: { ...meta, ...patch } });
+
+  it('parses a full fixture', () => {
+    expect(PrBrief.safeParse(full).success).toBe(true);
+  });
+
+  it('parses intent: null, blast: null with history omitted', () => {
+    const { history: _h, ...rest } = full;
+    const r = PrBrief.safeParse({ ...rest, intent: null, blast: null });
+    expect(r.success).toBe(true);
+  });
+
+  it.each(['summary', 'review_focus', 'meta'])('rejects missing %s', (key) => {
+    const copy: Record<string, unknown> = { ...full };
+    delete copy[key];
+    expect(PrBrief.safeParse(copy).success).toBe(false);
+  });
+
+  it('shared Risk accepts file_refs: [] (AC-84)', () => {
+    expect(Risk.safeParse({ kind: 'security', title: 't', explanation: 'e', severity: 'low', file_refs: [] }).success).toBe(true);
+  });
+
+  it('shared Risk accepts any kind string (AC-79)', () => {
+    expect(Risk.safeParse({ kind: 'totally_made_up', title: 't', explanation: 'e', severity: 'low', file_refs: [] }).success).toBe(true);
+  });
+
+  it('accepts null tokens_in, tokens_out and cost_usd (AC-70)', () => {
+    expect(PrBrief.safeParse(withMeta({ tokens_in: null, tokens_out: null, cost_usd: null })).success).toBe(true);
+  });
+
+  it('generated_at: Z only (AC-71)', () => {
+    expect(PrBrief.safeParse(withMeta({ generated_at: '2026-01-01T00:00:00+02:00' })).success).toBe(false);
+    expect(PrBrief.safeParse(withMeta({ generated_at: '2026-01-01' })).success).toBe(false);
+    expect(PrBrief.safeParse(withMeta({ generated_at: '2026-01-01T00:00:00Z' })).success).toBe(true);
+  });
+
+  it('missing: canonical order accepted, wrong order and duplicates rejected (AC-45)', () => {
+    expect(PrBrief.safeParse(withMeta({ missing: ['intent', 'blast', 'description', 'linked_issue', 'specs', 'diff'] })).success).toBe(true);
+    expect(PrBrief.safeParse(withMeta({ missing: [] })).success).toBe(true);
+    expect(PrBrief.safeParse(withMeta({ missing: ['blast', 'intent'] })).success).toBe(false);
+    expect(PrBrief.safeParse(withMeta({ missing: ['intent', 'intent'] })).success).toBe(false);
+  });
+
+  it('meta.schema_attempts is required', () => {
+    const { schema_attempts: _s, ...noAttempts } = meta;
+    expect(PrBrief.safeParse({ ...full, meta: noAttempts }).success).toBe(false);
+  });
+
+  it('rejects an unknown meta.missing value', () => {
+    expect(PrBrief.safeParse(withMeta({ missing: ['bogus'] })).success).toBe(false);
   });
 });

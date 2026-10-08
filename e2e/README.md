@@ -100,3 +100,4 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `05-pr-diff` | PR #482 → Files changed tab → seeded file renders in the diff viewer |
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
+| `08-pr-brief` | PR #482 → Overview → PR Brief card empty state ("Generate brief", no model call); `?tab=diff&file=src%2Fconfig.ts&line=12` deep link → `src/config.ts` file card expanded and highlighted (uses `eval` to navigate) |
