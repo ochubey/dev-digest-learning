@@ -11,10 +11,13 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  MergedPrWithFiles,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
 const TIMEOUT = 30_000;
+const MERGED_SCAN_DEFAULT = 30;
+const MERGED_FILES_CONCURRENCY = 5;
 
 function mapStatus(state: string, merged: boolean | undefined): PrStatus {
   if (merged) return 'merged';
@@ -65,6 +68,61 @@ export class OctokitGitHubClient implements GitHubClient {
         TIMEOUT,
       ),
     );
+  }
+
+  async listMergedPullRequestsWithFiles(
+    repo: RepoRef,
+    opts: { limit?: number; excludeNumber?: number } = {},
+  ): Promise<MergedPrWithFiles[]> {
+    const limit = opts.limit ?? MERGED_SCAN_DEFAULT;
+    const list = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.pulls.list({
+          owner: repo.owner,
+          repo: repo.name,
+          state: 'closed',
+          sort: 'updated',
+          direction: 'desc',
+          per_page: 100,
+        }),
+        TIMEOUT,
+      ),
+    );
+    const merged = list.data
+      .filter((pr) => pr.merged_at && pr.number !== opts.excludeNumber)
+      .slice(0, limit);
+
+    const out: MergedPrWithFiles[] = [];
+    for (let i = 0; i < merged.length; i += MERGED_FILES_CONCURRENCY) {
+      const batch = await Promise.all(
+        merged.slice(i, i + MERGED_FILES_CONCURRENCY).map(async (pr) => {
+          try {
+            const res = await withRetry(() =>
+              withTimeout(
+                this.octokit.rest.pulls.listFiles({
+                  owner: repo.owner,
+                  repo: repo.name,
+                  pull_number: pr.number,
+                  per_page: 100,
+                }),
+                TIMEOUT,
+              ),
+            );
+            return {
+              number: pr.number,
+              title: pr.title,
+              author: pr.user?.login ?? 'unknown',
+              merged_at: pr.merged_at as string,
+              files: res.data.map((f) => f.filename),
+            };
+          } catch {
+            return null; // skip a PR whose files cannot be read
+          }
+        }),
+      );
+      for (const b of batch) if (b) out.push(b);
+    }
+    return out;
   }
 
   async getPullRequest(repo: RepoRef, n: number): Promise<PrDetail> {

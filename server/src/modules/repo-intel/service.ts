@@ -14,8 +14,8 @@
  * `getUnresolvedReferences` and (via T1.3) `getCallerSignatures`. T2 fills in
  * the rank-driven methods. T3 unlocks `getCriticalPaths` etc.
  *
- * The constructor takes ONLY a Container. No astgrep / depgraph / tokenizer
- * deps are imported here — those land later and plug into this same shell.
+ * The constructor takes ONLY a Container; the adapters (astgrep, depgraph,
+ * tokenizer, codeIndex) are reached through it or imported by the pipelines.
  */
 import type { CodeSymbol, RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
@@ -218,6 +218,22 @@ export class RepoIntelService implements RepoIntel {
    * clone (not the index). T2 promotes this path to the persistent layer.
    */
   async getBlastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult> {
+    // Documented contract: never throws. A DB or clone error becomes a degraded result so the
+    // route answers 200 with a banner instead of a 500.
+    try {
+      return await this.blastRadius(repoId, changedFiles);
+    } catch {
+      return {
+        changedSymbols: [],
+        callers: [],
+        impactedEndpoints: [],
+        degraded: true,
+        reason: 'index_failed',
+      };
+    }
+  }
+
+  private async blastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult> {
     // T3: serve from the persistent index when it's built. Falls through to the
     // ripgrep best-effort below when the flag is off / index is absent.
     if (this.container.config.repoIntelEnabled && changedFiles.length > 0) {
@@ -296,7 +312,7 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callerRows,
+      callers: capCallersPerSymbol(callerRows),
       impactedEndpoints: [...endpoints],
       degraded: true,
       reason: 'no_data',
@@ -334,8 +350,13 @@ export class RepoIntelService implements RepoIntel {
       }
       nameSet.add(s.name);
     }
+    // A `partial` index (soft budget, failed/empty graph, parse errors) can miss callers, so
+    // report it instead of presenting "no callers" as a complete answer.
+    const incomplete: Pick<BlastResult, 'degraded' | 'reason'> =
+      state.status === 'partial' ? { degraded: true, reason: 'index_partial' } : { degraded: false };
+
     if (nameSet.size === 0) {
-      return { changedSymbols, callers: [], impactedEndpoints: [], degraded: false };
+      return { changedSymbols, callers: [], impactedEndpoints: [], ...incomplete };
     }
 
     // Resolved cross-file callers.
@@ -383,10 +404,10 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
+      callers: capCallersPerSymbol(callers),
       impactedEndpoints: [...endpoints],
       factsByFile,
-      degraded: false,
+      ...incomplete,
     };
   }
 
@@ -761,4 +782,22 @@ function enclosingSymbolName(
 
 async function readClone(clonePath: string, file: string): Promise<string | null> {
   return readFile(join(clonePath, file), 'utf8').catch(() => null);
+}
+
+/**
+ * Keep at most `limit` callers per changed symbol (`viaSymbol`), in input order, so callers
+ * must already be sorted most-important first. A cap over the whole list instead let one hot
+ * symbol use up the budget and made the others look caller-less.
+ */
+export function capCallersPerSymbol(
+  callers: BlastCallerRow[],
+  limit: number = MAX_CALLERS_PER_SYMBOL,
+): BlastCallerRow[] {
+  const taken = new Map<string, number>();
+  return callers.filter((c) => {
+    const n = taken.get(c.viaSymbol) ?? 0;
+    if (n >= limit) return false;
+    taken.set(c.viaSymbol, n + 1);
+    return true;
+  });
 }

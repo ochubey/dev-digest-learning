@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { RepoIntelService } from '../src/modules/repo-intel/service.js';
+import { RepoIntelService, capCallersPerSymbol } from '../src/modules/repo-intel/service.js';
+import { MAX_CALLERS_PER_SYMBOL } from '../src/modules/repo-intel/constants.js';
 import type { RepoBasics } from '../src/modules/repo-intel/repository.js';
 import type { IndexState } from '../src/modules/repo-intel/types.js';
 
@@ -123,3 +124,100 @@ describe('RepoIntel facade — degraded contract (flag on, but no data)', () => 
     await expect(svc.getCallerSignatures('r1', [])).resolves.toEqual([]);
   });
 });
+
+describe('RepoIntel facade — persistent blast reports an incomplete index', () => {
+  function persistentService(status: 'full' | 'partial'): RepoIntelService {
+    const container = { config: { repoIntelEnabled: true }, db: {} as never } as never;
+    const svc = new RepoIntelService(container);
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      tryGetIndexState: async () => ({ status }),
+      getSymbolRows: async (_id: string, files: string[]) =>
+        files.includes('a.ts') ? [{ path: 'a.ts', name: 'foo', kind: 'function', line: 1 }] : [],
+      getResolvedCallers: async () => [],
+      getFileFacts: async () => [],
+    };
+    return svc;
+  }
+
+  it('partial index -> degraded index_partial (never a silent "no callers")', async () => {
+    const blast = await persistentService('partial').getBlastRadius('r1', ['a.ts']);
+    expect(blast.changedSymbols).toHaveLength(1);
+    expect(blast.callers).toEqual([]);
+    expect(blast.degraded).toBe(true);
+    expect(blast.reason).toBe('index_partial');
+  });
+
+  it('full index -> not degraded', async () => {
+    const blast = await persistentService('full').getBlastRadius('r1', ['a.ts']);
+    expect(blast.degraded).toBe(false);
+    expect(blast.reason).toBeUndefined();
+  });
+});
+
+describe('RepoIntel facade — caller cap is per changed symbol', () => {
+  const row = (viaSymbol: string, i: number, rank: number) => ({
+    file: `src/${viaSymbol}${i}.ts`,
+    symbol: `c${i}`,
+    viaSymbol,
+    line: i,
+    rank,
+  });
+
+  it('capCallersPerSymbol keeps the first N of each symbol and keeps small symbols whole', () => {
+    const hot = Array.from({ length: 25 }, (_, i) => row('hot', i, 100 - i));
+    const small = [row('small', 0, 1), row('small', 1, 1), row('small', 2, 1)];
+    const out = capCallersPerSymbol([...hot, ...small]);
+    expect(out.filter((c) => c.viaSymbol === 'hot')).toHaveLength(MAX_CALLERS_PER_SYMBOL);
+    expect(out.filter((c) => c.viaSymbol === 'small')).toHaveLength(3);
+    // the hot symbol keeps its highest-ranked callers
+    expect(out.filter((c) => c.viaSymbol === 'hot').map((c) => c.symbol)).toEqual(
+      hot.slice(0, MAX_CALLERS_PER_SYMBOL).map((c) => c.symbol),
+    );
+  });
+
+  it('persistent blast: a hot symbol no longer starves the others', async () => {
+    const container = { config: { repoIntelEnabled: true }, db: {} as never } as never;
+    const svc = new RepoIntelService(container);
+    const refs = [
+      ...Array.from({ length: 30 }, (_, i) => ({ fromPath: `h${i}.ts`, toSymbol: 'hot', line: i, rank: 9 })),
+      { fromPath: 'low.ts', toSymbol: 'small', line: 1, rank: 0.1 },
+    ];
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      tryGetIndexState: async () => ({ status: 'full' }),
+      getSymbolRows: async (_id: string, files: string[]) =>
+        files.includes('a.ts')
+          ? [
+              { path: 'a.ts', name: 'hot', kind: 'function', line: 1 },
+              { path: 'a.ts', name: 'small', kind: 'function', line: 5 },
+            ]
+          : [],
+      getResolvedCallers: async () => refs,
+      getFileFacts: async () => [],
+    };
+    const blast = await svc.getBlastRadius('r1', ['a.ts']);
+    const by = (sym: string) => blast.callers.filter((c) => c.viaSymbol === sym);
+    expect(by('hot')).toHaveLength(MAX_CALLERS_PER_SYMBOL);
+    expect(by('small')).toHaveLength(1); // was dropped when the cap covered the whole list
+  });
+});
+
+describe('RepoIntel facade — getBlastRadius never throws', () => {
+  it('a DB error becomes degraded index_failed instead of an exception', async () => {
+    const container = { config: { repoIntelEnabled: true }, db: {} as never } as never;
+    const svc = new RepoIntelService(container);
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      tryGetIndexState: async () => {
+        throw new Error('connection terminated');
+      },
+    };
+    const blast = await svc.getBlastRadius('r1', ['a.ts']);
+    expect(blast).toMatchObject({
+      changedSymbols: [],
+      callers: [],
+      impactedEndpoints: [],
+      degraded: true,
+      reason: 'index_failed',
+    });
+  });
+});
+

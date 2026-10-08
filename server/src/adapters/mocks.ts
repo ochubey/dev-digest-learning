@@ -17,6 +17,7 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  MergedPrWithFiles,
   GitClient,
   CloneOptions,
   UnifiedDiff,
@@ -132,6 +133,8 @@ export interface MockGitHubOptions {
   files?: Record<string, string | null | Error>;
   /** Issues by number for getIssue: an Error is thrown, `null` is not-found (throws a 404). */
   issues?: Record<number, IssueMeta | null | Error>;
+  /** Merged PRs (with files) returned by listMergedPullRequestsWithFiles. */
+  mergedPulls?: MergedPrWithFiles[];
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -161,6 +164,15 @@ export class MockGitHubClient implements GitHubClient {
         },
       ]
     );
+  }
+
+  async listMergedPullRequestsWithFiles(
+    _repo: RepoRef,
+    opts: { limit?: number; excludeNumber?: number } = {},
+  ): Promise<MergedPrWithFiles[]> {
+    return (this.opts.mergedPulls ?? [])
+      .filter((p) => p.number !== opts.excludeNumber)
+      .slice(0, opts.limit ?? Infinity);
   }
 
   async getPullRequest(_repo: RepoRef, n: number): Promise<PrDetail> {

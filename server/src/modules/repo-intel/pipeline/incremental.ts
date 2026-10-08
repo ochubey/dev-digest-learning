@@ -38,6 +38,7 @@ import type { IndexResult, IndexStatus } from '../types.js';
 import { runFullIndex, type IndexPayload } from './full.js';
 import { walkClone } from './walk.js';
 import { computeFileRank } from './rank.js';
+import { emptyGraphReason } from './graph-guard.js';
 import { renderRepoMap } from './repo-map.js';
 
 /**
@@ -218,6 +219,7 @@ export async function runIncremental(
     const allFiles = (await walkClone(repo.clonePath)).files;
     const edges = await container.depgraph.buildEdges(repo.clonePath, allFiles);
     edgeRows = edges.map((e) => ({ fromFile: e.from, toFile: e.to }));
+    graphFailed = emptyGraphReason(edgeRows.length, allFiles.length);
     await repository.replaceEdges(repoId, edgeRows);
     // reset: a changed decl-file can invalidate a prior resolution.
     await repository.resolveReferences(repoId, { reset: true });

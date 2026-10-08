@@ -1,0 +1,60 @@
+import type { DownstreamImpact } from "@devdigest/shared";
+import { githubBlobUrl } from "@/lib/github-urls";
+import { RESYNCABLE_REASONS } from "./constants";
+
+const KNOWN_REASONS = [
+  "no_data",
+  "flag_off",
+  "index_failed",
+  "index_partial",
+  "repo_too_large",
+] as const;
+
+/** Message key (under `degraded.`) for a repo-intel degraded reason; unknown -> generic. */
+export function degradedReasonKey(reason: string | null | undefined): string {
+  return (KNOWN_REASONS as readonly string[]).includes(reason ?? "") ? (reason as string) : "unknown";
+}
+
+/** Whether re-syncing the repo index can fix this degraded reason. */
+export function canResync(reason: string | null | undefined): boolean {
+  return (RESYNCABLE_REASONS as readonly string[]).includes(degradedReasonKey(reason));
+}
+
+/** Totals for the summary row. Endpoints/crons are unioned across symbols. */
+export function blastCounts(symbolCount: number, downstream: DownstreamImpact[]) {
+  const endpoints = new Set<string>();
+  const crons = new Set<string>();
+  let callers = 0;
+  for (const d of downstream) {
+    callers += d.callers.length;
+    d.endpoints_affected.forEach((e) => endpoints.add(e));
+    d.crons_affected.forEach((c) => crons.add(c));
+  }
+  return { symbols: symbolCount, callers, endpoints: endpoints.size, crons: crons.size };
+}
+
+/** GitHub blob link at the PR head sha, or null when repo/sha are unknown. */
+export function callerHref(
+  repoFullName: string | null | undefined,
+  headSha: string | null | undefined,
+  file: string,
+  line: number,
+): string | null {
+  if (!repoFullName || !headSha) return null;
+  return githubBlobUrl(repoFullName, headSha, file, line);
+}
+
+/**
+ * Split changed symbols into those with downstream impact (callers, endpoints or crons) and
+ * those with none. The idle ones are summarised on one line instead of one row each.
+ */
+export function splitSymbols(downstream: DownstreamImpact[]) {
+  const active: DownstreamImpact[] = [];
+  const idle: DownstreamImpact[] = [];
+  for (const d of downstream) {
+    const hasImpact =
+      d.callers.length > 0 || d.endpoints_affected.length > 0 || d.crons_affected.length > 0;
+    (hasImpact ? active : idle).push(d);
+  }
+  return { active, idle };
+}

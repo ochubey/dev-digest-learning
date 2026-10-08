@@ -1,4 +1,5 @@
 {
+  "title": "Blast radius",
   "stat": {
     "symbols": "symbols",
     "callers": "callers",
@@ -9,10 +10,44 @@
     "tree": "tree",
     "graph": "graph"
   },
-  "callerCount": "{count} callers",
+  "callerCount": "{count, plural, one {# caller} other {# callers}}",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "noCallers": "No callers found",
+  "empty": "No changed symbols found in this PR.",
+  "loadError": "Could not load blast radius",
+  "loadErrorBody": "The request failed. Try again.",
+  "degraded": {
+    "title": "Blast radius is incomplete",
+    "resync": "Resync index",
+    "resyncing": "Resyncing…",
+    "resyncFailed": "Resync failed. Try again.",
+    "no_data": "The repository has no usable index yet, so callers could not be determined.",
+    "flag_off": "Repository indexing is turned off, so callers could not be determined.",
+    "index_failed": "The last index run failed, so callers could not be determined.",
+    "index_partial": "The index is only partial. Some callers may be missing.",
+    "repo_too_large": "The repository is too large to index. Some callers may be missing.",
+    "unknown": "The index is degraded. Some callers may be missing."
+  },
   "graph": {
     "empty": "No downstream callers to graph.",
-    "ariaLabel": "Blast radius graph"
-  }
+    "ariaLabel": "Blast radius graph",
+    "legend": {
+      "symbol": "changed symbol",
+      "callers": "callers",
+      "endpoints": "endpoints and crons affected"
+    },
+    "truncated": "Showing the {shown} most impactful of {total} symbols. Switch to the tree for the full list."
+  },
+  "priorPrs": {
+    "title": "Prior PRs touching these files",
+    "empty": "No recent merged PRs touched these files. Only the latest merged PRs are checked.",
+    "error": "Could not check GitHub for prior PRs (missing token or rate limit). This does not mean there are none.",
+    "mergedBy": "merged {date} by {author}",
+    "moreFiles": "+{count} more",
+    "scope": "Recent merged PRs only; older changes may not appear."
+  },
+  "idle": {
+    "title": "{count, plural, one {# changed symbol} other {# changed symbols}} with no callers"
+  },
+  "showAll": "Show all {count}"
 }

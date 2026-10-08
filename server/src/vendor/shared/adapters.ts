@@ -140,8 +140,26 @@ export interface CommitFilesPayload {
   files: CommitFile[];
 }
 
+/** A merged PR with the paths it changed ("prior PRs touching these files"). */
+export interface MergedPrWithFiles {
+  number: number;
+  title: string;
+  author: string;
+  merged_at: string;
+  files: string[];
+}
+
 export interface GitHubClient {
   listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
+  /**
+   * Recently merged PRs (most recently updated first) with their changed files: one
+   * `pulls.list` plus one `pulls.listFiles` per PR, so bounded by `limit`. A PR whose
+   * files cannot be read is skipped. Throws when the list itself fails.
+   */
+  listMergedPullRequestsWithFiles(
+    repo: RepoRef,
+    opts?: { limit?: number; excludeNumber?: number },
+  ): Promise<MergedPrWithFiles[]>;
   getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
   postReview(repo: RepoRef, n: number, review: GitHubReviewPayload): Promise<{ id: string }>;
   /** List inline review comments on a PR (for the "Files changed" tab). */
