@@ -8,6 +8,8 @@ import type {
   Provider,
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
+import { AppError, NotFoundError } from '../../platform/errors.js';
+import type { PerKeyCooldown } from '../../platform/cooldown.js';
 import type { PullRow } from '../../db/rows.js';
 import { withTimeout } from '../../platform/resilience.js';
 import { buildBlastRadius } from '../blast/build.js';
@@ -23,11 +25,12 @@ import {
 import { resolveFeatureModel } from '../settings/feature-models.js';
 import { isSafeRepoPath, normalizeRef } from './paths.js';
 import { BriefRepository } from './repository.js';
-import { BriefModelOutput, PrBriefStored } from './schema.js';
+import { BriefModelOutput, PrBriefStored, type BriefResponse } from './schema.js';
+import { PrBrief as PrBriefSchema } from '@devdigest/shared';
 import { diffFacts, diffStats, type DiffFact } from './diff-facts.js';
 import { buildBriefPrompt, type BriefPromptOptions } from './prompt.js';
 import { clampOutput, groundBrief } from './grounding.js';
-import { classifyLlmError, type BriefLogMeta, type BriefOutcome } from './log-line.js';
+import { classifyLlmError, logBriefGeneration, type BriefLogMeta, type BriefOutcome } from './log-line.js';
 import {
   BRIEF_ADAPTER_TIMEOUT_MS,
   BRIEF_BUDGET_TOKENS,
@@ -57,7 +60,16 @@ export type GenerateResult =
       meta: BriefLogMeta;
     };
 
+export type GenerateForPrResult =
+  | { kind: 'ok'; brief: BriefResponse }
+  | { kind: 'rate_limited'; retryAfter: number }
+  | { kind: 'failed'; error: string; retryAfter: number };
+
 export interface BriefServiceOptions {
+  /** Reads (PR, repo, stored brief, head SHA); defaults to a BriefRepository on the container db. */
+  reads?: Pick<BriefRepository, 'getBrief' | 'getPull' | 'getRepo' | 'getHeadSha'>;
+  /** Per-PR admission control; required, and must live as long as the process (not per request). */
+  cooldown: PerKeyCooldown;
   intentRepo?: Pick<IntentRepository, 'getIntent'>;
   briefRepo?: Pick<BriefRepository, 'upsertBrief'>;
   changedDiff?: (workspaceId: string, pr: PullRow, log: FastifyBaseLogger) => Promise<DiffLoadResult>;
@@ -118,10 +130,95 @@ function errorSources(repo: { owner: string; name: string }, title: string, body
 export class BriefService {
   private intentRepo: Pick<IntentRepository, 'getIntent'>;
   private briefRepo: Pick<BriefRepository, 'upsertBrief'>;
+  private reads: NonNullable<BriefServiceOptions['reads']>;
+  private cooldown: PerKeyCooldown;
 
-  constructor(private container: Container, private opts: BriefServiceOptions = {}) {
+  constructor(private container: Container, private opts: BriefServiceOptions) {
+    this.reads = opts.reads ?? new BriefRepository(container.db);
+    this.cooldown = opts.cooldown;
     this.intentRepo = opts.intentRepo ?? new IntentRepository(container.db);
     this.briefRepo = opts.briefRepo ?? new BriefRepository(container.db);
+  }
+
+  private async loadPull(prId: string, workspaceId: string): Promise<PullRow> {
+    const pr = await this.reads.getPull(prId);
+    if (!pr) throw new NotFoundError('PR not found');
+    if (pr.workspaceId !== workspaceId) throw new AppError('forbidden', 'Forbidden', 403);
+    return pr;
+  }
+
+  /** The stored brief (DB only: no GitHub, git or model call); 404 when absent or unparseable. */
+  async get(workspaceId: string, prId: string, log?: FastifyBaseLogger): Promise<BriefResponse> {
+    const pr = await this.loadPull(prId, workspaceId);
+    const json = await this.reads.getBrief(pr.id);
+    if (json === undefined) throw new NotFoundError('Brief not generated for this PR');
+
+    const parsed = PrBriefSchema.safeParse(json);
+    if (!parsed.success) {
+      log?.warn({ prId: pr.id, step: 'brief' }, 'brief: stored brief failed to parse; treating as absent');
+      throw new NotFoundError('Brief not generated for this PR');
+    }
+    return {
+      ...parsed.data,
+      pr_id: pr.id,
+      stale: parsed.data.meta.generated_from_head_sha !== pr.headSha,
+    };
+  }
+
+  /**
+   * Admission + generation + the single log line. 404 / 403 / missing repo come before any
+   * admission, GitHub call, model call or write.
+   */
+  async generateForPr(
+    workspaceId: string,
+    prId: string,
+    log: FastifyBaseLogger,
+  ): Promise<GenerateForPrResult> {
+    const pr = await this.loadPull(prId, workspaceId);
+    const repo = await this.reads.getRepo(pr.repoId);
+    if (!repo) throw new NotFoundError('Repo not found');
+
+    const admission = this.cooldown.admit(pr.id);
+    if (!admission.ok) {
+      log.warn({ prId: pr.id, step: 'brief' }, 'brief: rate limited');
+      return { kind: 'rate_limited', retryAfter: admission.retryAfter };
+    }
+
+    let result: GenerateResult;
+    try {
+      result = await this.generate({ workspaceId, pr, repo, log });
+    } catch (err) {
+      // Unexpected failure (not a model/provider outcome): still exactly one log line.
+      logBriefGeneration(log, {
+        prId: pr.id,
+        outcome: 'provider_error',
+        calls: 0,
+        truncated: [],
+        missing: [],
+        error_class: 'Error',
+        error_message: 'Unexpected error while generating the brief',
+      });
+      throw err;
+    } finally {
+      this.cooldown.release(pr.id);
+    }
+    logBriefGeneration(log, result.meta);
+
+    if (result.status === 'failed') {
+      return { kind: 'failed', error: result.error, retryAfter: this.cooldown.retryAfter(pr.id) };
+    }
+
+    // Staleness against the head SHA as it is now (a push may have landed during generation).
+    // The brief is already stored, so a failed re-read must not turn into a 500.
+    const currentSha = (await this.reads.getHeadSha(pr.id).catch(() => undefined)) ?? pr.headSha;
+    return {
+      kind: 'ok',
+      brief: {
+        ...result.brief,
+        pr_id: pr.id,
+        stale: result.brief.meta.generated_from_head_sha !== currentSha,
+      },
+    };
   }
 
   async generate(args: GenerateArgs): Promise<GenerateResult> {

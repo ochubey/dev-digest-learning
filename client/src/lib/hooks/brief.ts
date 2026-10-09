@@ -7,7 +7,7 @@ import { api, ApiError } from "../api";
 import type { PrBrief } from "@devdigest/shared";
 
 /** Route response: the shared contract plus the PR id and staleness flag.
-   Type-only mirror of the server's `BriefResponseSchema` (server/src/modules/brief/routes.ts);
+   Type-only mirror of the server's `BriefResponseSchema` (server/src/modules/brief/schema.ts);
    `client/src/vendor/shared` is read-only, so keep the two in step by hand. */
 export type BriefResponse = PrBrief & { pr_id: string; stale: boolean };
 

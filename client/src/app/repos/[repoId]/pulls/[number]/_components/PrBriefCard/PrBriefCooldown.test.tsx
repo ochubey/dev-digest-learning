@@ -198,6 +198,64 @@ describe("429 cooldown", () => {
   });
 });
 
+describe("cooldown scope (AC-111)", () => {
+  it("a 429 for PR A does not affect a card for PR B", async () => {
+    post.mockRejectedValue(limited(30));
+    const { qc } = setup(
+      <PrBriefCard prId="prA" diffPaths={new Set()} onOpenInDiff={() => {}} />,
+    );
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    await flush();
+    expect(screen.getByText(/Try again in 30 seconds/)).toBeInTheDocument();
+    cleanup();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ brief }}>
+        <QueryClientProvider client={qc}>
+          <PrBriefCard prId="prB" diffPaths={new Set()} onOpenInDiff={() => {}} />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
+    await flush();
+    expect(screen.queryByText(/Try again in/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeEnabled();
+    cleanup();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ brief }}>
+        <QueryClientProvider client={qc}>
+          <PrBriefCard prId="prA" diffPaths={new Set()} onOpenInDiff={() => {}} />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
+    await flush();
+    expect(screen.getByText(/Try again in/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeDisabled();
+  });
+
+  it("the empty-state Generate button of PR B stays enabled while PR A is cooling", async () => {
+    get.mockRejectedValue(new ApiError("nf", 404));
+    post.mockRejectedValue(limited(30));
+    const { qc } = setup(
+      <PrBriefCard prId="prA" diffPaths={new Set()} onOpenInDiff={() => {}} />,
+    );
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Generate brief" }));
+    await flush();
+    expect(screen.getByRole("button", { name: "Generate brief" })).toBeDisabled();
+    cleanup();
+    render(
+      <NextIntlClientProvider locale="en" messages={{ brief }}>
+        <QueryClientProvider client={qc}>
+          <PrBriefCard prId="prB" diffPaths={new Set()} onOpenInDiff={() => {}} />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
+    await flush();
+    expect(screen.queryByText(/Try again in/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Generate brief" })).toBeEnabled();
+  });
+});
+
 describe("global toast", () => {
   it("is not shown for a brief-generation 429", async () => {
     post.mockRejectedValue(limited(3));

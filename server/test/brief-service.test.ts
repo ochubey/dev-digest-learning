@@ -16,7 +16,8 @@ vi.mock('../src/modules/intent/service.js', () => ({
 import { MockGitHubClient, MockLLMProvider } from '../src/adapters/mocks.js';
 import { BriefService, trimBlast, type BriefServiceOptions } from '../src/modules/brief/service.js';
 import { PrBriefStored } from '../src/modules/brief/schema.js';
-import { ConfigError, ExternalServiceError } from '../src/platform/errors.js';
+import { PerKeyCooldown } from '../src/platform/cooldown.js';
+import { ConfigError,ExternalServiceError } from '../src/platform/errors.js';
 import type { DiffLoadResult } from '../src/modules/blast/files.js';
 
 const SENTINEL = 'SPEC-SENTINEL-9f3a';
@@ -117,6 +118,7 @@ function setup(
     db: {},
   } as never;
   const service = new BriefService(container, {
+    cooldown: new PerKeyCooldown(30_000),
     intentRepo: {
       getIntent: async () => (('intent' in over ? over.intent : intentRow) as never),
       upsertIntent,
@@ -292,6 +294,7 @@ describe('BriefService.generate', () => {
       db: {},
     } as never;
     const service = new BriefService(container, {
+      cooldown: new PerKeyCooldown(30_000),
       intentRepo: { getIntent: async () => undefined } as never,
       briefRepo: { upsertBrief: async () => {} },
       changedDiff: async () => loaded(),
@@ -455,6 +458,21 @@ describe('BriefService.generate', () => {
     expect(s.upsertBrief).not.toHaveBeenCalled();
   });
 
+  it('upsertBrief rejects: failed provider_error with the fixed store text, driver text not leaked (AC-26)', async () => {
+    const upsertBrief = vi.fn(async () => {
+      throw new Error('SQLITE_BUSY sk-test-123');
+    });
+    const s = setup({ opts: { briefRepo: { upsertBrief } } });
+    const r = await s.run();
+    expect(r).toMatchObject({
+      status: 'failed',
+      outcome: 'provider_error',
+      error: 'The brief could not be stored',
+    });
+    if (r.status === 'failed') expect(JSON.stringify(r)).not.toContain('sk-test-123');
+    expect(upsertBrief).toHaveBeenCalledTimes(1);
+  });
+
   it('a schema-validation ExternalServiceError is invalid_output with a lower bound of 2 attempts', async () => {
     const llm = new MockLLMProvider('openai', {});
     vi.spyOn(llm, 'completeStructured').mockRejectedValue(
@@ -481,6 +499,7 @@ describe('BriefService.generate', () => {
         db: {},
       } as never,
       {
+        cooldown: new PerKeyCooldown(30_000),
         intentRepo: { getIntent: async () => undefined } as never,
         briefRepo: { upsertBrief },
         resolveModel: async () => ({ provider: 'openai', model: 'm' }),

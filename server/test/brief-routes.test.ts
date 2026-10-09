@@ -48,7 +48,7 @@ import { MockGitHubClient, MockLLMProvider } from '../src/adapters/mocks.js';
 import { ExternalServiceError } from '../src/platform/errors.js';
 import { BriefRepository } from '../src/modules/brief/repository.js';
 import { briefLogFields } from '../src/modules/brief/log-line.js';
-import { BriefResponseSchema } from '../src/modules/brief/routes.js';
+import { BriefResponseSchema } from '../src/modules/brief/schema.js';
 
 const config = loadConfig({ ...process.env, NODE_ENV: 'test', LOG_LEVEL: 'silent' } as NodeJS.ProcessEnv);
 
@@ -549,6 +549,22 @@ describe('POST /pulls/:id/brief', () => {
     expect(hoisted.logSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('upsertBrief rejects: 502 with the store text, one log line, cooldown released (AC-26)', async () => {
+    vi.spyOn(BriefRepository.prototype, 'upsertBrief').mockRejectedValue(new Error('SQLITE_BUSY'));
+    const s = await setup();
+    const res = await s.post();
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ error: 'The brief could not be stored', retry_after: 30 });
+    expect(store.size).toBe(0);
+    expect(hoisted.logSpy).toHaveBeenCalledTimes(1);
+    expect(briefLogFields(lastLog()).calls).toBe('brief=1 provider_error');
+
+    // Within the window it counts (429); once it has passed, the PR is admitted again.
+    expect((await s.post()).statusCode).toBe(429);
+    vi.setSystemTime(T0.getTime() + 31_000);
+    expect((await s.post()).statusCode).toBe(502);
+  });
+
   it('a schema-validation ExternalServiceError: 502, row unchanged, log brief=1 invalid_output', async () => {
     store.set(PR_ID, storedBrief());
     const before = store.get(PR_ID);
@@ -566,7 +582,7 @@ describe('POST /pulls/:id/brief', () => {
   it('post-grounding validation failure: 502, row unchanged, one log line brief=1 invalid_output', async () => {
     store.set(PR_ID, storedBrief());
     const before = store.get(PR_ID);
-    // Route builds BriefService(container) with no options, so the seam is the grounding module:
+    // Route builds BriefService with only a cooldown, so the seam is the grounding module:
     // a risk left with no file_refs passes the model schema but fails PrBriefStored.
     hoisted.groundOverride.current = () => ({
       risks: [{ kind: 'other', title: 't', explanation: 'e', severity: 'low', file_refs: [] }],

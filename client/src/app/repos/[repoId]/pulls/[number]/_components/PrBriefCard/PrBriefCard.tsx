@@ -190,7 +190,7 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
         <RiskList risks={brief.risks.risks} onOpenRef={navigate} />
       )}
 
-      {!(risksNotAssessed && brief.review_focus.length === 0) && (
+      {!(brief.meta.missing.includes("diff") && brief.review_focus.length === 0) && (
         <>
           <div style={s.sectionLabel}>{t("card.reviewFocus")}</div>
           <ReviewFocusList items={brief.review_focus} onOpen={navigate} />

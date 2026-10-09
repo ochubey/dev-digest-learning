@@ -205,6 +205,30 @@ describe("diff unavailable", () => {
     expect(await screen.findAllByText(brief.card.risksNotAssessed)).toHaveLength(1);
     expect(screen.queryByText(brief.noRisks)).toBeNull();
     expect(screen.queryByText(brief.card.noFocus)).toBeNull();
+    expect(screen.queryByText(brief.card.reviewFocus)).toBeNull();
+  });
+
+  it("hides Review focus entirely when diff is missing and focus is empty, even with risks (AC-12)", async () => {
+    get.mockResolvedValue(
+      noDiff({
+        risks: {
+          risks: [
+            {
+              kind: "security",
+              title: "Caller breaks",
+              explanation: "x",
+              severity: "high",
+              file_refs: ["src/caller.ts"],
+            },
+          ],
+        },
+      }),
+    );
+    renderCard();
+    expect(await screen.findByText("Caller breaks")).toBeInTheDocument();
+    expect(screen.queryByText(brief.card.reviewFocus)).toBeNull();
+    expect(screen.queryByText(brief.card.noFocus)).toBeNull();
+    expect(screen.queryByText(brief.card.risksNotAssessed)).toBeNull();
   });
 
   it("keeps the normal empty text when the diff was available", async () => {
@@ -212,6 +236,8 @@ describe("diff unavailable", () => {
     renderCard();
     expect(await screen.findByText(brief.noRisks)).toBeInTheDocument();
     expect(screen.queryByText(brief.card.risksNotAssessed)).toBeNull();
+    expect(screen.getByText(brief.card.reviewFocus)).toBeInTheDocument();
+    expect(screen.getByText(brief.card.noFocus)).toBeInTheDocument();
   });
 });
 

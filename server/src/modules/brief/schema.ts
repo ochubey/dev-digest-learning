@@ -45,3 +45,10 @@ export const PrBriefStored = PrBrief.extend({
   }),
 });
 export type PrBriefStored = z.infer<typeof PrBriefStored>;
+
+/** Route response: the stored brief plus the PR id and the computed staleness. */
+export const BriefResponseSchema = PrBrief.extend({
+  pr_id: z.string(),
+  stale: z.boolean(),
+});
+export type BriefResponse = z.infer<typeof BriefResponseSchema>;
