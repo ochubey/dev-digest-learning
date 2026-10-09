@@ -86,7 +86,7 @@ Author: `implementation-planner` agent (read-only); saved by the caller.
 | `repository.ts` | DB | `BriefRepository.getBrief(prId)` and `upsertBrief(prId, json)` (`onConflictDoUpdate` on `prId`). |
 | `service.ts` | IO | `BriefService.generate(...)`: gathers inputs, builds the prompt, makes ONE `completeStructured` call wrapped in `withTimeout`, then validates, clamps, grounds, composes `PrBrief`, validates it with `PrBriefStored` (AC-68), upserts, and returns `{status, outcome, brief?, meta}`. Maps errors with `classifyLlmError` (T40). Takes an injectable `now()` for `generated_at`. Dependencies are injected so tests can stub them. Never writes on failure. Never imports `IntentService`. |
 | `paths.ts` | pure | `isSafeRepoPath(p)`: false for NUL, a leading `/` or `\`, a drive letter (`^[A-Za-z]:`), or a `..` segment split on `/` or `\`. `normalizeRef(p)` trims one leading `./` (AC-63). |
-| `routes.ts` | HTTP | `GET` and `POST /pulls/:id/brief`, `BriefResponseSchema`, and the in-memory per-PR limiter (same pattern as `intent/routes.ts:78,139-153`). |
+| `routes.ts` | HTTP | `GET` and `POST /pulls/:id/brief`, and wiring. `BriefResponseSchema` lives in `schema.ts`; the in-memory per-PR limiter is `PerKeyCooldown` (`server/src/platform/cooldown.ts`), held by `BriefService`. |
 
 Shared change: `server/src/modules/blast/files.ts` gains `changedDiffForPr()`, which returns `{status: 'loaded', diff: UnifiedDiff} | {status: 'unavailable', reason: string}`. A `loaded` diff may have zero files. It keeps the existing in-flight dedupe and PR-detail import. `changedFilesForPr()` maps `loaded` to paths and `unavailable` to `[]`, with no behaviour change.
 
@@ -167,7 +167,7 @@ export const PrBrief = z.object({
 });
 ```
 
-- Server route response: `BriefResponseSchema = PrBrief.extend({ pr_id: z.string(), stale: z.boolean() })` in `brief/routes.ts`. 429 and 502 return `{error: string, retry_after: number}`; 403 and 404 return `{error}` only. The server-only `PrBriefStored` (in `brief/schema.ts`) is used before every write. It is not part of the shared contract.
+- Server route response: `BriefResponseSchema = PrBrief.extend({ pr_id: z.string(), stale: z.boolean() })` in `brief/schema.ts`. 429 and 502 return `{error: string, retry_after: number}`; 403 and 404 return `{error}` only. The server-only `PrBriefStored` (in `brief/schema.ts`) is used before every write. It is not part of the shared contract.
 - Client mirror (`client/src/lib/hooks/brief.ts`, type only, same pattern as `hooks/blast.ts`): `export type BriefResponse = PrBrief & { pr_id: string; stale: boolean }`.
 
 ### Input budget (from the spec; measured on the exact serialized payload)
@@ -834,3 +834,12 @@ Every AC from AC-85 to AC-107 has at least one task.
 4. AC-100: `PrBriefCard` only calls `onOpenInDiff`; the `line=` URL is built by `usePrNavigation` (covered by `navigation.test.tsx`, AC-36). The plan asserts `onOpenInDiff(file, 12)`.
 5. AC-105: tokens are exact with thousands separators; the cost uses the same 3-decimal string as the header.
 6. AC-99: the header file button only shows while the risk is collapsed; the anchor ref gets the same label in the expanded list. A cost of exactly 0 shows `$0.000`.
+
+## 11. Changes made outside this plan (after P9)
+
+These were done as direct fixes, not as planned tasks, and are recorded here so the plan matches the code:
+
+- **Rate-limit countdown (AC-108..AC-113, D-21, spec rev 5):** global toast suppressed for the brief 429 (`providers.tsx`, mutation `meta.silent429`), live countdown and disabled buttons (`PrBriefCard/useCooldown.ts`, `GenerateNotice.tsx`, `InputsChangedHint.tsx`, `hooks/brief.ts`). Requested by the user after seeing only a toast without the wait time.
+- **M1 refactor (architecture review finding, spec rev 6, no behavior change):** `brief/routes.ts` is a thin adapter; logic moved to `BriefService.get()` / `generateForPr()`, DB access via `BriefRepository`, limiter extracted to `server/src/platform/cooldown.ts` (`PerKeyCooldown`). Reviewed by `architecture-reviewer`; minor findings F1-F7, F9, F10 fixed.
+- **Verifier follow-ups:** AC-12 hides the Review focus section whenever the diff is missing and focus is empty; tests added for AC-26 (store failure) and AC-111 (cooldown scoped per PR). Full report: `docs/plans/pr-brief-verification.md`.
+- Section 0 above says "84 ACs"; the spec now has AC-1..AC-113.
