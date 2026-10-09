@@ -4,6 +4,8 @@ Status: approved
 
 Revision note: revised after the cross-model review (`docs/plans/pr-brief-cross-review.md`) and the user's decisions. AC numbering is stable: existing ACs keep their ids, new ACs are appended as AC-56 and up, and no AC was removed. OQ-1..OQ-6 are resolved as decisions D-1..D-6, and OQ-7..OQ-12 as decisions D-9..D-14 (see "Decisions").
 
+Revision 4 note: two user-requested additions derived from the design prototype (`screen_pr_detail.jsx`): (A) an optional line range (`anchor`) per risk, grounded by code against the risk's file refs and the hunk new-side ranges (AC-85..AC-100, D-15..D-19), and (B) the brief's own generation cost and token usage in the card header (AC-101..AC-107, D-20). The shared `Risk` schema is extended with one optional field; it is still not tightened (D-15 amends D-4 and AC-84). Existing AC ids and texts are unchanged apart from cross-references.
+
 ## Problem and user
 
 A reviewer opens a pull request cold. The pieces needed to orient are scattered: Intent (L03) and Blast radius (L04) are separate blocks on the Overview tab, Smart Diff roles live on the Files changed tab, and nothing says where the risk is or which lines to read first. The reviewer has to assemble that picture by hand before the review starts.
@@ -37,7 +39,9 @@ The PR Brief puts that picture in one card on the Overview tab. It combines the 
 - Brief version history, editing a brief, posting a brief to GitHub, streaming partial output.
 - Rate limiting shared across server instances. The limiter is in-memory per process, like Intent.
 - Model fallback. If the `risk_brief` provider is unusable, generation fails (D-5).
-- Tightening the shared `Risk` schema. `Risk.kind` stays a free string and `Risk.file_refs` gets no `min(1)` (D-4, AC-84).
+- Tightening the shared `Risk` schema. `Risk.kind` stays a free string and `Risk.file_refs` gets no `min(1)` (D-4, AC-84). Adding the one optional `anchor` field (D-15, AC-85) is an extension, not a tightening.
+- More than one anchor per risk, anchors on blast-only files, and a flag or count for clipped anchors (D-17).
+- Storing anything new for the cost/tokens header line; it reads the existing `meta` fields (D-20).
 - Project Context Folder documents. No such module exists in the server today (`SpecFile` is a contract only). "Attached specs" means the spec/plan docs the PR references, as resolved by RefResolver (user decision).
 
 ## User stories
@@ -49,6 +53,8 @@ The PR Brief puts that picture in one card on the Overview tab. It combines the 
 - **US-5 (G4).** As a reviewer, I reload the page and the same brief appears immediately, without a new model call.
 - **US-6 (G4).** As a reviewer, I see when the brief was generated for an older commit than the current head, and I can regenerate it.
 - **US-7 (G3).** As an operator, I can confirm from the log line that one generation made exactly one `completeStructured` call (`brief=1 ok`), how many schema attempts it took (`schema_attempts`), that the input stayed within the budget and which model was used.
+- **US-8 (G2, G5).** As a reviewer, I see a risk pinned to a line range such as `src/middleware/ratelimit.ts:12-18`, and its navigate button opens Files changed at the first line of that range.
+- **US-9 (G3).** As a reviewer, I see in the brief header what this brief cost to generate and how many tokens it used (for example `$0.014  8.2K→1.3K`).
 
 ## Acceptance criteria (EARS)
 
@@ -91,7 +97,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* service unit test with a blast-only path and an invented path asserts both are dropped.
 - **AC-16 (P2, G2).** ЯКЩО a Review focus line lies outside every hunk new-side line range of its file (the range a hunk covers on the new side, context lines included, D-9), ТОДІ the system (shall) replace it with the start line of the nearest hunk range in that file (tie: the earlier range) and mark the item `line_adjusted`. Only files present in the diff facts reach this rule (deleted, pure-rename and binary files are never there, AC-60).
   *Verify:* service unit test with hunk ranges `[10-20, 50-60]` and model line 35 asserts line 50 (distance 15 vs 25) and `line_adjusted: true`. Line 30 (tie at 20) asserts line 10. A line that falls on a context line inside a hunk range is kept unchanged with no `line_adjusted`.
-- **AC-17 (P2, G2).** The system (shall) record per generation the number of dropped risks, dropped file references, dropped focus items and adjusted lines, return them in the response metadata, and write them to the generation log line.
+- **AC-17 (P2, G2).** The system (shall) record per generation the number of dropped risks, dropped file references, dropped focus items and adjusted lines, return them in the response metadata, and write them to the generation log line. (Dropped risk anchors are added by AC-93 and AC-94.)
   *Verify:* service test with mixed valid/invalid output asserts `meta.grounding` counts in the response. Log assertion in the route test.
 
 ### Model call, input and output (G3)
@@ -108,7 +114,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* builder unit test asserts the marker and `input.truncated` contents.
 - **AC-23 (P2, G3).** The system (shall) validate the model response against the brief model output schema (`summary`, `risks[]`, `review_focus[]`) before grounding and storage.
   *Verify:* route test where the stub returns a malformed structured result asserts 502 and an unchanged stored row.
-- **AC-24 (P2, G3).** The shared `PrBrief` contract (shall) be identical in the server and client copies and (shall) contain: `summary`; `risks[]`; `review_focus[{file, line, reason, line_adjusted?}]`; nullable `intent` and `blast` snapshots; optional `history`; and a `meta` object (`generated_from_head_sha`, `generated_at`, `provider`, `model`, `tokens_in`, `tokens_out`, `cost_usd`, `schema_attempts`, `missing[]`, `sources[]`, `diff_stats`, `input{estimated_tokens, budget_tokens, truncated[], blast_degraded_reason}`, `grounding{dropped_risks, dropped_refs, dropped_focus, adjusted_lines}`). The GET/POST response adds `pr_id` and `stale` (decision D-3).
+- **AC-24 (P2, G3).** The shared `PrBrief` contract (shall) be identical in the server and client copies and (shall) contain: `summary`; `risks[]`; `review_focus[{file, line, reason, line_adjusted?}]`; nullable `intent` and `blast` snapshots; optional `history`; and a `meta` object (`generated_from_head_sha`, `generated_at`, `provider`, `model`, `tokens_in`, `tokens_out`, `cost_usd`, `schema_attempts`, `missing[]`, `sources[]`, `diff_stats`, `input{estimated_tokens, budget_tokens, truncated[], blast_degraded_reason}`, `grounding{dropped_risks, dropped_refs, dropped_focus, adjusted_lines}`). The GET/POST response adds `pr_id` and `stale` (decision D-3). (Extended by AC-85, AC-95 and AC-96: optional `Risk.anchor` and optional `grounding.dropped_anchors`.)
   *Verify:* typecheck in both packages. A unit test parses one fixture with both copies, or a diff check between the two files.
 - **AC-25 (P2, G3).** The system (shall) select the provider and model from the workspace's `risk_brief` feature-model setting (default `openai` / `gpt-4.1`), never from a hard-coded value.
   *Verify:* route test with a workspace override asserts the LLM was called with the overridden model. The stored metadata records `provider` and `model`.
@@ -150,7 +156,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* page test asserts the params are removed.
 - **AC-41 (P3, G5).** ЯКЩО the reviewer activates navigation for a file reference that is not in the PR's current diff (a blast-only risk reference, or, after a later commit, a file no longer in the diff), ТОДІ the system (shall) stay on the current tab and show the toast "File not in this PR's diff". Focus items are diff files at generation time (AC-15), so for them this happens only after a later commit.
   *Verify:* component test asserts the toast and no navigation.
-- **AC-42 (P3, G5).** КОЛИ the reviewer activates a risk file reference's navigate control, the system (shall) navigate to that file by the same rules as Review focus (AC-35, AC-41).
+- **AC-42 (P3, G5).** КОЛИ the reviewer activates a risk file reference's navigate control, the system (shall) navigate to that file by the same rules as Review focus (AC-35, AC-41). (The target line for an anchored file is defined by AC-100.)
   *Verify:* component test.
 
 ### Degradation (G6)
@@ -272,8 +278,71 @@ Decisions turned into ACs
   *Verify:* route test with no key for the configured provider asserts 502, the message text, zero LLM calls and an unchanged row.
 - **AC-82 (P2, G3).** ЯКЩО the model call does not complete within 50 s, ТОДІ the system (shall) answer 502 `{error, retry_after}`, keep the previous brief, and log `outcome=timeout` (decision D-6).
   *Verify:* service test with fake timers asserts 502, no write and the log outcome.
-- **AC-84 (P2, G3).** The system (shall) leave the shared `Risk` schema unchanged (no `min(1)` on `file_refs`); the "at least one file reference" guarantee for brief risks (shall) be enforced by grounding (AC-14) and by the brief-specific stored schema used in AC-68.
+- **AC-84 (P2, G3).** The system (shall) leave the shared `Risk` schema unchanged (no `min(1)` on `file_refs`); the "at least one file reference" guarantee for brief risks (shall) be enforced by grounding (AC-14) and by the brief-specific stored schema used in AC-68. (Amended by D-15 / AC-85: the shared `Risk` schema gains exactly one optional field, `anchor`; no existing field is tightened.)
   *Verify:* contract test: shared `Risk` parses `file_refs: []`; brief stored schema rejects a risk with `file_refs: []`.
+
+### Added in revision 4 (AC-85 and up)
+
+Risk line range (anchor): contract and model output
+
+- **AC-85 (P2, G2).** The shared `Risk` schema (shall) have exactly one new field, optional `anchor: { file: string, start_line: integer ≥ 1, end_line: integer ≥ start_line }`, and every existing `Risk` field (shall) keep its current definition, so a `Risk` without `anchor` still parses (D-15).
+  *Verify:* contract test: a `Risk` without `anchor` parses; `anchor {file:'a.ts', start_line:12, end_line:18}` parses; `start_line: 0`, `end_line < start_line`, and a non-integer line are rejected; `file_refs: []` and an arbitrary `kind` still parse (AC-79, AC-84).
+- **AC-86 (P2, G3).** The system (shall) require in the model output schema, per risk, the keys `anchor_file` (string or null), `anchor_start_line` (integer or null) and `anchor_end_line` (integer or null), all required and nullable (no optional keys), with no `anchor` key; `anchor` in the stored brief (shall) be built only by code from these values (D-16).
+  *Verify:* schema test asserts the three keys are required and accept null; a model output that omits one of them fails the output schema (AC-23); a model output carrying an `anchor` object does not produce a stored `anchor` from that object.
+- **AC-87 (P2, G3).** The system (shall) state in the model instructions that the anchor is optional (all three anchor values null when no specific lines apply), that it must name one of the risk's own file refs, and that its lines must refer to new-side lines in the changed files of this PR only.
+  *Verify:* builder unit test asserts the instruction text is present in the system message; the AC-19 worst-case budget test still passes with it.
+
+Risk line range (anchor): grounding
+
+- **AC-88 (P2, G2).** ЯКЩО a risk's `anchor_file` does not match, by the same canonical matching as file references (AC-62, AC-63), one of that risk's file references that survived grounding, ТОДІ the system (shall) store the risk without `anchor`.
+  *Verify:* service test: a risk with refs `[src/a.ts]` and `anchor_file: 'src/b.ts'` (itself a valid diff file) is stored with refs `[src/a.ts]` and no anchor; with `anchor_file: './src/a.ts'` the stored `anchor.file` is the canonical `src/a.ts`.
+- **AC-89 (P2, G2).** ЯКЩО the anchor file is not a path in the PR diff facts (for example a blast-only caller file, or any file when the diff is unavailable, AC-48), ТОДІ the system (shall) store the risk without `anchor`. A risk whose surviving file refs are only blast caller files therefore never has an anchor.
+  *Verify:* service test: a risk whose only ref is a blast caller and whose anchor names that caller is stored with the ref and no anchor; a route test with a throwing diff loader asserts no stored risk has an anchor.
+- **AC-90 (P2, G2).** ЯКЩО a risk's anchor values are partial (some but not all three null), or `anchor_start_line` < 1, or `anchor_end_line` < `anchor_start_line`, ТОДІ the system (shall) store the risk without `anchor`, keeping its file references.
+  *Verify:* service test with each case asserts the risk is kept with its refs and has no anchor.
+- **AC-91 (P2, G2).** КОЛИ a risk's anchor range [start, end] intersects at least one hunk new-side line range of the anchor file (context lines included, D-9), the system (shall) store `anchor` with `start_line` = the lowest line in [start, end] covered by some hunk range and `end_line` = the highest such line (D-17).
+  *Verify:* service test with hunk ranges `[10-20, 50-60]`: anchor 12-18 stored 12-18; 5-12 stored 10-12; 18-30 stored 18-20; 25-55 stored 50-55; 15-55 stored 15-55; 12-12 stored 12-12.
+- **AC-92 (P2, G2).** ЯКЩО a risk's anchor range intersects no hunk new-side line range of the anchor file, ТОДІ the system (shall) drop the anchor and still store the risk with its grounded file references.
+  *Verify:* service test with hunk ranges `[10-20, 50-60]` and anchor 21-49 (and anchor 70-80) asserts the risk is stored with its refs and without `anchor`.
+- **AC-93 (P2, G2).** The system (shall) count in `meta.grounding.dropped_anchors` every stored risk for which the model supplied at least one non-null anchor value but no `anchor` was stored (AC-88..AC-90, AC-92), and return it in the response metadata. A risk with all three anchor values null (shall) not be counted, and a risk dropped by AC-14 (shall) not be counted (it is counted in `dropped_risks`) (D-18).
+  *Verify:* service test with one valid anchor, one out-of-hunk anchor, one partial anchor, one all-null anchor and one risk dropped for invented refs asserts `dropped_anchors = 2` and `dropped_risks = 1`.
+- **AC-94 (P2, G3).** КОЛИ grounding ran, the generation log line (shall) include `dropped_anchors=<n>` next to the other grounding drop counts (AC-26).
+  *Verify:* route test captures the log line and asserts `dropped_anchors=` with the expected count.
+
+Risk line range (anchor): contract and compatibility
+
+- **AC-95 (P2, G3).** The `PrBrief.meta.grounding` contract (shall) have a new optional number field `dropped_anchors` that reads as 0 when absent; all other `meta` fields listed in AC-24 (shall) keep their definitions.
+  *Verify:* contract test: `grounding` without `dropped_anchors` parses and yields 0; with `dropped_anchors: 3` parses and yields 3.
+- **AC-96 (P2, G3).** The server and client copies of the brief contract (shall) stay identical, including `Risk.anchor` and `grounding.dropped_anchors` (cross-reference AC-24).
+  *Verify:* diff check between the two `brief.ts` copies, or one fixture with an anchored risk and `dropped_anchors` parsed by both copies with equal results; typecheck in both packages.
+- **AC-97 (P2, G4).** КОЛИ GET `/pulls/:id/brief` reads a brief stored before this revision (risks without `anchor`, `grounding` without `dropped_anchors`), the system (shall) return it as a valid brief (not the "no brief" path) and the card (shall) render it with plain file labels.
+  *Verify:* route test seeds a pre-revision JSON row and asserts 200 with the brief; component test renders it with no line suffix on any risk label.
+- **AC-98 (P2, G2).** The brief stored schema used in AC-68 (shall) reject a risk whose `anchor.file` is not one of that risk's `file_refs`.
+  *Verify:* stored-schema test rejects `{file_refs:['a.ts'], anchor:{file:'b.ts', start_line:1, end_line:2}}` and accepts the same risk with `anchor.file: 'a.ts'`.
+
+Risk line range (anchor): UI
+
+- **AC-99 (P2, G1).** The system (shall) show the risk header file label as `file:start-end` when the risk has an anchor with `start_line` ≠ `end_line`, as `file:line` when `start_line` = `end_line`, using the anchor file; ДЕ the risk has no anchor, it (shall) show the plain first file reference as today (AC-8).
+  *Verify:* component test with anchors 12-18 and 12-12 and a risk without anchor asserts the labels `src/middleware/ratelimit.ts:12-18`, `src/middleware/ratelimit.ts:12` and the plain path.
+- **AC-100 (P3, G5).** КОЛИ the reviewer activates the navigate control of a risk's anchor file and that file is in the PR's current diff, the system (shall) navigate to Files changed with `?tab=diff&file=<url-encoded anchor file>&line=<anchor start_line>` by the rules of AC-35, AC-36 and AC-76; navigation to a non-anchor file ref of the same risk (shall) keep the existing behavior (AC-42), and a file not in the current diff (shall) show the toast (AC-41).
+  *Verify:* component test asserts the `router.replace` argument contains `line=12` for anchor 12-18; a non-anchor ref of the same risk produces no `line=` from the anchor; an anchor file absent from the current diff shows the toast and no navigation.
+
+Cost and tokens in the brief header
+
+- **AC-101 (P2, G3).** ПОКИ a brief is shown and `meta.cost_usd` is not null, the system (shall) show the cost in the card header as `$` followed by the value rounded to 3 decimals (for example `$0.014`), or as `<$0.001` when the value is positive and below 0.001 (D-20).
+  *Verify:* component test: 0.0142 shows `$0.014`; 1.2 shows `$1.200`; 0.0004 shows `<$0.001`.
+- **AC-102 (P2, G3).** ПОКИ a brief is shown and both `meta.tokens_in` and `meta.tokens_out` are not null, the system (shall) show the tokens in the card header as `<in>→<out>`, where each count from 1,000 up is shown in thousands rounded to one decimal with a `K` suffix and each count below 1,000 as a plain integer (for example `8.2K→1.3K`, `950→120`).
+  *Verify:* component test: 8,150/1,312 shows `8.2K→1.3K`; 1,000/999 shows `1.0K→999`; 950/120 shows `950→120`.
+- **AC-103 (P2, G3).** ЯКЩО any of `meta.cost_usd`, `meta.tokens_in`, `meta.tokens_out` is null, ТОДІ the system (shall) omit that part from the header line; when exactly one token count is null, the present count (shall) be shown alone with its direction word from `brief.json` (for example `8.2K in` or `1.3K out`) and no arrow.
+  *Verify:* component test with cost null shows only the tokens; with `tokens_out` null shows `$0.014  8.2K in`; with `tokens_in` null shows `1.3K out`.
+- **AC-104 (P2, G3).** ЯКЩО `meta.cost_usd`, `meta.tokens_in` and `meta.tokens_out` are all null, ТОДІ the system (shall) not render the cost-and-tokens line at all (no empty element, no placeholder).
+  *Verify:* component test with all three null asserts no element with the cost-and-tokens accessible name exists.
+- **AC-105 (P2, G3).** The cost-and-tokens line (shall) have an accessible name and a `title` that spell out the meaning and the exact values of the shown parts (for example "Generation cost and tokens: cost $0.014, input tokens 8,150, output tokens 1,312"), omitting null parts.
+  *Verify:* component test asserts the accessible name and `title` text for a full fixture and for a fixture with `tokens_out` null.
+- **AC-106 (P2, G3).** The system (shall) take the label, `title`/accessible-name templates and the `in`/`out` direction words of the cost-and-tokens line from `brief.json` keys under `card.costTokens*` (for example `card.costTokens`), with no hard-coded English (AC-54).
+  *Verify:* grep for hard-coded English in the header component; the i18n test passes with the new keys present in `client/messages/en/brief.json`.
+- **AC-107 (P2, G3).** ПОКИ the shown brief is stale or a regeneration is in flight, the system (shall) keep showing that brief's cost-and-tokens line with the same values (dimmed together with the brief during regeneration, AC-53), and (shall) replace it only when a new brief replaces the shown one.
+  *Verify:* component test with `stale: true` asserts the line is present; with a pending regeneration asserts the old values remain until the POST resolves, then the new values show.
 
 ## Edge cases
 
@@ -289,9 +358,18 @@ Decisions turned into ACs
 | Model returns a focus line outside any hunk range | The line is snapped to the nearest hunk range start and flagged as adjusted. A line on a context line inside a hunk range is kept (D-9). | AC-16 |
 | Model cites a deleted, pure-rename or binary file | The diff loader dropped these files, so the reference is outside the allow-list and is dropped by grounding. | AC-60 |
 | Renamed file that also has changed hunks | Grounded by the new path only; the old path is dropped. | AC-61 |
-| Diff cannot be loaded | `diff` in `missing`; grounding against blast callers only; Review focus empty. | AC-48 |
+| Diff cannot be loaded | `diff` in `missing`; grounding against blast callers only; Review focus empty; no risk has an anchor. | AC-48, AC-89 |
 | Diff loads with zero files | Not an error: empty diff-stats section, `diff` not in `missing`, Review focus empty. | AC-59 |
 | All risks dropped by grounding | `noRisks` label shown. The drop counts are returned and logged. | AC-11, AC-17 |
+| Risk anchor names a file that is not one of the risk's refs | Anchor dropped and counted; the risk is kept with its refs. | AC-88, AC-93 |
+| Risk anchor on a blast-only caller file | Anchor dropped and counted; the risk is kept with its refs; the header shows the plain file. | AC-89, AC-93, AC-99 |
+| Risk anchor range partly outside the hunks | Clipped to the hunk-covered span of the intersection; not counted as dropped. | AC-91 |
+| Risk anchor range entirely between or outside hunks, start > end, start < 1, or partial nulls | Anchor dropped and counted; the risk is kept. | AC-90, AC-92, AC-93 |
+| Anchor file no longer in the diff after a later commit | Navigate shows the toast; the label still shows the stored range. | AC-41, AC-100 |
+| Brief stored before revision 4 | Parses; risks show plain file labels; `dropped_anchors` reads as 0. | AC-95, AC-97 |
+| Provider reports no usage (cost and tokens null) | The cost-and-tokens line is not rendered. | AC-70, AC-104 |
+| Only one token count reported | The present count is shown with its `in`/`out` word, no arrow. | AC-103 |
+| Very small cost | Shown as `<$0.001`. | AC-101 |
 | New commit pushed after generation | The brief is shown with a stale badge (computed on each GET). Focus items pointing at files no longer in the diff produce the toast. | AC-29, AC-41 |
 | New commit pushed during generation | The brief is stored with the SHA its inputs were gathered at; the POST response has `stale: true`. | AC-27, AC-77 |
 | Two tabs or users click Generate at once (same process) | The first request is admitted. The second gets 429, refetches GET once, and says generation was recently started; it does not claim a brief exists. | AC-31, AC-32 |
@@ -301,7 +379,7 @@ Decisions turned into ACs
 | Model call exceeds 50 s | 502, `outcome=timeout`, old brief kept. A late provider response may still be billed (accepted). | AC-82 |
 | Provider error text echoes the prompt or a key | Only a sanitized error class and message are logged; the 502 body carries no raw provider text. | AC-67 |
 | Untrusted text contains fake delimiters or instructions | Escaped; it stays inside its own data block and cannot add blocks or change labels. | AC-65, AC-66 |
-| Stored JSON from an older contract version, or unparsable | GET treats it as "no brief" (404 / empty state) and logs a warning. It is overwritten on the next generation. | AC-1 |
+| Stored JSON from an older contract version, or unparsable | GET treats it as "no brief" (404 / empty state) and logs a warning. It is overwritten on the next generation. Rows from before revision 4 are not "older" in this sense: they parse (AC-97). | AC-1, AC-97 |
 | URL `file` param names a path not in the PR | Files changed opens normally and shows "File not in this PR's diff"; the toast fires again on each change to a different unknown path. | AC-83 |
 | Live Intent derived after the brief was generated | Advisory hint "Inputs changed since this brief — Regenerate". | AC-78 |
 | Unknown risk kind in stored data | Generic icon with the text label. | AC-80 |
@@ -310,11 +388,11 @@ Decisions turned into ACs
 ## Non-functional requirements
 
 - **Performance.** GET `/pulls/:id/brief` reads the DB only (no GitHub, no model, no diff load), with p95 ≤ 300 ms locally. POST targets ≤ 60 s end to end (decision D-6); the model call is capped at 50 s (AC-82), leaving the remainder for input gathering, grounding and storage. Model output is capped by the schema limits: summary ≤ 600 chars, ≤ 8 risks, explanation ≤ 400 chars, ≤ 7 focus items, reason ≤ 200 chars.
-- **Cost.** One `completeStructured` call per generation, `maxRetries: 1` (at most 2 schema attempts, so at most 2 billed requests from schema reprompts; adapter transport retries are not counted and are not bounded by this spec). Input ≤ 8,000 estimated tokens on the exact serialized messages. Cost (`cost_usd`, nullable) is stored with the brief and logged.
-- **Security.** Authorization runs before any GitHub call, DB write, limiter admission or model call (AC-58). Untrusted text is escaped inside delimited data blocks (AC-65, AC-66). Paths with NUL, absolute form or `..` segments are rejected (AC-63); stored paths are canonical allow-list paths (AC-62). Model output is rendered as plain text, or through the existing `Markdown` component that never renders raw HTML. No document content from RefResolver is persisted. No secrets go into prompts or logs; provider errors are logged sanitized (AC-67).
-- **Accessibility.** Generate and Regenerate are real buttons with accessible names. Focus items and risk navigate controls are keyboard-focusable buttons whose names include the file and line. The risk expand control is a separate chevron button with `aria-expanded`, `aria-controls` and an accessible name (AC-51, AC-73). Deep-link scrolling does not move focus and respects reduced motion (AC-74, AC-75). The stale badge, missing-data note, inputs-changed hint, rate-limit and error messages use `role="status"` / `role="alert"`. Severity is not conveyed by color alone (text or icon label too).
-- **Observability.** One structured log line per generation, success or failure (AC-26), in the same style as the Intent `llm.calls` line, with `brief=0|1`, `schema_attempts` and an outcome. 429 is logged with the PR id and the `brief` step.
-- **Compatibility.** Both copies of the `brief.ts` contract change in lockstep. The shared `Risk` schema is unchanged (AC-84). Existing Intent and Blast routes and UI behavior are unchanged.
+- **Cost.** One `completeStructured` call per generation, `maxRetries: 1` (at most 2 schema attempts, so at most 2 billed requests from schema reprompts; adapter transport retries are not counted and are not bounded by this spec). Input ≤ 8,000 estimated tokens on the exact serialized messages. Cost (`cost_usd`, nullable) is stored with the brief and logged, and shown in the card header with the token usage (AC-101..AC-107).
+- **Security.** Authorization runs before any GitHub call, DB write, limiter admission or model call (AC-58). Untrusted text is escaped inside delimited data blocks (AC-65, AC-66). Paths with NUL, absolute form or `..` segments are rejected (AC-63); stored paths are canonical allow-list paths (AC-62), including anchor files (AC-88). Model output is rendered as plain text, or through the existing `Markdown` component that never renders raw HTML. No document content from RefResolver is persisted. No secrets go into prompts or logs; provider errors are logged sanitized (AC-67).
+- **Accessibility.** Generate and Regenerate are real buttons with accessible names. Focus items and risk navigate controls are keyboard-focusable buttons whose names include the file and line. The risk expand control is a separate chevron button with `aria-expanded`, `aria-controls` and an accessible name (AC-51, AC-73). Deep-link scrolling does not move focus and respects reduced motion (AC-74, AC-75). The stale badge, missing-data note, inputs-changed hint, rate-limit and error messages use `role="status"` / `role="alert"`. Severity is not conveyed by color alone (text or icon label too). The cost-and-tokens line has a spelled-out accessible name and `title`, so the `K` abbreviation and the arrow are not the only carriers of meaning (AC-105).
+- **Observability.** One structured log line per generation, success or failure (AC-26), in the same style as the Intent `llm.calls` line, with `brief=0|1`, `schema_attempts`, an outcome and, when grounding ran, `dropped_anchors` (AC-94). 429 is logged with the PR id and the `brief` step.
+- **Compatibility.** Both copies of the `brief.ts` contract change in lockstep (AC-96). The shared `Risk` schema is not tightened (AC-84); it is extended only with the optional `anchor` field (AC-85), so all existing consumers and stored rows still parse (AC-97). `grounding.dropped_anchors` is optional with a default of 0 (AC-95). Existing Intent and Blast routes and UI behavior are unchanged.
 
 ## Inputs and provenance
 
@@ -322,7 +400,7 @@ Decisions turned into ACs
 |---|---|---|
 | Intent (summary, in/out scope) | [reused: L03 `pr_intent` via `IntentRepository.getIntent` in `server/src/modules/intent/repository.ts`] | Read only, never derived here. The assignment names `reviews/repository.ts`, but `getIntent` actually lives in `intent/repository.ts`. |
 | Blast radius summary + caller files | [reused: L04 `repoIntel.getBlastRadius` + `buildBlastRadius`, same data as GET `/pulls/:id/blast`] | Only `summary` and caller `file:line` go to the model. Not cached per PR. Computed at generation time. |
-| Changed files, +/− counts, hunk new-side line ranges (context included, D-9), load status (`loaded` / `unavailable`) | [deterministic: `reviews/diff-loader` `loadDiff`, as Intent uses] | `pr_files` may be empty until PR detail is opened, so the diff loader is the source. Deleted, pure-rename and binary files are excluded from the diff facts by the brief: the git path drops them in the parser, while the `pr_files` fallback keeps deleted files, so the diff facts filter out any file with no new-side hunk (AC-60). No change status is derived. Hunk bodies are never forwarded. |
+| Changed files, +/− counts, hunk new-side line ranges (context included, D-9), load status (`loaded` / `unavailable`) | [deterministic: `reviews/diff-loader` `loadDiff`, as Intent uses] | `pr_files` may be empty until PR detail is opened, so the diff loader is the source. Deleted, pure-rename and binary files are excluded from the diff facts by the brief: the git path drops them in the parser, while the `pr_files` fallback keeps deleted files, so the diff facts filter out any file with no new-side hunk (AC-60). No change status is derived. Hunk bodies are never forwarded. The same hunk ranges validate and clip risk anchors (AC-91). |
 | Smart Diff role per file | [deterministic: `reviews/smart-diff/classify`] | Path rules, no model. The only per-file classification sent or shown. |
 | PR title, description | [reused: `pull_requests` row] | Untrusted. |
 | Linked issue | [deterministic: RefResolver `extractIssueRef` + GitHub fetch] | Resolved live. Only the code-owned label ("Linked issue #<number>" or "Issue #<number> (other repository)") and status are persisted (D-12). Untrusted. |
@@ -331,12 +409,14 @@ Decisions turned into ACs
 | Delimiter escaping | [deterministic: brief input builder] | |
 | Path validation (NUL, absolute, `..`) | [deterministic: brief path validator] | |
 | Grounding (path allow-list, canonical paths, line snapping, `line_adjusted`) | [deterministic: brief service] | Code owns path validity, not the model. |
-| Post-grounding validation | [deterministic: brief stored schema] | |
+| Anchor grounding (tie to risk refs and diff files, hunk clipping, `dropped_anchors`) | [deterministic: brief service] | Builds `Risk.anchor` from the nullable `anchor_*` model values; the model never sees hunk bodies, so every anchor line is validated against hunk ranges by code and unvalidated anchors are dropped (AC-88..AC-93). |
+| Post-grounding validation | [deterministic: brief stored schema] | Includes the `anchor.file ∈ file_refs` rule (AC-98). |
 | Stale flag | [deterministic: stored SHA vs `pull_requests.head_sha` re-read when building each response] | |
 | Inputs-changed hint | [deterministic: client comparison of stored snapshot vs live Intent/Blast] | |
+| Cost-and-tokens header line | [reused: stored `meta.cost_usd`, `meta.tokens_in`, `meta.tokens_out` (AC-70)] + [deterministic: client formatting] | Nothing new is stored (D-20). |
 | Model selection | [reused: `resolveFeatureModel(container, workspaceId, 'risk_brief')`] | Default `openai` / `gpt-4.1` (`contracts/platform.ts`). No fallback. |
 | Verdict + score (P3 banner) | [reused: latest review runs] | Not produced by the brief. |
-| Summary, risks (kind, title, explanation, severity, file_refs), review_focus (file, line, reason) | [new: 1 LLM call, `completeStructured` with `risk_brief` model, `maxRetries: 1`] | The model summarizes and prioritizes. Every path and line is then validated by code. |
+| Summary, risks (kind, title, explanation, severity, file_refs, `anchor_file`, `anchor_start_line`, `anchor_end_line`), review_focus (file, line, reason) | [new: 1 LLM call, `completeStructured` with `risk_brief` model, `maxRetries: 1`] | The model summarizes and prioritizes. Every path and line, including anchors, is then validated by code. No extra call is added by revision 4. |
 
 ### Input budget
 
@@ -357,7 +437,7 @@ Each variable section has a ceiling, measured on its escaped content. When conte
 | Blast caller list (≤ 25 distinct `file:line`) | ≤ 500 | 4th: lowest-ranked callers dropped |
 | Diff stats rows (path, Smart Diff role, +a/−d, hunk new-side line ranges) | ≤ 2,500 | 5th: rows dropped by role (docs → boilerplate → tests → wiring → core), then by lowest churn, and replaced by an aggregate "+N more files" line |
 
-Variable ceilings sum to 6,500; with the 1,500 framing reserve the total is 8,000.
+Variable ceilings sum to 6,500; with the 1,500 framing reserve the total is 8,000. The anchor instruction (AC-87) and the three `anchor_*` keys of the output schema (AC-86) are part of the framing.
 
 ## Untrusted inputs
 
@@ -370,7 +450,7 @@ All of the following come from the repo, the PR or GitHub, and are fed to the mo
 - Blast caller file paths and symbol names
 - The Intent summary and scope items, which are model-derived from the same untrusted sources
 
-They are passed as clearly delimited data blocks (tagged sections with their source labels), after an explicit injection guard in the system message: content inside those blocks is data, may contain instructions, and must not change the task, the output schema or any policy. Text inside a block is escaped or encoded so it cannot contain a literal closing delimiter or a fake source tag (AC-65); an adversarial test proves that injected text stays in its own block (AC-66). Paths with NUL, absolute form or `..` segments are rejected before they reach the prompt (AC-63). Untrusted text cannot change policy. In particular it cannot add paths: grounding (AC-13–AC-16, AC-60–AC-62) removes any file not in the PR diff facts or blast map and stores only canonical paths, and the output is validated before grounding (AC-23) and after it (AC-68). Model output is rendered as text, with no raw HTML. Prompt bodies and RefResolver content are not traced or logged locally (D-14).
+They are passed as clearly delimited data blocks (tagged sections with their source labels), after an explicit injection guard in the system message: content inside those blocks is data, may contain instructions, and must not change the task, the output schema or any policy. Text inside a block is escaped or encoded so it cannot contain a literal closing delimiter or a fake source tag (AC-65); an adversarial test proves that injected text stays in its own block (AC-66). Paths with NUL, absolute form or `..` segments are rejected before they reach the prompt (AC-63). Untrusted text cannot change policy. In particular it cannot add paths or lines: grounding (AC-13–AC-16, AC-60–AC-62) removes any file not in the PR diff facts or blast map and stores only canonical paths, anchor grounding (AC-88–AC-92) keeps an anchor only on one of the risk's grounded diff files and only inside its hunk ranges, and the output is validated before grounding (AC-23) and after it (AC-68, AC-98). Model output is rendered as text, with no raw HTML. Prompt bodies and RefResolver content are not traced or logged locally (D-14). Revision 4 adds no new untrusted text to the model input.
 
 ## Decisions
 
@@ -379,7 +459,7 @@ The user accepted the proposed defaults for OQ-1..OQ-6 and OQ-7..OQ-12. They are
 - **D-1 (was OQ-1). Review focus scope.** Focus items may only point at PR diff files (AC-15). Risks may also cite blast caller files (AC-13); navigating to a blast-only file shows the toast (AC-41).
 - **D-2 (was OQ-2). Intent and Blast in the card.** The card renders the live IntentBlock and BlastRadiusBlock, which keep their own actions such as Run Intent; the separate Overview blocks are moved into the card, not duplicated (AC-5, AC-6). The brief JSON stores the trimmed snapshot the model saw (`intent`, `blast` = summary + caller files). If live data differs from the snapshot, the card shows the advisory hint "Inputs changed since this brief — Regenerate" (AC-78).
 - **D-3 (was OQ-3). Contract shape.** `intent` and `blast` are nullable, `history` is optional, and `summary`, `review_focus` and `meta` are added (AC-24). Usage and cost fields are nullable (AC-70), `generated_at` is ISO-8601 UTC (AC-71), `missing` has a canonical order (AC-45), `line_adjusted` is grounding-only (AC-69), and the full brief is validated after grounding (AC-68).
-- **D-4 (was OQ-4). Risk kinds.** The model output schema restricts `kind` to `security | db_migration | breaking_api | perf | deps | correctness | other` (AC-79). The shared `Risk.kind` stays a free string and the shared `Risk` schema is not tightened (AC-84). The UI shows a generic icon for unknown kinds (AC-80).
+- **D-4 (was OQ-4). Risk kinds.** The model output schema restricts `kind` to `security | db_migration | breaking_api | perf | deps | correctness | other` (AC-79). The shared `Risk.kind` stays a free string and the shared `Risk` schema is not tightened (AC-84). The UI shows a generic icon for unknown kinds (AC-80). (Amended by D-15: the shared `Risk` schema is extended with one optional `anchor` field.)
 - **D-5 (was OQ-5). Model fallback.** None. A 502 names the `risk_brief` setting (AC-81).
 - **D-6 (was OQ-6). Generation time.** POST targets ≤ 60 s end to end; the model call is capped at 50 s (AC-82).
 - **D-7. One-call wording.** `maxRetries: 1` is kept; one generation = one `completeStructured` call with up to 2 schema attempts (G3, AC-18).
@@ -390,6 +470,12 @@ The user accepted the proposed defaults for OQ-1..OQ-6 and OQ-7..OQ-12. They are
 - **D-12 (was OQ-10). Source labels.** Stored source labels are code-owned strings: "PR title", "PR body", "Changed files", and for resolved references "Linked issue #<number>", "Spec at <repo-relative path>", "Plan at <repo-relative path>" and "Issue #<number> (other repository)". Each is stored with its status (`fetched` / `unavailable` / `error`). No contents, titles or URLs are stored (AC-46).
 - **D-13 (was OQ-11). Absent vs failed sources in the note.** The missing-data note lists absent and failed sources alike under "Generated without"; the source chips (AC-55) show the difference through their status (AC-46, AC-47).
 - **D-14 (was OQ-12). Retention of prompt and RefResolver content.** No local tracing or logging of prompt bodies or RefResolver content (consistent with AC-46 and AC-67). Provider-side retention follows the workspace's provider settings and is not controlled by this feature.
+- **D-15. Risk anchor contract (amends D-4 and AC-84).** The shared `Risk` schema gets exactly one new optional field, `anchor?: { file: string, start_line: int ≥ 1, end_line: int ≥ start_line }`, applied identically in both `brief.ts` copies. It is backward compatible: all existing consumers and stored rows still parse. `Risk` is extended, not tightened; `kind` stays a free string and `file_refs` gets no `min(1)` (AC-85, AC-96, AC-97).
+- **D-16. Model output shape for anchors.** The model output schema is strict with no optional keys, so each risk carries required nullable `anchor_file: string | null`, `anchor_start_line: integer | null`, `anchor_end_line: integer | null`. Code builds `anchor` from them; the model never emits `anchor` directly. The prompt states that the anchor is optional and must refer to lines in the changed files only (AC-86, AC-87).
+- **D-17. Anchor grounding.** The anchor file must canonically match one of the risk's grounded file refs and be a PR diff file. The range is validated against that file's hunk new-side ranges (context included, D-9): if it intersects at least one hunk range it is kept, clipped to [first covered line, last covered line] of the intersection; otherwise (or with start > end, start < 1, or partial nulls) the anchor is dropped and the risk is kept with its file refs. Clipping is neither flagged nor counted. A risk whose refs are only blast caller files has no anchor. The stored schema enforces `anchor.file ∈ file_refs` (AC-88..AC-92, AC-98).
+- **D-18. `dropped_anchors`.** `meta.grounding.dropped_anchors` counts stored risks where the model supplied at least one non-null anchor value and no anchor was stored; all-null anchors and risks dropped by AC-14 are not counted. The field is optional in `BriefMeta` and reads as 0 for rows stored before revision 4; it is written to the log line (AC-93..AC-95).
+- **D-19. Anchor UI and navigation.** The risk header label is `file:start-end`, `file:line` when start equals end, or the plain first file ref when there is no anchor. The navigate control for the anchor file opens Files changed at `start_line` through the existing deep link (`?tab=diff&file=&line=`) when the file is in the current diff; otherwise the toast rules apply (AC-99, AC-100).
+- **D-20. Cost and tokens in the header.** The card header shows the brief's own generation cost and token usage from `meta.cost_usd`, `meta.tokens_in`, `meta.tokens_out`: cost as `$` with 3 decimals (`<$0.001` when positive below that), tokens as `in→out` with counts from 1,000 up in thousands with one decimal and a `K` suffix and plain integers below. Null parts are omitted (a lone token count gets an `in`/`out` word); the whole line is omitted when all three are null. Its accessible name and `title` are spelled out, its strings come from `brief.json` keys under `card.costTokens*`, and it stays visible with the brief while stale or regenerating. Nothing new is stored (AC-101..AC-107).
 
 ### Known limitations accepted for this iteration
 
@@ -400,7 +486,7 @@ The user accepted the proposed defaults for OQ-1..OQ-6 and OQ-7..OQ-12. They are
 
 ## Open questions
 
-None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14.
+None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14. The revision 4 additions are fully decided (D-15..D-20).
 
 ### Design coverage gaps (from `screen_pr_detail.jsx`) and proposals
 
@@ -418,6 +504,8 @@ None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14.
 - **Regenerate placement.** The design puts Regenerate inside VerdictBanner, which is P3 and depends on a review run. Proposal: the Regenerate control lives in the PR Brief card header regardless of the banner (AC-10).
 - **Tab key.** The design uses `files`. The app's real Files changed tab key is `diff` (`PrDetailHeader.tsx`, `page.tsx`), so navigation uses `?tab=diff`.
 - **DiffTab today accepts no navigation target.** File cards auto-expand only below a line threshold. AC-35–AC-39 and AC-74, AC-75, AC-83 require an external "open this file / scroll to this line" input driven by URL params.
+- **Risk anchor in the design.** The prototype gives each risk `anchor {file, line}` and shows ranges such as `src/middleware/ratelimit.ts:12-18`, and it assumes every risk has an anchor. The spec makes the anchor optional, a range (`start_line`..`end_line`), tied to one of the risk's own file refs and validated against hunk ranges by code (AC-85..AC-100). The design does not cover a risk without an anchor (plain file label, AC-99), an anchor on a blast-only file (dropped, AC-89) or an anchor file no longer in the diff (toast, AC-100).
+- **Cost and tokens in the design header.** The design shows `$0.014  8.2K→1.3K` but does not cover missing usage, a single reported count, very small costs, or an accessible reading of `K` and `→`. Covered by AC-101..AC-107.
 
 ### Research suggestions (via caller, optional)
 
@@ -430,3 +518,4 @@ None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14.
 - Facts verified in code (revision 1): the tab key `diff`, the `risk_brief` default (`openai`/`gpt-4.1`), the `pr_brief(pr_id, json)` table, the Intent rate limit (30 s, 429/502 with `retry_after`), that Blast is not cached, and that no Project Context module exists.
 - Revision 2 inputs: `docs/plans/pr-brief-cross-review.md` and the user's decisions D-1..D-8. The 50 s model-call cap matches the plan's `BRIEF_LLM_TIMEOUT_MS`.
 - Revision 3 inputs: the user's confirmation of the OQ-7..OQ-12 defaults (D-9..D-14) and corrections found during planning (diff-facts exclusion wording, AC-26 outcome list, AC-64 verification, AC-70 zero usage).
+- Revision 4 inputs: the user's requests for a risk line range and for cost/tokens in the brief header, and the design prototype `screen_pr_detail.jsx` (risks carry `anchor {file, line}`). Checked in code: both `brief.ts` copies (`server/src/vendor/shared/contracts/brief.ts`, `client/src/vendor/shared/contracts/brief.ts`) have `meta.grounding` with `dropped_risks`, `dropped_refs`, `dropped_focus`, `adjusted_lines` and no `dropped_anchors`; `RiskList.tsx` today shows the first file ref in the collapsed header and navigates refs by file only (no line). Because GET treats unparsable rows as "no brief", `dropped_anchors` must be optional and `anchor` optional for pre-revision rows to keep showing (AC-97). `get_blast_radius` was not run for revision 4 (the change is a spec amendment, not a PR).

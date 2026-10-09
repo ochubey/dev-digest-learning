@@ -610,3 +610,227 @@ No AC is uncovered.
 Why: the server and client sets of files don't overlap. Client tests mock fetch, so they don't need a running server. The response type is frozen in section 2. Each phase fits one implementer run. Parallel tracks cut wall-clock time by roughly 40%.
 
 Alternative: one sequential pass P1 -> P8. Simpler to review and no merge risk, but takes longer. Choose it if a single reviewer will read every phase in order anyway.
+
+## 10. P9: Risk anchor and cost line (SPEC-01 rev 4)
+
+Spec: revision 4, AC-85..AC-107, D-15..D-20. Appended after the first delivery (T1-T42 done and committed). Tests are written before code in every task. Execution mode: multi-agent. T43-T44 run alone, then a server agent (P9b) and a client agent (P9c) work in parallel.
+
+**File ownership:**
+- **P9a (T43-T44) runs alone.** It owns both `brief.ts` copies, `server/test/contracts.test.ts` and the compile-ripple edits listed in T44.
+- **After P9a, P9b (server) and P9c (client) run in parallel.**
+  - P9b edits only `server/**`.
+  - P9c edits only `client/**`, including `client/messages/en/brief.json`.
+  - The client does not depend on the server tasks: tests mock the hooks, and the contract types are frozen in T44.
+
+**Contract decision (frozen in T44, identical in both copies):**
+
+```ts
+export const RiskAnchor = z.object({ file: z.string(), start_line: z.number().int().min(1),
+  end_line: z.number().int().min(1) }).refine((a) => a.end_line >= a.start_line, 'end_line must be >= start_line');
+export type RiskAnchor = z.infer<typeof RiskAnchor>;
+// Risk: add exactly `anchor: RiskAnchor.optional()`; every other field unchanged (D-15).
+// BriefMeta.grounding: add `dropped_anchors: z.number().int().min(0).default(0)`.
+```
+
+- `.default(0)` makes the field optional in stored JSON and always present after a parse. GET already returns `parsed.data` (`brief/routes.ts:74-83`), so old rows come back with 0 (AC-95, AC-97).
+- Side effect: the output type `PrBrief['meta']['grounding']` now requires `dropped_anchors`. T44 absorbs the compile ripple this causes.
+
+### P9a: Contract (alone)
+
+- [x] T43 Write failing tests in `server/test/contracts.test.ts`, new `describe('PrBrief rev 4')`:
+  - a `Risk` without `anchor` parses
+  - `anchor {file:'a.ts', start_line:12, end_line:18}` parses
+  - these are rejected: `start_line: 0`, `end_line < start_line`, a non-integer `start_line`
+  - `file_refs: []` and `kind: 'custom'` still parse
+  - `grounding` without `dropped_anchors` parses and gives 0; with `dropped_anchors: 3` it gives 3
+  - one fixture with an anchored risk plus `dropped_anchors` parses to the same result through the server copy and through a dynamic import of the client copy's file
+  -> AC-85, AC-95, AC-96 -> `contracts.test.ts > PrBrief rev 4 *`
+- [x] T44 Contract edit and compile ripple:
+  - Edit `server/src/vendor/shared/contracts/brief.ts` to the frozen shape above.
+  - Copy it byte-for-byte to `client/src/vendor/shared/contracts/brief.ts`.
+  - Update the comment above `ReviewFocusItem` ("Risk / Risks are shared and unchanged") to "extended only with optional anchor".
+  - Minimal compile fix in `server/src/modules/brief/grounding.ts`: `GroundingCounts` gains `dropped_anchors: number`, and `groundBrief` initialises it to 0. No logic yet; T47 adds it.
+  - Client test fixtures typed `BriefResponse` get `dropped_anchors: 0` in `grounding`, otherwise client typecheck fails:
+    - `client/src/app/repos/[repoId]/pulls/[number]/_components/PrBriefCard/PrBriefCard.test.tsx` (fixture near line 67)
+    - `client/src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/OverviewTab.test.tsx` (fixture near line 76)
+  -> AC-85, AC-95, AC-96 -> `contracts-parity.test.ts > brief.ts is byte-identical on server and client`, `contracts.test.ts > PrBrief rev 4 *`
+
+Done when:
+- `server`: `pnpm typecheck`, and `pnpm exec vitest run test/contracts.test.ts test/contracts-parity.test.ts` pass.
+- `client`: `pnpm typecheck` passes.
+- `reviewer-core`: `pnpm typecheck` passes. It has no `Risk`/`PrBrief` consumers, but CI triggers on `vendor/shared/**`.
+
+### P9b: Server (after T44; only `server/**`)
+
+- [x] T45 `server/src/modules/brief/schema.ts`.
+  - `BriefModelOutput` risk object gains three keys, with no `anchor` key:
+    - `anchor_file: z.string().nullable()`
+    - `anchor_start_line: z.number().int().nullable()`
+    - `anchor_end_line: z.number().int().nullable()`
+  - `PrBriefStored` risk becomes `Risk.extend({ file_refs: z.array(z.string()).min(1) }).refine((r) => !r.anchor || r.file_refs.includes(r.anchor.file), 'anchor.file must be one of file_refs')`.
+  - Tests in `server/test/brief-schema.test.ts`:
+    - the three keys are in `required` and accept `null`
+    - output missing `anchor_end_line` fails
+    - the existing "requires every property" walk stays green with nullable keys (`zodResponseFormat` emits them as nullable, still required)
+    - stored schema rejects `{file_refs:['a.ts'], anchor:{file:'b.ts', start_line:1, end_line:2}}` and accepts `anchor.file:'a.ts'`
+    - a stored risk without `anchor` still passes
+  - Existing fixture: `validOut` (line 7) needs the three keys set to `null`.
+  -> AC-86, AC-98 -> `brief-schema.test.ts > model output schema is strict-mode safe`, `> stored schema`
+- [x] T46 `server/src/modules/brief/prompt.ts`, `SYSTEM_PROMPT`.
+  - The risks line lists `anchor_file, anchor_start_line, anchor_end_line`.
+  - Add one instruction line. Suggested text: "anchor_file/anchor_start_line/anchor_end_line: optional line range the risk is about. anchor_file must be one of that risk's own file_refs and the lines must be new-side lines of a changed file of this PR (inside its listed ranges). Set all three to null when no specific lines apply."
+  - Tests in `server/test/brief-prompt.test.ts`: the system message contains "optional", "one of that risk's own file_refs", "new-side" and "null".
+  - Budget gates. Both existing tests must stay green; do not raise `BRIEF_FRAMING_RESERVE`:
+    - `framing alone (worst-case title, all 6 missing) is within the 1,500 reserve`
+    - the AC-19 worst-case <= 8,000 test
+  - Budget estimate, not measured: about +550 chars, ~140 tokens, from the wording plus three nullable schema properties. `estimateTokens` counts the schema through `outputSchemaChars()`, so the schema growth is included automatically.
+  - The implementer records the before/after framing `estimatedTokens` in the report. If the reserve test fails, shorten the wording; the reserve itself is fixed by the spec.
+  -> AC-87, AC-19 -> `brief-prompt.test.ts > anchor instruction`, `> framing alone ...`
+- [x] T47 `server/src/modules/brief/grounding.ts`, in the `groundBrief` risk loop, after `refs` survive.
+  - Build the stored risk explicitly from `{kind, title, explanation, severity, file_refs}` plus `anchor` when kept. Today's `{ ...r, file_refs }` would leak the `anchor_*` keys and any model `anchor` object.
+  - Anchor rule:
+    1. All three values null (treat `undefined` as null) -> no anchor, not counted.
+    2. Partial nulls, `start < 1` or `end < start` -> drop.
+    3. `canonical(anchor_file, (k) => refs.includes(k))`, then the key must also be in `ctx.diff`. Otherwise drop. Blast-only refs therefore never anchor.
+    4. Clip against `fact.ranges`: collect `[max(s,start), min(e,end)]` wherever `lo <= hi`. Store `{file: key, start_line: min lo, end_line: max hi}`. No intersection -> drop.
+    5. Count `dropped_anchors` only for kept risks that had at least one non-null value and got no anchor. Clipping is not counted.
+  - Tests in `server/test/brief-grounding.test.ts`, ranges `[10-20, 50-60]`:
+    - clipping:
+      - 12-18 -> 12-18
+      - 5-12 -> 10-12
+      - 18-30 -> 18-20
+      - 25-55 -> 50-55
+      - 15-55 -> 15-55
+      - 12-12 -> 12-12
+    - 21-49 and 70-80 -> no anchor, refs kept, counted
+    - anchor file is another valid diff file that is not in the risk's refs -> no anchor, counted
+    - `./src/a.ts` -> stored `src/a.ts`
+    - blast-caller ref and anchor on that caller -> ref kept, no anchor
+    - partial / `start 0` / `end < start` -> each kept without anchor
+    - all-null -> not counted
+    - a risk dropped for invented refs is not counted
+    - an extra `anchor` object cast onto the model risk does not appear in the output
+  - Existing fixtures:
+    - `ZERO` (line 37) gains `dropped_anchors: 0`; every `counts` `toEqual` depends on it.
+    - The `risk()` helper (line 24) gains the three `null`s.
+  -> AC-88, AC-89, AC-90, AC-91, AC-92, AC-93, AC-86 -> `brief-grounding.test.ts > risk anchors *`
+- [x] T48 Wire-through in `server/src/modules/brief/service.ts` and `log-line.ts`.
+  - The service already passes `grounded.counts` into `meta.grounding` and the log meta. Confirm no code change beyond types. `BriefLogMeta.grounding` is `GroundingCounts`, so the log gets `grounding.dropped_anchors` automatically.
+  - Tests in `server/test/brief-service.test.ts`: the LLM stub returns one valid anchor, one out-of-hunk anchor, one partial anchor, one all-null anchor and one risk with invented refs. Assert:
+    - `meta.grounding.dropped_anchors === 2` and `dropped_risks === 1`
+    - the stored risk has the clipped anchor
+    - `PrBriefStored` parses
+  - Test in `server/test/brief-log-line.test.ts`: the `okMeta` grounding includes `dropped_anchors` and `briefLogFields` carries it.
+  - Existing fixtures to update with `dropped_anchors: 0`: `brief-service.test.ts` (near lines 170, 371), `brief-log-line.test.ts` (near lines 39, 57); stub model outputs gain the `anchor_*` nulls.
+  -> AC-93, AC-94 -> `brief-service.test.ts > dropped_anchors mix`, `brief-log-line.test.ts > carries every required field`
+- [x] T49 Routes, in `server/test/brief-routes.test.ts`:
+  - POST success: the spied `logBriefGeneration` meta has `grounding.dropped_anchors` equal to the expected count (AC-94)
+  - POST with a throwing / `unavailable` diff loader: no stored or returned risk has `anchor` (AC-89)
+  - GET with a seeded pre-revision row (no `anchor`, no `dropped_anchors`): 200 with the brief, and `meta.grounding.dropped_anchors === 0` (AC-97)
+  - Existing tests to update: the `toEqual` near line 308 gains `dropped_anchors: 0`; the stub `counts` near line 490 gains `dropped_anchors: 0`; any `toEqual` on a full GET body now sees `dropped_anchors: 0`
+  -> AC-89, AC-94, AC-97 -> `brief-routes.test.ts > rev 4 *`
+- [x] T50 Housekeeping, no AC: one sentence in the `server/README.md` "PR Brief" note about risk anchors (grounded and clipped to hunk ranges) and `dropped_anchors`. -> docs
+
+Done when:
+- `server`: `pnpm typecheck` and `pnpm exec vitest run --exclude '**/*.it.test.ts'` pass, and `contracts-parity` stays green. `brief.it.test.ts` needs Docker: run it if available, otherwise note the skip.
+- `reviewer-core`: `pnpm typecheck` passes.
+
+### P9c: Client (after T44; only `client/**`)
+
+All paths are under `client/src/app/repos/[repoId]/pulls/[number]/_components/PrBriefCard/` unless stated.
+
+- [x] T51 `helpers.ts` (+ `helpers.test.ts`):
+  - `riskLabel(risk)`:
+    - start != end -> `file:start-end`
+    - start = end -> `file:line`
+    - no anchor -> `file_refs[0]`
+  - `riskRefLine(risk, file)`: `anchor.start_line` when `file === anchor.file`, else `null`
+  - `formatCost(usd)`:
+    - `null` -> `null`
+    - `0 < usd < 0.001` -> `<$0.001`
+    - else `$` + `toFixed(3)` (0 shows `$0.000`)
+  - `formatTokens(n)`: `n >= 1000` -> `(n/1000).toFixed(1)+'K'`, else `String(n)`
+  - `costTokensParts(meta)`: returns `{cost, tokensIn, tokensOut}` with nulls kept
+  - Tests:
+    - `0.0142` -> `$0.014`; `1.2` -> `$1.200`; `0.0004` -> `<$0.001`
+    - `8150/1312` -> `8.2K`/`1.3K`; `1000/999` -> `1.0K`/`999`; `950/120`
+    - labels for anchors 12-18 and 12-12, and for no anchor
+  -> AC-99, AC-101, AC-102, AC-103 -> `helpers.test.ts > riskLabel / formatCost / formatTokens`
+- [x] T52 Message keys in `client/messages/en/brief.json`, under `card`:
+  - `costTokens`: "Generation cost and tokens: {parts}"
+  - `costTokensCost`: "cost {cost}"
+  - `costTokensIn`: "input tokens {count, number}"
+  - `costTokensOut`: "output tokens {count, number}"
+  - `costTokensInWord`: "in"
+  - `costTokensOutWord`: "out"
+  - Joining parts with ", " follows the existing missing-note `join(", ")` precedent.
+  - The arrow goes in `constants.ts` as `TOKENS_ARROW`. It is a symbol, not English.
+  -> AC-106, AC-54 -> `PrBriefCard.test.tsx > i18n (AC-54)` (existing; extend it to render a brief with cost and tokens)
+- [x] T53 Anchor label and navigation in `RiskList.tsx` and `PrBriefCard.tsx`:
+  - `onOpenRef` becomes `(file: string, line: number | null) => void`. `PrBriefCard` passes `navigate` directly instead of `(file) => navigate(file, null)`.
+  - Collapsed header: one ref button for `anchor?.file ?? file_refs[0]`, labelled `riskLabel(risk)`. Its `aria-label` is `card.openRef` with `{file: riskLabel(risk)}`.
+  - Expanded list: the anchor file's button uses the same label. Other refs stay plain.
+  - Every button calls `onOpenRef(file, riskRefLine(risk, file))`.
+  - Not-in-diff still toasts, through `navigate` (AC-41).
+  - Tests in `PrBriefCard.test.tsx`:
+    - labels `src/middleware/ratelimit.ts:12-18`, `src/middleware/ratelimit.ts:12`, and the plain path when there is no anchor
+    - clicking the anchor ref -> `onOpenInDiff('src/middleware/ratelimit.ts', 12)`
+    - a non-anchor ref of the same risk (expanded) -> `(file, null)`
+    - an anchor file not in `diffPaths` -> toast and no call
+    - pre-revision fixture (no anchor anywhere) -> no `:\d` suffix on any risk label (AC-97)
+  - Existing tests must stay green: "risk shows its title and first file", "focus item opens the diff at its line; risk ref opens the file", AC-73 keyboard.
+  -> AC-99, AC-100, AC-97, AC-42 -> `PrBriefCard.test.tsx > risk anchor *`
+- [x] T54 Cost-and-tokens line in the `PrBriefCard.tsx` header, after `generatedAt`, inside the existing dimmed `aria-busy` wrapper. Add a style in `styles.ts`.
+  - Render as an element with an explicit role (e.g. `role="note"`), with `aria-label` and `title` set to `t("card.costTokens", {parts})`. The cost part in the title uses the same `formatCost` string (spec example `$0.014`); token counts are exact.
+  - Visible text: cost, then tokens as `in→out`. With one count null, show the other with its word (`8.2K in`, `1.3K out`) and no arrow.
+  - With all three null, render no element at all.
+  - Tests in `PrBriefCard.test.tsx`:
+    - full fixture -> `$0.014` and `8.2K→1.3K`, plus the accessible name and `title` "Generation cost and tokens: cost $0.014, input tokens 8,150, output tokens 1,312"
+    - cost null -> tokens only
+    - `tokens_out` null -> `$0.014` and `8.2K in`, with name/title omitting the output part
+    - `tokens_in` null -> `1.3K out`
+    - all null -> `queryByRole('note', {name: /Generation cost/})` is null
+    - `stale: true` -> line present
+    - pending regeneration -> old values stay, dimmed; after the mutation resolves with a new brief (setQueryData), the new values show
+  -> AC-101, AC-102, AC-103, AC-104, AC-105, AC-106, AC-107 -> `PrBriefCard.test.tsx > cost and tokens *`
+
+Done when:
+- `client`: `pnpm typecheck` and `pnpm test` pass.
+- A grep for English string literals in `PrBriefCard/*.tsx` finds none (AC-54, AC-106).
+
+### P9 final
+
+- [x] T55 Run everything:
+  - server: `pnpm typecheck`, `pnpm exec vitest run --exclude '**/*.it.test.ts'` (plus `pnpm test` if Docker is available)
+  - client: `pnpm typecheck`, `pnpm test`
+  - reviewer-core: `pnpm typecheck`
+  - `contracts-parity` green
+  - Manual: one real generation on `openai/gpt-4.1` checks that strict mode accepts the nullable `anchor_*` keys (same residual risk as R2), the log has `grounding.dropped_anchors`, and the header shows cost and tokens.
+  -> all
+
+### Coverage (AC-85..AC-107)
+
+| AC | Tasks | AC | Tasks |
+|---|---|---|---|
+| AC-85 | T43, T44 | AC-97 | T49, T53 |
+| AC-86 | T45, T47 | AC-98 | T45 |
+| AC-87 | T46 | AC-99 | T51, T53 |
+| AC-88 | T47 | AC-100 | T51, T53 |
+| AC-89 | T47, T49 | AC-101 | T51, T54 |
+| AC-90 | T47 | AC-102 | T51, T54 |
+| AC-91 | T47 | AC-103 | T51, T54 |
+| AC-92 | T47 | AC-104 | T54 |
+| AC-93 | T47, T48 | AC-105 | T54 |
+| AC-94 | T48, T49 | AC-106 | T52, T54 |
+| AC-95 | T43, T44, T49 | AC-107 | T54 |
+| AC-96 | T43, T44, T55 | | |
+
+Every AC from AC-85 to AC-107 has at least one task.
+
+**Notes from the planner:**
+1. Impact on existing tests. The server `tsconfig` only includes `src/**`, so stale test fixtures fail at runtime, not at typecheck. Each affected fixture is named in the tasks above (grounding `ZERO`, log-line `okMeta`, routes and service `toEqual`s, schema `validOut`, model-output stubs needing the `anchor_*` nulls). The client `tsconfig` covers tests, so T44 fixes the two `BriefResponse` fixtures.
+2. Prompt budget. The anchor wording and the nullable schema keys both count toward the 1,500 framing reserve. Estimate +140 tokens; T46's existing reserve test and the worst-case <= 8,000 test are the gate.
+3. AC-94 wording: the log is structured, so the count appears as the field `grounding.dropped_anchors`, not literal `dropped_anchors=<n>` text.
+4. AC-100: `PrBriefCard` only calls `onOpenInDiff`; the `line=` URL is built by `usePrNavigation` (covered by `navigation.test.tsx`, AC-36). The plan asserts `onOpenInDiff(file, 12)`.
+5. AC-105: tokens are exact with thousands separators; the cost uses the same 3-decimal string as the header.
+6. AC-99: the header file button only shows while the risk is collapsed; the anchor ref gets the same label in the expanded list. A cost of exactly 0 shows `$0.000`.
