@@ -69,5 +69,16 @@ export const s = {
 
   notice: { display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12.5, color: "var(--warn)" } as React.CSSProperties,
 
+  bare: { border: 0, padding: 0, margin: 0, minWidth: 0 } as React.CSSProperties,
+
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+  } as React.CSSProperties,
+
   error: { display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12.5, color: "var(--danger, var(--crit))" } as React.CSSProperties,
 };

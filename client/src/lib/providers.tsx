@@ -39,7 +39,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         }),
         mutationCache: new MutationCache({
-          onError: (err) => notify.error(errorMessage(err)),
+          onError: (err, _vars, _ctx, mutation) => {
+            // Opt-out for mutations that show their own inline notice for a 429.
+            if (mutation.meta?.silent429 && err instanceof ApiError && err.status === 429) return;
+            notify.error(errorMessage(err));
+          },
         }),
       })
   );

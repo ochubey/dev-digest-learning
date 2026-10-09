@@ -65,6 +65,7 @@
     "costTokensInWord": "in",
     "costTokensOutWord": "out",
     "missing": "Generated without: {list}",
+    "rateLimitedLabel": "Generation was started recently. Please wait before trying again.",
     "rateLimited": "Generation was started recently. Try again in {seconds, plural, one {# second} other {# seconds}}.",
     "generateError": "Couldn’t generate the brief. Please try again.",
     "retry": "Retry",

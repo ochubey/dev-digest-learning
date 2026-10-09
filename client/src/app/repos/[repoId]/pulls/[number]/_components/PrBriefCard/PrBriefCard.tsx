@@ -8,6 +8,7 @@ import { usePrBrief, useGenerateBrief, useIsGeneratingBrief } from "@/lib/hooks/
 import { notify } from "@/lib/toast";
 import { costTokensParts, formatCost, formatTokens, isInDiff, missingLabels } from "./helpers";
 import { TOKENS_ARROW } from "./constants";
+import { useCooldown } from "./useCooldown";
 import { GenerateNotice } from "./GenerateNotice";
 import { BriefSkeleton } from "./BriefSkeleton";
 import { BriefStats } from "./BriefStats";
@@ -39,9 +40,10 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
   // Any in-flight generation for this PR (also one started from the inputs-changed hint).
   const generating = useIsGeneratingBrief(prId);
   const pending = generate.isPending || generating;
+  const cooling = useCooldown(prId) > 0;
 
   const generateNotice = (
-    <GenerateNotice error={generate.error} pending={pending} onRetry={() => generate.mutate()} />
+    <GenerateNotice prId={prId} error={generate.error} pending={pending} onRetry={() => generate.mutate()} />
   );
 
   // A ref outside the diff cannot be opened: tell the user instead of navigating (AC-42).
@@ -84,14 +86,17 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
       <Card style={s.wrap}>
       <div aria-busy={pending}>
         {title}
-        <EmptyState
-          icon="Sparkles"
-          title={t("unavailable")}
-          body={t("unavailableHint")}
-          cta={t("card.generate")}
-          onCta={() => generate.mutate()}
-          ctaLoading={pending}
-        />
+        {/* A disabled fieldset disables the CTA during the cooldown without a spinner. */}
+        <fieldset disabled={cooling} style={s.bare}>
+          <EmptyState
+            icon="Sparkles"
+            title={t("unavailable")}
+            body={t("unavailableHint")}
+            cta={t("card.generate")}
+            onCta={() => generate.mutate()}
+            ctaLoading={pending}
+          />
+        </fieldset>
         {pending && <BriefSkeleton />}
         {generateNotice}
       </div>
@@ -153,7 +158,7 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
             size="sm"
             kind="ghost"
             icon="RefreshCw"
-            disabled={pending}
+            disabled={pending || cooling}
             onClick={() => generate.mutate()}
           >
             {pending ? t("card.regenerating") : t("card.regenerate")}

@@ -8,6 +8,7 @@ import { useGenerateBrief, useIsGeneratingBrief, type BriefResponse } from "@/li
 import { useIntent } from "@/lib/hooks/reviews";
 import { useBlastRadius } from "@/lib/hooks/blast";
 import { inputsChanged } from "./helpers";
+import { useCooldown } from "./useCooldown";
 import { GenerateNotice } from "./GenerateNotice";
 import { s } from "./styles";
 
@@ -21,6 +22,7 @@ export function InputsChangedHint({ prId, brief }: { prId: string; brief: BriefR
   // Disabled while any generation for this PR runs, including the card header's.
   const generating = useIsGeneratingBrief(prId);
   const pending = generate.isPending || generating;
+  const cooling = useCooldown(prId) > 0;
 
   const settled = !intent.isPending && !intent.isFetching && !blast.isPending && !blast.isFetching;
   if (!settled) return null;
@@ -40,13 +42,13 @@ export function InputsChangedHint({ prId, brief }: { prId: string; brief: BriefR
           size="sm"
           kind="ghost"
           icon="RefreshCw"
-          disabled={pending}
+          disabled={pending || cooling}
           onClick={() => generate.mutate()}
         >
           {pending ? t("card.regenerating") : t("card.regenerate")}
         </Button>
       </div>
-      <GenerateNotice error={generate.error} pending={pending} onRetry={() => generate.mutate()} />
+      <GenerateNotice prId={prId} showCooldown={false} error={generate.error} pending={pending} onRetry={() => generate.mutate()} />
     </>
   );
 }
