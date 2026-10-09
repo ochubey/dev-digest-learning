@@ -6,6 +6,8 @@ Revision note: revised after the cross-model review (`docs/plans/pr-brief-cross-
 
 Revision 4 note: two user-requested additions derived from the design prototype (`screen_pr_detail.jsx`): (A) an optional line range (`anchor`) per risk, grounded by code against the risk's file refs and the hunk new-side ranges (AC-85..AC-100, D-15..D-19), and (B) the brief's own generation cost and token usage in the card header (AC-101..AC-107, D-20). The shared `Risk` schema is extended with one optional field; it is still not tightened (D-15 amends D-4 and AC-84). Existing AC ids and texts are unchanged apart from cross-references.
 
+Revision 5 note: user-reported gap. After a second Generate within the 30 s cooldown the UI showed only a global toast ("A brief was requested for this PR recently; try again later") with no time. The 429 response now drives an inline live countdown in the card and in the inputs-changed hint, with the Generate/Regenerate controls disabled until it ends (AC-108..AC-113, D-21). Existing AC ids and texts are unchanged apart from cross-references in AC-32 and AC-72.
+
 ## Problem and user
 
 A reviewer opens a pull request cold. The pieces needed to orient are scattered: Intent (L03) and Blast radius (L04) are separate blocks on the Overview tab, Smart Diff roles live on the Files changed tab, and nothing says where the risk is or which lines to read first. The reviewer has to assemble that picture by hand before the review starts.
@@ -42,6 +44,7 @@ The PR Brief puts that picture in one card on the Overview tab. It combines the 
 - Tightening the shared `Risk` schema. `Risk.kind` stays a free string and `Risk.file_refs` gets no `min(1)` (D-4, AC-84). Adding the one optional `anchor` field (D-15, AC-85) is an extension, not a tightening.
 - More than one anchor per risk, anchors on blast-only files, and a flag or count for clipped anchors (D-17).
 - Storing anything new for the cost/tokens header line; it reads the existing `meta` fields (D-20).
+- Persisting the rate-limit countdown across a full page reload or sharing it between browser tabs; it lives in client memory for the open page (D-21).
 - Project Context Folder documents. No such module exists in the server today (`SpecFile` is a contract only). "Attached specs" means the spec/plan docs the PR references, as resolved by RefResolver (user decision).
 
 ## User stories
@@ -55,6 +58,7 @@ The PR Brief puts that picture in one card on the Overview tab. It combines the 
 - **US-7 (G3).** As an operator, I can confirm from the log line that one generation made exactly one `completeStructured` call (`brief=1 ok`), how many schema attempts it took (`schema_attempts`), that the input stayed within the budget and which model was used.
 - **US-8 (G2, G5).** As a reviewer, I see a risk pinned to a line range such as `src/middleware/ratelimit.ts:12-18`, and its navigate button opens Files changed at the first line of that range.
 - **US-9 (G3).** As a reviewer, I see in the brief header what this brief cost to generate and how many tokens it used (for example `$0.014  8.2K→1.3K`).
+- **US-10 (G4, G6).** As a reviewer who clicks Generate again too soon, I see right in the card how many seconds remain before I can try again, counting down live, and the Generate/Regenerate buttons stay disabled until then.
 
 ## Acceptance criteria (EARS)
 
@@ -133,7 +137,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal.
   *Verify:* component and route test.
 - **AC-31 (P2, G4).** ЯКЩО a generation for the same PR was admitted less than 30 s ago, regardless of its outcome (success, model failure, or a failure before any provider call such as a missing provider key or an over-budget input), ТОДІ the system (shall) reject the request with HTTP 429, a `Retry-After` header and a body `{error, retry_after}`, without calling GitHub or the model.
   *Verify:* route test with two POSTs in a row; a second route test where the first POST fails with provider-unavailable and the second still gets 429.
-- **AC-32 (P2, G4).** ЯКЩО the server answers 429, ТОДІ the client (shall) keep showing the current brief (or the empty state), refetch the stored brief exactly once, and show a message that generation was recently started, with the remaining seconds. The message (shall) not claim that a brief exists.
+- **AC-32 (P2, G4).** ЯКЩО the server answers 429, ТОДІ the client (shall) keep showing the current brief (or the empty state), refetch the stored brief exactly once, and show a message that generation was recently started, with the remaining seconds. The message (shall) not claim that a brief exists. (Refined by AC-108..AC-113: the message is shown inline as a live countdown, never as a global toast, and the Generate/Regenerate controls stay disabled while it runs.)
   *Verify:* component test with a 429 response asserts one GET refetch and the message text; with the refetch returning 404 the empty state remains and no "brief ready" wording appears.
 - **AC-33 (P2, G6).** ЯКЩО the model call fails or its output fails validation, ТОДІ the system (shall) answer HTTP 502 `{error, retry_after}` and keep the previously stored brief unchanged.
   *Verify:* integration test: seed a brief, make the stub throw, assert 502 and an unchanged row.
@@ -245,7 +249,7 @@ Contract
 
 Rate limit
 
-- **AC-72 (P2, G4).** КОЛИ the system answers 429, `retry_after` in the body (shall) be the remaining cooldown in whole seconds rounded up (ceil, minimum 1), and the `Retry-After` header (shall) carry the same value.
+- **AC-72 (P2, G4).** КОЛИ the system answers 429, `retry_after` in the body (shall) be the remaining cooldown in whole seconds rounded up (ceil, minimum 1), and the `Retry-After` header (shall) carry the same value. (The client starts its live countdown from this value, AC-109.)
   *Verify:* route test with a fake clock at 29.2 s remaining asserts `retry_after = 30` and `Retry-After: 30`; at 0.1 s remaining asserts 1.
 
 Navigation and accessibility
@@ -344,6 +348,23 @@ Cost and tokens in the brief header
 - **AC-107 (P2, G3).** ПОКИ the shown brief is stale or a regeneration is in flight, the system (shall) keep showing that brief's cost-and-tokens line with the same values (dimmed together with the brief during regeneration, AC-53), and (shall) replace it only when a new brief replaces the shown one.
   *Verify:* component test with `stale: true` asserts the line is present; with a pending regeneration asserts the old values remain until the POST resolves, then the new values show.
 
+### Added in revision 5 (AC-108 and up)
+
+Rate-limit countdown in the card (refines AC-32; driven by `retry_after` from AC-72; D-21)
+
+- **AC-108 (P2, G6).** КОЛИ POST `/pulls/:id/brief` повертає 429, the system (shall) not show a global toast for that response and (shall) instead show the rate-limit message inline in the PR Brief card and, ПОКИ the inputs-changed hint (AC-78) is visible, also inside that hint. The AC-32 behavior (current brief or empty state kept, exactly one GET refetch, no claim that a brief exists) still applies.
+  *Verify:* component test with a mocked 429 `{error, retry_after: 12}` asserts no toast call (toast spy not called), the inline message in the card, the same message in the inputs-changed hint when it is rendered, and one GET refetch.
+- **AC-109 (P2, G6).** ПОКИ the rate-limit message is shown, the system (shall) display the remaining seconds as a live countdown that starts at `retry_after` (AC-72), decreases by 1 every second, and (shall) remove the message when it reaches 0. The displayed value is the ceiling of the remaining time to the countdown's end time, so it never shows 0 or a negative number.
+  *Verify:* component test with fake timers and `retry_after: 3` asserts "3 seconds", then "2 seconds" and "1 second" after each 1 s advance (using the existing `rateLimited` plural message), and no message after the third advance.
+- **AC-110 (P2, G4).** ПОКИ the countdown is running, the system (shall) disable the Generate and Regenerate buttons in the card and in the inputs-changed hint, and КОЛИ it reaches 0 (shall) enable them again, unless another generation is in flight (AC-3).
+  *Verify:* component test with fake timers asserts both buttons are disabled during the countdown, a click on them sends no POST, and they are enabled (and send a POST on click) after the countdown ends.
+- **AC-111 (P2, G4).** The system (shall) keep one countdown state per PR, stored as an absolute end time (time of the 429 response + `retry_after` seconds) and not as a decrementing counter, shared by every mounted instance of the card and the inputs-changed hint for that PR, so that an instance mounted or remounted during the countdown shows the same remaining seconds and the same disabled buttons. A newer 429 for the same PR (shall) replace the end time; a countdown for one PR (shall) not affect another PR.
+  *Verify:* component test with fake timers: after a 429 with `retry_after: 10`, advance 4 s, unmount and remount the card, assert "6 seconds" and disabled buttons; render the card and the hint together and assert both show the same value; render a card for a second PR and assert no countdown and enabled buttons.
+- **AC-112 (P2, G6).** The system (shall) announce the rate-limit message to assistive technology once, when it appears, and (shall) not announce the per-second countdown updates.
+  *Verify:* component test asserts the announced live region (`role="status"`) receives its text once when the message appears and its text does not change on subsequent 1 s advances (the changing seconds are rendered outside the live region or with the live region silenced after the first announcement); manual screen-reader check (NVDA or VoiceOver) confirms a single announcement.
+- **AC-113 (P2, G6).** ЯКЩО POST `/pulls/:id/brief` fails with a non-429 error (for example 502, AC-33, AC-64, AC-81, AC-82), ТОДІ the system (shall) behave as before this revision (AC-34): show the error message with a retry option, keep the previously shown brief, and start no countdown and no button disabling beyond the in-flight state (AC-3).
+  *Verify:* component test with a 502 response asserts the AC-34 error message and retry option, no countdown text, and enabled Generate/Regenerate buttons after the request settles; existing AC-34 tests pass unchanged.
+
 ## Edge cases
 
 | Case | Expected behavior | AC |
@@ -372,7 +393,12 @@ Cost and tokens in the brief header
 | Very small cost | Shown as `<$0.001`. | AC-101 |
 | New commit pushed after generation | The brief is shown with a stale badge (computed on each GET). Focus items pointing at files no longer in the diff produce the toast. | AC-29, AC-41 |
 | New commit pushed during generation | The brief is stored with the SHA its inputs were gathered at; the POST response has `stale: true`. | AC-27, AC-77 |
-| Two tabs or users click Generate at once (same process) | The first request is admitted. The second gets 429, refetches GET once, and says generation was recently started; it does not claim a brief exists. | AC-31, AC-32 |
+| Two tabs or users click Generate at once (same process) | The first request is admitted. The second gets 429, refetches GET once, and shows an inline countdown saying generation was recently started; it does not claim a brief exists. | AC-31, AC-32, AC-108 |
+| Second Generate within the 30 s cooldown | No toast. Inline countdown in the card (and in the inputs-changed hint if shown) from `retry_after` to 0; Generate/Regenerate disabled until it ends. | AC-108–AC-110 |
+| Card or hint remounted during the countdown (tab switch, re-render) | Remaining seconds are recomputed from the stored end time; buttons stay disabled until it ends. | AC-111 |
+| Full page reload during the countdown | The client countdown is gone (in-memory, D-21); a new Generate may get another 429, which starts a fresh countdown. | AC-111, AC-31 |
+| 429 while a generation for the PR is still in flight (in-flight guard) | `retry_after` is at least 1; the countdown runs as for any 429. | AC-72, AC-109 |
+| Non-429 failure (502, timeout, over budget) | Error message with retry as before; no countdown. | AC-34, AC-113 |
 | Overlapping generations on different server processes | Both may run; the last successful write wins. No compare-and-swap (accepted). | AC-27 |
 | Server restart during cooldown | The limiter resets (in-memory, like Intent). Accepted. | AC-31 |
 | LLM provider key missing for the `risk_brief` provider | 502 whose message names the Risk Brief model setting. No fallback model. The old brief is kept. Counts toward the cooldown. | AC-81, AC-31 |
@@ -390,7 +416,7 @@ Cost and tokens in the brief header
 - **Performance.** GET `/pulls/:id/brief` reads the DB only (no GitHub, no model, no diff load), with p95 ≤ 300 ms locally. POST targets ≤ 60 s end to end (decision D-6); the model call is capped at 50 s (AC-82), leaving the remainder for input gathering, grounding and storage. Model output is capped by the schema limits: summary ≤ 600 chars, ≤ 8 risks, explanation ≤ 400 chars, ≤ 7 focus items, reason ≤ 200 chars.
 - **Cost.** One `completeStructured` call per generation, `maxRetries: 1` (at most 2 schema attempts, so at most 2 billed requests from schema reprompts; adapter transport retries are not counted and are not bounded by this spec). Input ≤ 8,000 estimated tokens on the exact serialized messages. Cost (`cost_usd`, nullable) is stored with the brief and logged, and shown in the card header with the token usage (AC-101..AC-107).
 - **Security.** Authorization runs before any GitHub call, DB write, limiter admission or model call (AC-58). Untrusted text is escaped inside delimited data blocks (AC-65, AC-66). Paths with NUL, absolute form or `..` segments are rejected (AC-63); stored paths are canonical allow-list paths (AC-62), including anchor files (AC-88). Model output is rendered as plain text, or through the existing `Markdown` component that never renders raw HTML. No document content from RefResolver is persisted. No secrets go into prompts or logs; provider errors are logged sanitized (AC-67).
-- **Accessibility.** Generate and Regenerate are real buttons with accessible names. Focus items and risk navigate controls are keyboard-focusable buttons whose names include the file and line. The risk expand control is a separate chevron button with `aria-expanded`, `aria-controls` and an accessible name (AC-51, AC-73). Deep-link scrolling does not move focus and respects reduced motion (AC-74, AC-75). The stale badge, missing-data note, inputs-changed hint, rate-limit and error messages use `role="status"` / `role="alert"`. Severity is not conveyed by color alone (text or icon label too). The cost-and-tokens line has a spelled-out accessible name and `title`, so the `K` abbreviation and the arrow are not the only carriers of meaning (AC-105).
+- **Accessibility.** Generate and Regenerate are real buttons with accessible names. Focus items and risk navigate controls are keyboard-focusable buttons whose names include the file and line. The risk expand control is a separate chevron button with `aria-expanded`, `aria-controls` and an accessible name (AC-51, AC-73). Deep-link scrolling does not move focus and respects reduced motion (AC-74, AC-75). The stale badge, missing-data note, inputs-changed hint, rate-limit and error messages use `role="status"` / `role="alert"`. The rate-limit countdown is announced once when it appears, not on every second (AC-112). Severity is not conveyed by color alone (text or icon label too). The cost-and-tokens line has a spelled-out accessible name and `title`, so the `K` abbreviation and the arrow are not the only carriers of meaning (AC-105).
 - **Observability.** One structured log line per generation, success or failure (AC-26), in the same style as the Intent `llm.calls` line, with `brief=0|1`, `schema_attempts`, an outcome and, when grounding ran, `dropped_anchors` (AC-94). 429 is logged with the PR id and the `brief` step.
 - **Compatibility.** Both copies of the `brief.ts` contract change in lockstep (AC-96). The shared `Risk` schema is not tightened (AC-84); it is extended only with the optional `anchor` field (AC-85), so all existing consumers and stored rows still parse (AC-97). `grounding.dropped_anchors` is optional with a default of 0 (AC-95). Existing Intent and Blast routes and UI behavior are unchanged.
 
@@ -414,6 +440,7 @@ Cost and tokens in the brief header
 | Stale flag | [deterministic: stored SHA vs `pull_requests.head_sha` re-read when building each response] | |
 | Inputs-changed hint | [deterministic: client comparison of stored snapshot vs live Intent/Blast] | |
 | Cost-and-tokens header line | [reused: stored `meta.cost_usd`, `meta.tokens_in`, `meta.tokens_out` (AC-70)] + [deterministic: client formatting] | Nothing new is stored (D-20). |
+| Rate-limit countdown (end time per PR, remaining seconds, disabled state) | [reused: 429 body `retry_after` (AC-72)] + [deterministic: client state and clock] | In-memory client state per PR; not persisted, no new server field (D-21). |
 | Model selection | [reused: `resolveFeatureModel(container, workspaceId, 'risk_brief')`] | Default `openai` / `gpt-4.1` (`contracts/platform.ts`). No fallback. |
 | Verdict + score (P3 banner) | [reused: latest review runs] | Not produced by the brief. |
 | Summary, risks (kind, title, explanation, severity, file_refs, `anchor_file`, `anchor_start_line`, `anchor_end_line`), review_focus (file, line, reason) | [new: 1 LLM call, `completeStructured` with `risk_brief` model, `maxRetries: 1`] | The model summarizes and prioritizes. Every path and line, including anchors, is then validated by code. No extra call is added by revision 4. |
@@ -450,7 +477,7 @@ All of the following come from the repo, the PR or GitHub, and are fed to the mo
 - Blast caller file paths and symbol names
 - The Intent summary and scope items, which are model-derived from the same untrusted sources
 
-They are passed as clearly delimited data blocks (tagged sections with their source labels), after an explicit injection guard in the system message: content inside those blocks is data, may contain instructions, and must not change the task, the output schema or any policy. Text inside a block is escaped or encoded so it cannot contain a literal closing delimiter or a fake source tag (AC-65); an adversarial test proves that injected text stays in its own block (AC-66). Paths with NUL, absolute form or `..` segments are rejected before they reach the prompt (AC-63). Untrusted text cannot change policy. In particular it cannot add paths or lines: grounding (AC-13–AC-16, AC-60–AC-62) removes any file not in the PR diff facts or blast map and stores only canonical paths, anchor grounding (AC-88–AC-92) keeps an anchor only on one of the risk's grounded diff files and only inside its hunk ranges, and the output is validated before grounding (AC-23) and after it (AC-68, AC-98). Model output is rendered as text, with no raw HTML. Prompt bodies and RefResolver content are not traced or logged locally (D-14). Revision 4 adds no new untrusted text to the model input.
+They are passed as clearly delimited data blocks (tagged sections with their source labels), after an explicit injection guard in the system message: content inside those blocks is data, may contain instructions, and must not change the task, the output schema or any policy. Text inside a block is escaped or encoded so it cannot contain a literal closing delimiter or a fake source tag (AC-65); an adversarial test proves that injected text stays in its own block (AC-66). Paths with NUL, absolute form or `..` segments are rejected before they reach the prompt (AC-63). Untrusted text cannot change policy. In particular it cannot add paths or lines: grounding (AC-13–AC-16, AC-60–AC-62) removes any file not in the PR diff facts or blast map and stores only canonical paths, anchor grounding (AC-88–AC-92) keeps an anchor only on one of the risk's grounded diff files and only inside its hunk ranges, and the output is validated before grounding (AC-23) and after it (AC-68, AC-98). Model output is rendered as text, with no raw HTML. Prompt bodies and RefResolver content are not traced or logged locally (D-14). Revision 4 adds no new untrusted text to the model input. Revision 5 is client-only and adds no model input.
 
 ## Decisions
 
@@ -476,6 +503,7 @@ The user accepted the proposed defaults for OQ-1..OQ-6 and OQ-7..OQ-12. They are
 - **D-18. `dropped_anchors`.** `meta.grounding.dropped_anchors` counts stored risks where the model supplied at least one non-null anchor value and no anchor was stored; all-null anchors and risks dropped by AC-14 are not counted. The field is optional in `BriefMeta` and reads as 0 for rows stored before revision 4; it is written to the log line (AC-93..AC-95).
 - **D-19. Anchor UI and navigation.** The risk header label is `file:start-end`, `file:line` when start equals end, or the plain first file ref when there is no anchor. The navigate control for the anchor file opens Files changed at `start_line` through the existing deep link (`?tab=diff&file=&line=`) when the file is in the current diff; otherwise the toast rules apply (AC-99, AC-100).
 - **D-20. Cost and tokens in the header.** The card header shows the brief's own generation cost and token usage from `meta.cost_usd`, `meta.tokens_in`, `meta.tokens_out`: cost as `$` with 3 decimals (`<$0.001` when positive below that), tokens as `in→out` with counts from 1,000 up in thousands with one decimal and a `K` suffix and plain integers below. Null parts are omitted (a lone token count gets an `in`/`out` word); the whole line is omitted when all three are null. Its accessible name and `title` are spelled out, its strings come from `brief.json` keys under `card.costTokens*`, and it stays visible with the brief while stale or regenerating. Nothing new is stored (AC-101..AC-107).
+- **D-21. Rate-limit countdown (refines AC-32).** A 429 from POST `/pulls/:id/brief` is shown inline (in the card and, when visible, in the inputs-changed hint), never as a global toast. The message counts down live, once per second, from `retry_after` (AC-72) and disappears at 0; the Generate and Regenerate buttons in both places are disabled until then. The countdown is one per-PR client state stored as an absolute end time, shared by all mounted card/hint instances for that PR and surviving remounts; it is in memory only and not kept across a full page reload or shared between browser tabs. It is announced to assistive technology once when it appears, not every second. Non-429 errors keep their previous behavior (AC-108..AC-113).
 
 ### Known limitations accepted for this iteration
 
@@ -486,13 +514,13 @@ The user accepted the proposed defaults for OQ-1..OQ-6 and OQ-7..OQ-12. They are
 
 ## Open questions
 
-None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14. The revision 4 additions are fully decided (D-15..D-20).
+None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14. The revision 4 additions are fully decided (D-15..D-20), and the revision 5 addition is fully decided (D-21).
 
 ### Design coverage gaps (from `screen_pr_detail.jsx`) and proposals
 
 - **No error state.** Add an inline error with Retry (AC-34). Keep the previous brief.
 - **No stale badge.** Add a badge next to the card title with Regenerate (AC-29).
-- **No rate-limit message.** Show inline status text with the remaining seconds, saying generation was recently started (AC-32, AC-72).
+- **No rate-limit message.** Show inline status text with the remaining seconds, saying generation was recently started (AC-32, AC-72), as a live countdown with Generate/Regenerate disabled until it ends (AC-108..AC-113).
 - **No regenerate-loading state.** Keep the old brief dimmed with "Regenerating…" (AC-53). The design reuses the skeleton, which hides content the reviewer may be reading.
 - **No diff stats block.** Show a compact stats row in the card header (AC-55).
 - **No attached-specs / sources block.** Show source chips with statuses, reusing the Intent sources style (AC-55).
@@ -519,3 +547,4 @@ None. OQ-1..OQ-12 are resolved as decisions D-1..D-6 and D-9..D-14. The revision
 - Revision 2 inputs: `docs/plans/pr-brief-cross-review.md` and the user's decisions D-1..D-8. The 50 s model-call cap matches the plan's `BRIEF_LLM_TIMEOUT_MS`.
 - Revision 3 inputs: the user's confirmation of the OQ-7..OQ-12 defaults (D-9..D-14) and corrections found during planning (diff-facts exclusion wording, AC-26 outcome list, AC-64 verification, AC-70 zero usage).
 - Revision 4 inputs: the user's requests for a risk line range and for cost/tokens in the brief header, and the design prototype `screen_pr_detail.jsx` (risks carry `anchor {file, line}`). Checked in code: both `brief.ts` copies (`server/src/vendor/shared/contracts/brief.ts`, `client/src/vendor/shared/contracts/brief.ts`) have `meta.grounding` with `dropped_risks`, `dropped_refs`, `dropped_focus`, `adjusted_lines` and no `dropped_anchors`; `RiskList.tsx` today shows the first file ref in the collapsed header and navigates refs by file only (no line). Because GET treats unparsable rows as "no brief", `dropped_anchors` must be optional and `anchor` optional for pre-revision rows to keep showing (AC-97). `get_blast_radius` was not run for revision 4 (the change is a spec amendment, not a PR).
+- Revision 5 inputs: the user's report that a second Generate within the cooldown showed only a toast with no time, and the requested countdown behavior (D-21). Checked in code: `client/messages/en/brief.json` already has a `rateLimited` message with a pluralized `{seconds}` placeholder ("Generation was started recently. Try again in …"), which the countdown can reuse. `get_blast_radius` was not run for revision 5 (spec amendment, not a PR).
