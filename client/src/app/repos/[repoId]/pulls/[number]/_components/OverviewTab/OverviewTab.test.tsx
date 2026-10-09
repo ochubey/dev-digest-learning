@@ -73,7 +73,7 @@ const BRIEF = (over: Record<string, unknown> = {}) => ({
     sources: [],
     diff_stats: null,
     input: { estimated_tokens: 1, budget_tokens: 2, truncated: [], blast_degraded_reason: null },
-    grounding: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0 },
+    grounding: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0, dropped_anchors: 0 },
   },
   ...over,
 });

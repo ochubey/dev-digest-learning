@@ -58,12 +58,22 @@ export type BlastRadius = z.infer<typeof BlastRadius>;
 export const RiskSeverity = z.enum(['high', 'medium', 'low']);
 export type RiskSeverity = z.infer<typeof RiskSeverity>;
 
+export const RiskAnchor = z
+  .object({
+    file: z.string(),
+    start_line: z.number().int().min(1),
+    end_line: z.number().int().min(1),
+  })
+  .refine((a) => a.end_line >= a.start_line, 'end_line must be >= start_line');
+export type RiskAnchor = z.infer<typeof RiskAnchor>;
+
 export const Risk = z.object({
   kind: z.string(),
   title: z.string(),
   explanation: z.string(),
   severity: RiskSeverity,
   file_refs: z.array(z.string()),
+  anchor: RiskAnchor.optional(),
 });
 export type Risk = z.infer<typeof Risk>;
 
@@ -124,7 +134,7 @@ export const SmartDiff = z.object({
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
 // ---- Composed PR Brief (pr_brief.json) ----
-// Risk / Risks are shared and unchanged; the ">= 1 file_refs" rule lives in the
+// Risk / Risks are shared, extended only with optional anchor; the ">= 1 file_refs" rule lives in the
 // server-only PrBriefStored schema.
 
 export const ReviewFocusItem = z.object({
@@ -200,6 +210,7 @@ export const BriefMeta = z.object({
     dropped_refs: z.number().int(),
     dropped_focus: z.number().int(),
     adjusted_lines: z.number().int(),
+    dropped_anchors: z.number().int().min(0).default(0),
   }),
 });
 export type BriefMeta = z.infer<typeof BriefMeta>;

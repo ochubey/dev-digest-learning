@@ -40,6 +40,7 @@ export interface GroundingCounts {
   dropped_refs: number;
   dropped_focus: number;
   adjusted_lines: number;
+  dropped_anchors: number;
 }
 
 export interface GroundedBrief {
@@ -75,12 +76,57 @@ function snapLine(line: number, ranges: [number, number][]): number {
   return best;
 }
 
+type AnchorInput = Pick<
+  BriefModelOutput['risks'][number],
+  'anchor_file' | 'anchor_start_line' | 'anchor_end_line'
+>;
+
+function hasAnchorValue(r: AnchorInput): boolean {
+  return (
+    (r.anchor_file ?? null) !== null ||
+    (r.anchor_start_line ?? null) !== null ||
+    (r.anchor_end_line ?? null) !== null
+  );
+}
+
+/**
+ * Builds the stored anchor from the model's nullable values, or undefined. The anchor file must
+ * be one of the surviving refs and a diff file; lines are clipped to the hunk new-side ranges.
+ */
+function groundAnchor(
+  r: AnchorInput,
+  refs: string[],
+  ctx: GroundingContext,
+): Risk['anchor'] | undefined {
+  const file = r.anchor_file ?? null;
+  const start = r.anchor_start_line ?? null;
+  const end = r.anchor_end_line ?? null;
+  if (file === null || start === null || end === null) return undefined;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) return undefined;
+  const key = canonical(file, (k) => refs.includes(k));
+  const fact = key === null ? undefined : ctx.diff.get(key);
+  if (key === null || !fact) return undefined;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const [s, e] of fact.ranges) {
+    const a = Math.max(s, start);
+    const b = Math.min(e, end);
+    if (a <= b) {
+      lo = Math.min(lo, a);
+      hi = Math.max(hi, b);
+    }
+  }
+  if (lo === Infinity) return undefined;
+  return { file: key, start_line: lo, end_line: hi };
+}
+
 export function groundBrief(out: BriefModelOutput, ctx: GroundingContext): GroundedBrief {
   const counts: GroundingCounts = {
     dropped_risks: 0,
     dropped_refs: 0,
     dropped_focus: 0,
     adjusted_lines: 0,
+    dropped_anchors: 0,
   };
 
   const risks: Risk[] = [];
@@ -95,7 +141,17 @@ export function groundBrief(out: BriefModelOutput, ctx: GroundingContext): Groun
       counts.dropped_risks++;
       continue;
     }
-    risks.push({ ...r, file_refs: refs });
+    const stored: Risk = {
+      kind: r.kind,
+      title: r.title,
+      explanation: r.explanation,
+      severity: r.severity,
+      file_refs: refs,
+    };
+    const anchor = groundAnchor(r, refs, ctx);
+    if (anchor) stored.anchor = anchor;
+    else if (hasAnchorValue(r)) counts.dropped_anchors++;
+    risks.push(stored);
   }
 
   const focus: ReviewFocusItem[] = [];

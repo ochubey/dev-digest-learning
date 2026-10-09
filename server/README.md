@@ -147,6 +147,9 @@ written on failure).
   reserve for prompt framing.
 - **Grounding.** File and line refs in the result are checked against the PR diff;
   refs outside it are flagged and lines are snapped to the nearest changed line.
+  A risk may carry one optional anchor (file and line range); it is grounded to the
+  risk's own refs and a diff file, clipped to the hunk line ranges, and dropped
+  (counted in `dropped_anchors`) when it cannot be validated.
 - **Limiter.** 30 s per PR (in-process), independent of the global rate limit.
 - **No hunk bodies to the model.** Only diff facts (paths, stats, roles), never
   patch text.

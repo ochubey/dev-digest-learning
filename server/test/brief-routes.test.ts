@@ -108,7 +108,14 @@ const diffOf = (paths: string[] = ['src/a.ts']) => ({
 const OUTPUT = {
   summary: 'It adds the thing.',
   risks: [
-    { kind: 'correctness', title: 'Edge', explanation: 'x', severity: 'high', file_refs: ['src/a.ts', 'invented.ts'] },
+    {
+      kind: 'correctness',
+      title: 'Edge',
+      explanation: 'x',
+      severity: 'high',
+      file_refs: ['src/a.ts', 'invented.ts'],
+      anchor_file: null, anchor_start_line: null, anchor_end_line: null,
+    },
   ],
   review_focus: [{ file: 'src/a.ts', line: 12, reason: 'core' }],
 };
@@ -275,6 +282,77 @@ describe('GET /pulls/:id/brief', () => {
   });
 });
 
+const anchored = (title: string, a: [string | null, number | null, number | null]) => ({
+  kind: 'correctness',
+  title,
+  explanation: 'x',
+  severity: 'high',
+  file_refs: ['src/a.ts'],
+  anchor_file: a[0],
+  anchor_start_line: a[1],
+  anchor_end_line: a[2],
+});
+
+describe('rev 4 risk anchors', () => {
+  it('POST: logged grounding.dropped_anchors equals the counted drops; clipped anchor is stored', async () => {
+    const llm = new MockLLMProvider('openai', {
+      structured: {
+        summary: 's',
+        risks: [
+          anchored('ok', ['src/a.ts', 12, 30]),
+          anchored('outside', ['src/a.ts', 40, 50]),
+          anchored('partial', ['src/a.ts', 12, null]),
+        ],
+        review_focus: [],
+      },
+    });
+    const s = await setup({ llm });
+    const res = await s.post();
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.meta.grounding.dropped_anchors).toBe(2);
+    expect(body.risks.risks[0].anchor).toEqual({ file: 'src/a.ts', start_line: 12, end_line: 14 });
+    expect(body.risks.risks[1].anchor).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain('anchor_');
+    expect(briefLogFields(lastLog()).grounding).toMatchObject({ dropped_anchors: 2 });
+  });
+
+  it('POST with an unavailable diff: no stored or returned risk has an anchor', async () => {
+    hoisted.diff.current = { status: 'unavailable', reason: 'no_pr_files' };
+    const llm = new MockLLMProvider('openai', {
+      structured: {
+        summary: 's',
+        risks: [{ ...anchored('caller', ['src/caller.ts', 3, 5]), file_refs: ['src/caller.ts'] }],
+        review_focus: [],
+      },
+    });
+    const s = await setup({ llm });
+    const res = await s.post();
+    expect(res.statusCode).toBe(200);
+    const returned = res.json().risks.risks as { anchor?: unknown }[];
+    for (const r of returned) expect(r.anchor).toBeUndefined();
+    const stored = (upserts.at(-1)![1] as { risks: { risks: { anchor?: unknown }[] } }).risks.risks;
+    for (const r of stored) expect(r.anchor).toBeUndefined();
+  });
+
+  it('GET of a pre-revision row (no anchor, no dropped_anchors) is 200 with dropped_anchors 0', async () => {
+    const old = storedBrief('sha-1');
+    old.risks = {
+      risks: [
+        { kind: 'other', title: 't', explanation: 'e', severity: 'low', file_refs: ['src/a.ts'] },
+      ],
+    } as never;
+    store.set(PR_ID, old);
+    const s = await setup();
+    const res = await s.get();
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(BriefResponseSchema.safeParse(body).success).toBe(true);
+    expect(body.meta.grounding.dropped_anchors).toBe(0);
+    expect(body.risks.risks[0].anchor).toBeUndefined();
+  });
+});
+
 describe('POST /pulls/:id/brief', () => {
   it('404 with zero GitHub, DB-write and LLM calls when the PR does not exist', async () => {
     const s = await setup({ rows: [[t.pullRequests, []]] });
@@ -305,7 +383,13 @@ describe('POST /pulls/:id/brief', () => {
     const body = res.json();
     expect(BriefResponseSchema.safeParse(body).success).toBe(true);
     expect(body).toMatchObject({ pr_id: PR_ID, stale: false });
-    expect(body.meta.grounding).toEqual({ dropped_risks: 0, dropped_refs: 1, dropped_focus: 0, adjusted_lines: 0 });
+    expect(body.meta.grounding).toEqual({
+      dropped_risks: 0,
+      dropped_refs: 1,
+      dropped_focus: 0,
+      adjusted_lines: 0,
+      dropped_anchors: 0,
+    });
     expect(s.structuredCalls()).toHaveLength(1);
     expect(upserts).toHaveLength(1);
 
@@ -487,7 +571,7 @@ describe('POST /pulls/:id/brief', () => {
     hoisted.groundOverride.current = () => ({
       risks: [{ kind: 'other', title: 't', explanation: 'e', severity: 'low', file_refs: [] }],
       review_focus: [],
-      counts: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0 },
+      counts: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0, dropped_anchors: 0 },
     });
     const s = await setup();
     const res = await s.post();

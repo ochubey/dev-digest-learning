@@ -15,6 +15,9 @@ export const BriefModelOutput = z.object({
       explanation: z.string(),
       severity: RiskSeverity,
       file_refs: z.array(z.string()),
+      anchor_file: z.string().nullable(),
+      anchor_start_line: z.number().int().nullable(),
+      anchor_end_line: z.number().int().nullable(),
     }),
   ),
   review_focus: z.array(
@@ -33,7 +36,12 @@ export type BriefModelOutput = z.infer<typeof BriefModelOutput>;
  */
 export const PrBriefStored = PrBrief.extend({
   risks: z.object({
-    risks: z.array(Risk.extend({ file_refs: z.array(z.string()).min(1) })),
+    risks: z.array(
+      Risk.extend({ file_refs: z.array(z.string()).min(1) }).refine(
+        (r) => !r.anchor || r.file_refs.includes(r.anchor.file),
+        'anchor.file must be one of file_refs',
+      ),
+    ),
   }),
 });
 export type PrBriefStored = z.infer<typeof PrBriefStored>;

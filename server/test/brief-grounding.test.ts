@@ -27,6 +27,9 @@ const risk = (file_refs: string[], over: Record<string, unknown> = {}) => ({
   explanation: 'e',
   severity: 'medium' as const,
   file_refs,
+  anchor_file: null,
+  anchor_start_line: null,
+  anchor_end_line: null,
   ...over,
 });
 const out = (
@@ -34,7 +37,7 @@ const out = (
   review_focus: BriefModelOutput['review_focus'] = [],
 ): BriefModelOutput => ({ summary: 's', risks, review_focus });
 const focus = (file: string, line: number, reason = 'r') => ({ file, line, reason });
-const ZERO = { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0 };
+const ZERO = { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0, dropped_anchors: 0 };
 
 describe('groundBrief risks', () => {
   it('keeps the valid ref, drops the invented one', () => {
@@ -109,6 +112,106 @@ describe('groundBrief risks', () => {
     expect(g.risks[0]!.file_refs).toEqual(['src/new-name.ts']);
     expect(g.review_focus.map((f) => f.file)).toEqual(['src/new-name.ts']);
     expect(g.counts).toEqual({ ...ZERO, dropped_refs: 3, dropped_focus: 2 });
+  });
+});
+
+describe('groundBrief risk anchors', () => {
+  const c = ctx([fact('a.ts', [[10, 20], [50, 60]])]);
+  const anc = (file: string | null, s: number | null, e: number | null, refs = ['a.ts']) =>
+    risk(refs, { anchor_file: file, anchor_start_line: s, anchor_end_line: e });
+  const one = (r: ReturnType<typeof risk>, cx = c) => groundBrief(out([r]), cx);
+
+  it.each([
+    [12, 18, 12, 18],
+    [5, 12, 10, 12],
+    [18, 30, 18, 20],
+    [25, 55, 50, 55],
+    [15, 55, 15, 55],
+    [12, 12, 12, 12],
+  ])('clips %i-%i to %i-%i without counting', (s, e, ls, le) => {
+    const g = one(anc('a.ts', s, e));
+    expect(g.risks[0]!.anchor).toEqual({ file: 'a.ts', start_line: ls, end_line: le });
+    expect(g.counts.dropped_anchors).toBe(0);
+  });
+
+  it.each([
+    [21, 49],
+    [70, 80],
+  ])('drops %i-%i, keeps refs, counts', (s, e) => {
+    const g = one(anc('a.ts', s, e));
+    expect(g.risks).toHaveLength(1);
+    expect(g.risks[0]!.file_refs).toEqual(['a.ts']);
+    expect(g.risks[0]!.anchor).toBeUndefined();
+    expect(g.counts.dropped_anchors).toBe(1);
+  });
+
+  it('drops an anchor on another diff file that is not in the risk refs', () => {
+    const cx = ctx([fact('a.ts', [[10, 20]]), fact('b.ts', [[10, 20]])]);
+    const g = one(anc('b.ts', 12, 14), cx);
+    expect(g.risks[0]!.anchor).toBeUndefined();
+    expect(g.counts.dropped_anchors).toBe(1);
+  });
+
+  it('stores the allow-list key for ./src/a.ts', () => {
+    const g = one(anc('./src/a.ts', 2, 3, ['src/a.ts']), ctx([fact('src/a.ts', [[1, 5]])]));
+    expect(g.risks[0]!.anchor).toEqual({ file: 'src/a.ts', start_line: 2, end_line: 3 });
+  });
+
+  it('blast-caller ref with an anchor on that caller keeps the ref, no anchor', () => {
+    const cx = ctx([fact('a.ts')], ['src/caller.ts']);
+    const g = one(anc('src/caller.ts', 1, 2, ['src/caller.ts']), cx);
+    expect(g.risks[0]!.file_refs).toEqual(['src/caller.ts']);
+    expect(g.risks[0]!.anchor).toBeUndefined();
+    expect(g.counts.dropped_anchors).toBe(1);
+  });
+
+  it.each([
+    ['partial', 'a.ts', 12, null],
+    ['partial file only', 'a.ts', null, null],
+    ['start 0', 'a.ts', 0, 12],
+    ['end < start', 'a.ts', 15, 12],
+  ])('%s -> kept without anchor, counted', (_n, f, s, e) => {
+    const g = one(anc(f, s as number | null, e as number | null));
+    expect(g.risks).toHaveLength(1);
+    expect(g.risks[0]!.anchor).toBeUndefined();
+    expect(g.counts.dropped_anchors).toBe(1);
+  });
+
+  it('all-null is not counted; undefined is treated as null', () => {
+    const g = one(anc(null, null, null));
+    expect(g.risks[0]!.anchor).toBeUndefined();
+    expect(g.counts.dropped_anchors).toBe(0);
+    const { anchor_file: _a, anchor_start_line: _b, anchor_end_line: _c, ...bare } = anc(null, null, null);
+    const h = groundBrief(out([bare as never]), c);
+    expect(h.counts.dropped_anchors).toBe(0);
+  });
+
+  it('a risk dropped for invented refs is not counted', () => {
+    const g = one(anc('a.ts', 12, 14, ['nope.ts']));
+    expect(g.risks).toEqual([]);
+    expect(g.counts).toEqual({ ...ZERO, dropped_risks: 1, dropped_refs: 1 });
+  });
+
+  it('does not leak anchor_* keys or a model-supplied anchor object', () => {
+    const r = risk(['a.ts'], { anchor: { file: 'zzz', start_line: 1, end_line: 2 } });
+    const g = one(r);
+    expect(g.risks[0]).toEqual({
+      kind: 'correctness',
+      title: 't',
+      explanation: 'e',
+      severity: 'medium',
+      file_refs: ['a.ts'],
+    });
+    const k = one(anc('a.ts', 12, 14)).risks[0]!;
+    expect(Object.keys(k).sort()).toEqual(
+      ['anchor', 'explanation', 'file_refs', 'kind', 'severity', 'title'].sort(),
+    );
+  });
+
+  it('no anchor when the diff is unavailable (empty diff map)', () => {
+    const g = one(anc('a.ts', 12, 14), ctx([], ['a.ts']));
+    expect(g.risks[0]!.anchor).toBeUndefined();
+    expect(g.counts.dropped_anchors).toBe(1);
   });
 });
 

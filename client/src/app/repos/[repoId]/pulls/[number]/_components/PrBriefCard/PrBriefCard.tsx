@@ -6,7 +6,8 @@ import { Card, Button, EmptyState, ErrorState, SectionLabel, Skeleton } from "@d
 import { ApiError } from "@/lib/api";
 import { usePrBrief, useGenerateBrief, useIsGeneratingBrief } from "@/lib/hooks/brief";
 import { notify } from "@/lib/toast";
-import { isInDiff, missingLabels } from "./helpers";
+import { costTokensParts, formatCost, formatTokens, isInDiff, missingLabels } from "./helpers";
+import { TOKENS_ARROW } from "./constants";
 import { GenerateNotice } from "./GenerateNotice";
 import { BriefSkeleton } from "./BriefSkeleton";
 import { BriefStats } from "./BriefStats";
@@ -103,6 +104,31 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
   const risksNotAssessed =
     brief.meta.missing.includes("diff") && brief.risks.risks.length === 0;
 
+  const { cost, tokensIn, tokensOut } = costTokensParts(brief.meta);
+  const costText = formatCost(cost);
+  const visible: string[] = [];
+  const spoken: string[] = [];
+  if (costText !== null) {
+    visible.push(costText);
+    spoken.push(t("card.costTokensCost", { cost: costText }));
+  }
+  if (tokensIn !== null && tokensOut !== null) {
+    visible.push(`${formatTokens(tokensIn)}${TOKENS_ARROW}${formatTokens(tokensOut)}`);
+  } else if (tokensIn !== null) {
+    visible.push(`${formatTokens(tokensIn)} ${t("card.costTokensInWord")}`);
+  } else if (tokensOut !== null) {
+    visible.push(`${formatTokens(tokensOut)} ${t("card.costTokensOutWord")}`);
+  }
+  if (tokensIn !== null) spoken.push(t("card.costTokensIn", { count: tokensIn }));
+  if (tokensOut !== null) spoken.push(t("card.costTokensOut", { count: tokensOut }));
+  const costTokensLabel = t("card.costTokens", { parts: spoken.join(", ") });
+  const costTokens =
+    visible.length > 0 ? (
+      <span role="note" aria-label={costTokensLabel} title={costTokensLabel} style={s.costTokens}>
+        {visible.join(" ")}
+      </span>
+    ) : null;
+
   return (
     <Card style={s.wrap}>
       <div aria-busy={pending} style={pending ? s.dimmed : undefined}>
@@ -121,6 +147,7 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
             }),
           })}
         </span>
+        {costTokens}
         <div style={s.headerActions}>
           <Button
             size="sm"
@@ -155,7 +182,7 @@ export function PrBriefCard({ prId, diffPaths, onOpenInDiff, children, notice }:
           {t("card.risksNotAssessed")}
         </p>
       ) : (
-        <RiskList risks={brief.risks.risks} onOpenRef={(file) => navigate(file, null)} />
+        <RiskList risks={brief.risks.risks} onOpenRef={navigate} />
       )}
 
       {!(risksNotAssessed && brief.review_focus.length === 0) && (

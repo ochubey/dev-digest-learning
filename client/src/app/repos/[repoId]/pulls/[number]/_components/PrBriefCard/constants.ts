@@ -27,3 +27,6 @@ export const SEVERITY_COLOR: Record<RiskSeverity, string> = {
  *  symbols together), while the live /blast is only capped per symbol. A snapshot at the cap is
  *  therefore a truncated view of the live callers. */
 export const MAX_BLAST_CALLERS = 25;
+
+/** Separator between input and output token counts in the cost-and-tokens line (a symbol, not text). */
+export const TOKENS_ARROW = "→";

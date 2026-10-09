@@ -56,6 +56,9 @@ const OUTPUT = {
       explanation: 'Might break.',
       severity: 'high',
       file_refs: ['src/a.ts', 'invented/nope.ts'],
+      anchor_file: null,
+      anchor_start_line: null,
+      anchor_end_line: null,
     },
     {
       kind: 'other',
@@ -63,6 +66,9 @@ const OUTPUT = {
       explanation: 'x',
       severity: 'low',
       file_refs: ['invented/only.ts'],
+      anchor_file: null,
+      anchor_start_line: null,
+      anchor_end_line: null,
     },
   ],
   review_focus: [
@@ -168,8 +174,48 @@ describe('BriefService.generate', () => {
       dropped_refs: 2,
       dropped_focus: 1,
       adjusted_lines: 0,
+      dropped_anchors: 0,
     });
     expect(r.meta.grounding).toEqual(r.brief.meta.grounding);
+  });
+
+  it('dropped_anchors mix: clipped, out-of-hunk, partial, all-null and invented-ref risks', async () => {
+    const mk = (title: string, refs: string[], a: [string | null, number | null, number | null]) => ({
+      kind: 'correctness',
+      title,
+      explanation: 'x',
+      severity: 'low',
+      file_refs: refs,
+      anchor_file: a[0],
+      anchor_start_line: a[1],
+      anchor_end_line: a[2],
+    });
+    // the diff has src/a.ts with new-side range 10-14
+    const s = setup({
+      structured: {
+        summary: 's',
+        risks: [
+          mk('valid', ['src/a.ts'], ['src/a.ts', 12, 30]),
+          mk('outside', ['src/a.ts'], ['src/a.ts', 40, 50]),
+          mk('partial', ['src/a.ts'], ['src/a.ts', 12, null]),
+          mk('allnull', ['src/a.ts'], [null, null, null]),
+          mk('invented', ['invented/x.ts'], ['src/a.ts', 12, 13]),
+        ],
+        review_focus: [],
+      },
+    });
+    const r = await s.run();
+    if (r.status !== 'ok') throw new Error('expected ok');
+    expect(r.brief.meta.grounding.dropped_anchors).toBe(2);
+    expect(r.brief.meta.grounding.dropped_risks).toBe(1);
+    expect(r.meta.grounding).toEqual(r.brief.meta.grounding);
+    const risks = r.brief.risks.risks;
+    expect(risks.map((x) => x.title)).toEqual(['valid', 'outside', 'partial', 'allnull']);
+    expect(risks[0]!.anchor).toEqual({ file: 'src/a.ts', start_line: 12, end_line: 14 });
+    for (const x of risks.slice(1)) expect(x.anchor).toBeUndefined();
+    expect(PrBriefStored.safeParse(r.brief).success).toBe(true);
+    const stored = (s.upsertBrief.mock.calls[0] as unknown as [string, unknown])[1];
+    expect(JSON.stringify(stored)).not.toContain('anchor_');
   });
 
   it('no pr_intent: missing includes intent, snapshot is null, intent is never written or derived', async () => {
@@ -279,7 +325,14 @@ describe('BriefService.generate', () => {
       structured: {
         summary: 's',
         risks: [
-          { kind: 'correctness', title: 'T', explanation: 'x', severity: 'low', file_refs: ['src/x.ts'] },
+          {
+            kind: 'correctness',
+            title: 'T',
+            explanation: 'x',
+            severity: 'low',
+            file_refs: ['src/x.ts'],
+            anchor_file: null, anchor_start_line: null, anchor_end_line: null,
+          },
         ],
         review_focus: [],
       },
@@ -368,7 +421,7 @@ describe('BriefService.generate', () => {
             { kind: 'other', title: 't', explanation: 'e', severity: 'low' as const, file_refs: [] },
           ],
           review_focus: [],
-          counts: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0 },
+          counts: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0, dropped_anchors: 0 },
         }),
       },
     });

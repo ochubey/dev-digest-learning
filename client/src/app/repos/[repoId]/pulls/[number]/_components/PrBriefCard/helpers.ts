@@ -1,4 +1,12 @@
-import type { BlastRadius, BriefMissingInput, Intent, PrBrief, ReviewFocusItem } from "@devdigest/shared";
+import type {
+  BlastRadius,
+  BriefMeta,
+  BriefMissingInput,
+  Intent,
+  PrBrief,
+  Risk,
+  ReviewFocusItem,
+} from "@devdigest/shared";
 import type { IconName } from "@devdigest/ui";
 import { ApiError } from "@/lib/api";
 import { GENERIC_RISK_ICON, KNOWN_RISK_KINDS, MAX_BLAST_CALLERS, RISK_KIND_ICON } from "./constants";
@@ -20,6 +28,36 @@ export function isInDiff(path: string, diffPaths: ReadonlySet<string>): boolean 
 /** `file:line` locator of a review-focus item. */
 export function focusLabel(item: Pick<ReviewFocusItem, "file" | "line">): string {
   return `${item.file}:${item.line}`;
+}
+
+/** Label of a risk's ref button: `file:start-end`, `file:line`, or the first plain ref. */
+export function riskLabel(risk: Pick<Risk, "file_refs" | "anchor">): string {
+  const a = risk.anchor;
+  if (!a) return risk.file_refs[0] ?? "";
+  return a.start_line === a.end_line ? `${a.file}:${a.start_line}` : `${a.file}:${a.start_line}-${a.end_line}`;
+}
+
+/** Line to open for a risk ref: the anchor start for the anchor file, else null. */
+export function riskRefLine(risk: Pick<Risk, "anchor">, file: string): number | null {
+  return risk.anchor && risk.anchor.file === file ? risk.anchor.start_line : null;
+}
+
+export function formatCost(usd: number | null): string | null {
+  if (usd === null) return null;
+  if (usd > 0 && usd < 0.001) return "<$0.001";
+  return `$${usd.toFixed(3)}`;
+}
+
+export function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+}
+
+export function costTokensParts(meta: Pick<BriefMeta, "cost_usd" | "tokens_in" | "tokens_out">): {
+  cost: number | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+} {
+  return { cost: meta.cost_usd, tokensIn: meta.tokens_in, tokensOut: meta.tokens_out };
 }
 
 export function riskKindIcon(kind: string): IconName {

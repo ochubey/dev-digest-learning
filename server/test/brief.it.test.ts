@@ -34,7 +34,7 @@ const DIFF = [
 
 const OUTPUT = {
   summary: 'It adds the thing.',
-  risks: [{ kind: 'correctness', title: 'Edge', explanation: 'x', severity: 'high', file_refs: ['src/a.ts'] }],
+  risks: [{ kind: 'correctness', title: 'Edge', explanation: 'x', severity: 'high', file_refs: ['src/a.ts'], anchor_file: null, anchor_start_line: null, anchor_end_line: null }],
   review_focus: [{ file: 'src/a.ts', line: 3, reason: 'core' }],
 };
 

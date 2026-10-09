@@ -310,3 +310,81 @@ describe('PrBrief v2', () => {
     expect(PrBrief.safeParse(withMeta({ missing: ['bogus'] })).success).toBe(false);
   });
 });
+
+describe('PrBrief rev 4', () => {
+  const baseRisk = { kind: 'security', title: 't', explanation: 'e', severity: 'high', file_refs: ['a.ts'] };
+  const anchor = { file: 'a.ts', start_line: 12, end_line: 18 };
+  const grounding = { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0 };
+  const meta = {
+    generated_from_head_sha: 'abc123',
+    generated_at: '2026-01-01T00:00:00Z',
+    provider: 'anthropic',
+    model: 'claude-x',
+    schema_attempts: 1,
+    tokens_in: 100,
+    tokens_out: 50,
+    cost_usd: 0.01,
+    missing: [],
+    sources: [],
+    diff_stats: null,
+    input: { estimated_tokens: 1000, budget_tokens: 8000, truncated: [], blast_degraded_reason: null },
+    grounding,
+  };
+  const brief = (risk: unknown, g: Record<string, unknown> = grounding) => ({
+    summary: 's',
+    intent: null,
+    blast: null,
+    risks: { risks: [risk] },
+    review_focus: [],
+    meta: { ...meta, grounding: g },
+  });
+
+  it('Risk without anchor parses (AC-85)', () => {
+    expect(Risk.safeParse(baseRisk).success).toBe(true);
+  });
+
+  it('Risk with a valid anchor parses (AC-85)', () => {
+    const r = Risk.safeParse({ ...baseRisk, anchor });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.anchor).toEqual(anchor);
+  });
+
+  it('rejects start_line: 0', () => {
+    expect(Risk.safeParse({ ...baseRisk, anchor: { ...anchor, start_line: 0 } }).success).toBe(false);
+  });
+
+  it('rejects end_line < start_line', () => {
+    expect(Risk.safeParse({ ...baseRisk, anchor: { ...anchor, end_line: 11 } }).success).toBe(false);
+  });
+
+  it('rejects a non-integer start_line', () => {
+    expect(Risk.safeParse({ ...baseRisk, anchor: { ...anchor, start_line: 12.5 } }).success).toBe(false);
+  });
+
+  it('file_refs: [] and kind: custom still parse', () => {
+    expect(Risk.safeParse({ ...baseRisk, file_refs: [], kind: 'custom' }).success).toBe(true);
+  });
+
+  it('grounding without dropped_anchors parses and gives 0 (AC-95)', () => {
+    const r = PrBrief.safeParse(brief(baseRisk));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.meta.grounding.dropped_anchors).toBe(0);
+  });
+
+  it('grounding with dropped_anchors: 3 gives 3 (AC-96)', () => {
+    const r = PrBrief.safeParse(brief(baseRisk, { ...grounding, dropped_anchors: 3 }));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.meta.grounding.dropped_anchors).toBe(3);
+  });
+
+  it('server and client copies parse an anchored fixture identically', async () => {
+    const client = (await import('../../client/src/vendor/shared/contracts/brief')) as {
+      PrBrief: typeof PrBrief;
+    };
+    const fixture = brief({ ...baseRisk, anchor }, { ...grounding, dropped_anchors: 2 });
+    const a = PrBrief.safeParse(fixture);
+    const b = client.PrBrief.safeParse(fixture);
+    expect(a.success).toBe(true);
+    expect(b).toEqual(a);
+  });
+});

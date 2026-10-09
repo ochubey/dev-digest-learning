@@ -7,6 +7,11 @@ import {
   riskKindIcon,
   riskKindLabelKey,
   inputsChanged,
+  riskLabel,
+  riskRefLine,
+  formatCost,
+  formatTokens,
+  costTokensParts,
 } from "./helpers";
 import { RISK_KIND_ICON, GENERIC_RISK_ICON } from "./constants";
 
@@ -117,5 +122,46 @@ describe("inputsChanged", () => {
   });
   it("ignores fields outside the compared set (confidence, sources)", () => {
     expect(inputsChanged(snap, intent({ confidence: 0.1 }), snap.blast)).toBe(false);
+  });
+});
+
+const risk = (anchor?: { file: string; start_line: number; end_line: number }) => ({
+  file_refs: ["src/a.ts", "src/b.ts"],
+  ...(anchor ? { anchor } : {}),
+});
+
+describe("riskLabel / formatCost / formatTokens", () => {
+  it("riskLabel: range, single line and no anchor (AC-99, AC-97)", () => {
+    expect(riskLabel(risk({ file: "src/a.ts", start_line: 12, end_line: 18 }))).toBe("src/a.ts:12-18");
+    expect(riskLabel(risk({ file: "src/a.ts", start_line: 12, end_line: 12 }))).toBe("src/a.ts:12");
+    expect(riskLabel(risk())).toBe("src/a.ts");
+  });
+  it("riskRefLine: start line for the anchor file only (AC-100)", () => {
+    const r = risk({ file: "src/a.ts", start_line: 12, end_line: 18 });
+    expect(riskRefLine(r, "src/a.ts")).toBe(12);
+    expect(riskRefLine(r, "src/b.ts")).toBeNull();
+    expect(riskRefLine(risk(), "src/a.ts")).toBeNull();
+  });
+  it("formatCost (AC-101, AC-102)", () => {
+    expect(formatCost(null)).toBeNull();
+    expect(formatCost(0.0142)).toBe("$0.014");
+    expect(formatCost(1.2)).toBe("$1.200");
+    expect(formatCost(0.0004)).toBe("<$0.001");
+    expect(formatCost(0)).toBe("$0.000");
+  });
+  it("formatTokens (AC-103)", () => {
+    expect(formatTokens(8150)).toBe("8.2K");
+    expect(formatTokens(1312)).toBe("1.3K");
+    expect(formatTokens(1000)).toBe("1.0K");
+    expect(formatTokens(999)).toBe("999");
+    expect(formatTokens(950)).toBe("950");
+    expect(formatTokens(120)).toBe("120");
+  });
+  it("costTokensParts keeps nulls", () => {
+    expect(costTokensParts({ cost_usd: 0.0142, tokens_in: 8150, tokens_out: null })).toEqual({
+      cost: 0.0142,
+      tokensIn: 8150,
+      tokensOut: null,
+    });
   });
 });

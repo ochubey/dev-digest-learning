@@ -64,7 +64,7 @@ const BRIEF: BriefResponse = {
     sources: [],
     diff_stats: null,
     input: { estimated_tokens: 1, budget_tokens: 2, truncated: [], blast_degraded_reason: null },
-    grounding: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0 },
+    grounding: { dropped_risks: 0, dropped_refs: 0, dropped_focus: 0, adjusted_lines: 0, dropped_anchors: 0 },
   },
 };
 
@@ -535,5 +535,151 @@ describe("navigation", () => {
     );
     renderCard();
     expect(await screen.findByText(brief.card.lineAdjusted)).toBeInTheDocument();
+  });
+});
+
+const ANCHOR_FILE = "src/middleware/ratelimit.ts";
+const anchored = (start: number, end: number): Partial<BriefResponse> => ({
+  risks: {
+    risks: [
+      {
+        kind: "perf",
+        title: "Unbounded loop",
+        explanation: "e",
+        severity: "medium",
+        file_refs: [ANCHOR_FILE, "src/other.ts"],
+        anchor: { file: ANCHOR_FILE, start_line: start, end_line: end },
+      },
+    ],
+  },
+});
+
+describe("risk anchor", () => {
+  it("labels a range, a single line and no anchor (AC-99)", async () => {
+    get.mockResolvedValue(withBrief(anchored(12, 18)));
+    renderCard([ANCHOR_FILE]);
+    expect(await screen.findByRole("button", { name: `Open ${ANCHOR_FILE}:12-18` })).toHaveTextContent(
+      `${ANCHOR_FILE}:12-18`,
+    );
+    cleanup();
+    get.mockResolvedValue(withBrief(anchored(12, 12)));
+    renderCard([ANCHOR_FILE]);
+    expect(await screen.findByRole("button", { name: `Open ${ANCHOR_FILE}:12` })).toBeInTheDocument();
+    cleanup();
+    get.mockResolvedValue(BRIEF);
+    renderCard();
+    expect(await screen.findByRole("button", { name: "Open src/auth.ts" })).toHaveTextContent(/^src\/auth\.ts$/);
+  });
+
+  it("anchor ref opens its start line; another ref of the same risk opens with null (AC-100)", async () => {
+    get.mockResolvedValue(withBrief(anchored(12, 18)));
+    renderCard([ANCHOR_FILE, "src/other.ts"]);
+    fireEvent.click(await screen.findByRole("button", { name: `Open ${ANCHOR_FILE}:12-18` }));
+    expect(onOpenInDiff).toHaveBeenLastCalledWith(ANCHOR_FILE, 12);
+    fireEvent.click(screen.getByRole("button", { name: "Show details: Unbounded loop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open src/other.ts" }));
+    expect(onOpenInDiff).toHaveBeenLastCalledWith("src/other.ts", null);
+    expect(screen.getAllByRole("button", { name: `Open ${ANCHOR_FILE}:12-18` })).toHaveLength(1);
+  });
+
+  it("an anchor file outside the diff toasts and does not navigate (AC-42)", async () => {
+    get.mockResolvedValue(withBrief(anchored(12, 18)));
+    renderCard(["src/a.ts"]);
+    fireEvent.click(await screen.findByRole("button", { name: `Open ${ANCHOR_FILE}:12-18` }));
+    expect(notifyInfo).toHaveBeenCalledWith(brief.card.notInDiff);
+    expect(onOpenInDiff).not.toHaveBeenCalled();
+  });
+
+  it("a pre-revision brief has no :line suffix on any risk label (AC-97)", async () => {
+    get.mockResolvedValue(BRIEF);
+    renderCard();
+    await screen.findByText("Token logged");
+    for (const b of screen.getAllByRole("button", { name: /^Open / })) {
+      expect(b.textContent).not.toMatch(/:\d/);
+    }
+  });
+});
+
+describe("cost and tokens", () => {
+  const costMeta = (over: Partial<BriefResponse["meta"]> = {}) =>
+    metaWith({ cost_usd: 0.0142, tokens_in: 8150, tokens_out: 1312, ...over });
+  const note = () => screen.findByRole("note", { name: /Generation cost/ });
+
+  it("shows cost and in-to-out tokens with an accessible name and title (AC-101..AC-103, AC-106)", async () => {
+    get.mockResolvedValue(withBrief({ meta: costMeta() }));
+    renderCard();
+    const el = await note();
+    expect(el).toHaveTextContent("$0.014");
+    expect(el).toHaveTextContent("8.2K\u21921.3K");
+    const full = "Generation cost and tokens: cost $0.014, input tokens 8,150, output tokens 1,312";
+    expect(el).toHaveAttribute("aria-label", full);
+    expect(el).toHaveAttribute("title", full);
+  });
+
+  it("cost null shows tokens only", async () => {
+    get.mockResolvedValue(withBrief({ meta: costMeta({ cost_usd: null }) }));
+    renderCard();
+    const el = await note();
+    expect(el).toHaveTextContent("8.2K\u21921.3K");
+    expect(el).not.toHaveTextContent("$");
+    expect(el).toHaveAttribute("title", "Generation cost and tokens: input tokens 8,150, output tokens 1,312");
+  });
+
+  it("tokens_out null shows `8.2K in` and omits the output part", async () => {
+    get.mockResolvedValue(withBrief({ meta: costMeta({ tokens_out: null }) }));
+    renderCard();
+    const el = await note();
+    expect(el).toHaveTextContent("$0.014");
+    expect(el).toHaveTextContent("8.2K in");
+    expect(el).not.toHaveTextContent("\u2192");
+    expect(el).toHaveAttribute("title", "Generation cost and tokens: cost $0.014, input tokens 8,150");
+  });
+
+  it("tokens_in null shows `1.3K out`", async () => {
+    get.mockResolvedValue(withBrief({ meta: costMeta({ tokens_in: null }) }));
+    renderCard();
+    expect(await note()).toHaveTextContent("1.3K out");
+  });
+
+  it("all null renders no element (AC-104)", async () => {
+    get.mockResolvedValue(BRIEF);
+    renderCard();
+    await screen.findByText("Adds retry to the sync job.");
+    expect(screen.queryByRole("note", { name: /Generation cost/ })).toBeNull();
+  });
+
+  it("stays visible when stale (AC-105)", async () => {
+    get.mockResolvedValue(withBrief({ stale: true, meta: costMeta() }));
+    renderCard();
+    expect(await note()).toBeInTheDocument();
+  });
+
+  it("stays dimmed while regenerating, then shows the new values (AC-107)", async () => {
+    get.mockResolvedValue(withBrief({ meta: costMeta() }));
+    let resolve!: (b: BriefResponse) => void;
+    post.mockReturnValue(new Promise<BriefResponse>((r) => (resolve = r)));
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <NextIntlClientProvider locale="en" messages={{ brief }}>
+          <PrBriefCard prId="pr1" diffPaths={new Set()} onOpenInDiff={onOpenInDiff} />
+        </NextIntlClientProvider>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Regenerate" }));
+    const busy = await waitFor(() => {
+      const el = container.querySelector('[aria-busy="true"]') as HTMLElement;
+      expect(el).not.toBeNull();
+      return el;
+    });
+    expect(busy.style.opacity).toBe("0.5");
+    expect(busy).toContainElement(await note());
+    expect(await note()).toHaveTextContent("8.2K\u21921.3K");
+    const next = withBrief({ meta: costMeta({ cost_usd: 0.5, tokens_in: 20000, tokens_out: 900 }) });
+    resolve(next);
+    await waitFor(async () => expect(await note()).toHaveTextContent("$0.500"));
+    expect(await note()).toHaveTextContent("20.0K\u2192900");
   });
 });

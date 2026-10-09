@@ -11,6 +11,8 @@ export const s = {
 
   generatedAt: { fontSize: 11.5, color: "var(--text-muted)" } as React.CSSProperties,
 
+  costTokens: { fontSize: 11.5, color: "var(--text-muted)" } as React.CSSProperties,
+
   staleBadge: {
     display: "inline-flex",
     alignItems: "center",

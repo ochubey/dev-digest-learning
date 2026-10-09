@@ -5,12 +5,12 @@ import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { Risk } from "@devdigest/shared";
 import { SEVERITY_COLOR } from "./constants";
-import { riskKindIcon, riskKindLabelKey } from "./helpers";
+import { riskKindIcon, riskKindLabelKey, riskLabel, riskRefLine } from "./helpers";
 import { s } from "./styles";
 
 interface RiskListProps {
   risks: Risk[];
-  onOpenRef: (file: string) => void;
+  onOpenRef: (file: string, line: number | null) => void;
 }
 
 /**
@@ -36,18 +36,24 @@ export function RiskList({ risks, onOpenRef }: RiskListProps) {
         const Chevron = open.has(i) ? Icon.ChevronDown : Icon.ChevronRight;
         const expanded = open.has(i);
         const regionId = `${baseId}-risk-${i}`;
-        const refs = expanded ? risk.file_refs : risk.file_refs.slice(0, 1);
-        const refButton = (file: string) => (
-          <button
-            key={file}
-            type="button"
-            style={s.fileLink}
-            aria-label={t("card.openRef", { file })}
-            onClick={() => onOpenRef(file)}
-          >
-            {file}
-          </button>
-        );
+        const label = riskLabel(risk);
+        const primary = risk.anchor?.file ?? risk.file_refs[0];
+        // Collapsed: one button for the anchor file (or the first ref). Expanded: every ref.
+        const refs = expanded ? risk.file_refs : primary ? [primary] : [];
+        const refButton = (file: string) => {
+          const text = file === primary ? label : file;
+          return (
+            <button
+              key={file}
+              type="button"
+              style={s.fileLink}
+              aria-label={t("card.openRef", { file: text })}
+              onClick={() => onOpenRef(file, riskRefLine(risk, file))}
+            >
+              {text}
+            </button>
+          );
+        };
         return (
           <li key={`${risk.title}-${i}`} style={s.riskItem}>
             <div style={s.riskHeader}>

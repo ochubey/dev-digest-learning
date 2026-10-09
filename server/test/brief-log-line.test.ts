@@ -36,7 +36,13 @@ const okMeta: BriefLogMeta = {
   tokensOut: 300,
   costUsd: 0.012,
   truncated: ['specs'],
-  grounding: { dropped_risks: 1, dropped_refs: 2, dropped_focus: 3, adjusted_lines: 4 },
+  grounding: {
+    dropped_risks: 1,
+    dropped_refs: 2,
+    dropped_focus: 3,
+    adjusted_lines: 4,
+    dropped_anchors: 5,
+  },
   missing: ['intent', 'diff'],
 };
 
@@ -54,7 +60,13 @@ describe('briefLogFields', () => {
       tokens_out: 300,
       cost_usd: 0.012,
       truncated: ['specs'],
-      grounding: { dropped_risks: 1, dropped_refs: 2, dropped_focus: 3, adjusted_lines: 4 },
+      grounding: {
+        dropped_risks: 1,
+        dropped_refs: 2,
+        dropped_focus: 3,
+        adjusted_lines: 4,
+        dropped_anchors: 5,
+      },
       missing: ['intent', 'diff'],
       outcome: 'ok',
       error_class: null,
