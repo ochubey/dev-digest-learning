@@ -1,7 +1,8 @@
 /* SkillCard — grid card for the Skills Lab: name, description, type badge,
    source icon, agent_count badge, enabled toggle, and a delete button (opens
    a real confirm Modal, not window.confirm). Clicking the card body opens
-   the preview drawer (handled by the parent via onClick). */
+   the editor (handled by the parent via onClick). `compact` renders the
+   narrow sidebar-list variant; `active` highlights the open skill. */
 "use client";
 
 import React from "react";
@@ -13,15 +14,35 @@ import { SKILL_SOURCE_ICON } from "./constants";
 import { DeleteSkillModal } from "./_components/DeleteSkillModal";
 import { s } from "./styles";
 
-export function SkillCard({ skill, onClick }: { skill: Skill; onClick?: () => void }) {
+export function SkillCard({
+  skill,
+  onClick,
+  active,
+  compact,
+  onDeleted,
+}: {
+  skill: Skill;
+  onClick?: () => void;
+  /** Highlights the card (the skill open in the editor). */
+  active?: boolean;
+  /** List-row layout for the editor sidebar: no description, tighter spacing. */
+  compact?: boolean;
+  /** Called after the skill was deleted from this card. */
+  onDeleted?: () => void;
+}) {
   const setEnabled = useSetSkillEnabled();
   const [deleting, setDeleting] = React.useState(false);
   const color = SKILL_TYPE_COLOR[skill.type];
   const SourceIcon = Icon[SKILL_SOURCE_ICON[skill.source]];
 
   return (
-    <div onClick={onClick} style={s.card(skill.enabled)}>
-      {deleting && <DeleteSkillModal skill={skill} onClose={() => setDeleting(false)} />}
+    <div onClick={onClick} style={s.card(skill.enabled, !!active, !!compact)} aria-current={active ? "true" : undefined}>
+      {deleting && (
+        // Modal events bubble through React portals; keep them off the card's onClick.
+        <div onClick={(e) => e.stopPropagation()}>
+          <DeleteSkillModal skill={skill} onClose={() => setDeleting(false)} onDeleted={onDeleted} />
+        </div>
+      )}
       <div style={s.headerRow}>
         <div style={s.iconBox} title={skill.source}>
           <Icon.FileText size={15} />
@@ -31,7 +52,7 @@ export function SkillCard({ skill, onClick }: { skill: Skill; onClick?: () => vo
           <SourceIcon size={13} />
         </span>
       </div>
-      <div style={s.description}>{skill.description || "No description"}</div>
+      {!compact && <div style={s.description}>{skill.description || "No description"}</div>}
       <div style={s.metaRow}>
         <Badge color={color} bg="transparent">
           {skill.type}
@@ -43,7 +64,7 @@ export function SkillCard({ skill, onClick }: { skill: Skill; onClick?: () => vo
           {skill.agent_count} agent{skill.agent_count === 1 ? "" : "s"}
         </Badge>
       </div>
-      <div style={s.footerRow} onClick={(e) => e.stopPropagation()}>
+      <div style={compact ? s.compactFooterRow : s.footerRow} onClick={(e) => e.stopPropagation()}>
         <Toggle on={skill.enabled} onChange={(enabled) => setEnabled.mutate({ id: skill.id, enabled })} size={14} />
         <div style={s.spacer} />
         <IconBtn icon="Trash" label="Delete skill" onClick={() => setDeleting(true)} />

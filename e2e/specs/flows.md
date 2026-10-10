@@ -39,3 +39,6 @@ JSON file: what must stay true about how they run **together**, per
    with 2 attached paths; 10 opens the seeded run whose id is
    `SEED_PROJECT_CONTEXT_RUN_ID` in `server/src/db/seed.ts`. Neither clicks
    attach/detach or runs a review, so they stay read-only.
+7. **Flow 11 depends on the seeded `breaking-change-detector` skill** (created
+   by `server/src/db/seed.ts`). It only navigates and reads (no attach, no
+   model call).
