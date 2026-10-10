@@ -58,12 +58,22 @@ export type BlastRadius = z.infer<typeof BlastRadius>;
 export const RiskSeverity = z.enum(['high', 'medium', 'low']);
 export type RiskSeverity = z.infer<typeof RiskSeverity>;
 
+export const RiskAnchor = z
+  .object({
+    file: z.string(),
+    start_line: z.number().int().min(1),
+    end_line: z.number().int().min(1),
+  })
+  .refine((a) => a.end_line >= a.start_line, 'end_line must be >= start_line');
+export type RiskAnchor = z.infer<typeof RiskAnchor>;
+
 export const Risk = z.object({
   kind: z.string(),
   title: z.string(),
   explanation: z.string(),
   severity: RiskSeverity,
   file_refs: z.array(z.string()),
+  anchor: RiskAnchor.optional(),
 });
 export type Risk = z.infer<typeof Risk>;
 
@@ -124,10 +134,94 @@ export const SmartDiff = z.object({
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
 // ---- Composed PR Brief (pr_brief.json) ----
+// Risk / Risks are shared, extended only with optional anchor; the ">= 1 file_refs" rule lives in the
+// server-only PrBriefStored schema.
+
+export const ReviewFocusItem = z.object({
+  file: z.string(),
+  line: z.number().int().min(1),
+  reason: z.string(),
+  line_adjusted: z.boolean().optional(), // set only by grounding
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+// Enum order IS the canonical order of meta.missing.
+export const BriefMissingInput = z.enum([
+  'intent',
+  'blast',
+  'description',
+  'linked_issue',
+  'specs',
+  'diff',
+]);
+export type BriefMissingInput = z.infer<typeof BriefMissingInput>;
+
+export const BriefSection = z.enum([
+  'specs',
+  'linked_issue',
+  'description',
+  'blast_callers',
+  'diff_stats',
+]);
+export type BriefSection = z.infer<typeof BriefSection>;
+
+export const BriefDiffStats = z.object({
+  files: z.number().int(),
+  additions: z.number().int(),
+  deletions: z.number().int(),
+  by_role: z.object({
+    core: z.number().int(),
+    tests: z.number().int(),
+    wiring: z.number().int(),
+    docs: z.number().int(),
+    boilerplate: z.number().int(),
+  }),
+});
+export type BriefDiffStats = z.infer<typeof BriefDiffStats>;
+
+export const BriefMeta = z.object({
+  generated_from_head_sha: z.string(),
+  generated_at: z.string().datetime(), // ISO-8601 UTC, 'Z' only, no offset
+  provider: z.string(),
+  model: z.string(),
+  schema_attempts: z.number().int().min(1),
+  tokens_in: z.number().int().nullable(),
+  tokens_out: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  missing: z.array(BriefMissingInput).refine(
+    (a) =>
+      a.every(
+        (v, i) =>
+          i === 0 ||
+          BriefMissingInput.options.indexOf(a[i - 1]!) < BriefMissingInput.options.indexOf(v),
+      ),
+    'missing must be unique and in canonical order',
+  ),
+  sources: z.array(IntentSource),
+  diff_stats: BriefDiffStats.nullable(),
+  input: z.object({
+    estimated_tokens: z.number().int(),
+    budget_tokens: z.number().int(),
+    truncated: z.array(BriefSection),
+    blast_degraded_reason: z.string().nullable(),
+  }),
+  grounding: z.object({
+    dropped_risks: z.number().int(),
+    dropped_refs: z.number().int(),
+    dropped_focus: z.number().int(),
+    adjusted_lines: z.number().int(),
+    dropped_anchors: z.number().int().min(0).default(0),
+  }),
+});
+export type BriefMeta = z.infer<typeof BriefMeta>;
+
 export const PrBrief = z.object({
-  intent: Intent,
-  blast: BlastRadius,
+  summary: z.string(),
+  intent: Intent.nullable(),
+  blast: BlastRadius.nullable(),
   risks: Risks,
-  history: PrHistory,
+  review_focus: z.array(ReviewFocusItem),
+  history: PrHistory.optional(),
+  meta: BriefMeta,
 });
 export type PrBrief = z.infer<typeof PrBrief>;

@@ -6,7 +6,8 @@
 "use client";
 
 import React from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import { usePrNavigation } from "./navigation";
 import { Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "../../../../../components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
@@ -26,7 +27,7 @@ import type { FindingRecord } from "@devdigest/shared";
 export default function PRDetailPage() {
   const params = useParams<{ repoId: string; number: string }>();
   const search = useSearchParams();
-  const router = useRouter();
+  const nav = usePrNavigation();
   const { repoId, number } = params;
   const { activeRepo } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
@@ -57,18 +58,13 @@ export default function PRDetailPage() {
     if (prId) qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
   };
 
-  const tab = search.get("tab") ?? "overview";
+  const { tab, setParam, setTab } = nav;
   const traceRunId = search.get("trace");
-  const setParam = (key: string, val: string | null) => {
-    const sp = new URLSearchParams(search.toString());
-    if (val == null) sp.delete(key);
-    else sp.set(key, val);
-    router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
-  };
-  const setTab = (t: string) => setParam("tab", t);
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
+  const latestReview = runs.find((r) => r.kind === "review") ?? null;
+  const diffPaths = React.useMemo(() => new Set((pr?.files ?? []).map((f) => f.path)), [pr?.files]);
   const allFindings: FindingRecord[] = React.useMemo(
     () => runs.flatMap((r) => r.findings),
     [reviews],
@@ -141,6 +137,9 @@ export default function PRDetailPage() {
             repoId={repoId}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            diffPaths={diffPaths}
+            onOpenInDiff={nav.openInDiff}
+            latestReview={latestReview}
           />
         )}
 
@@ -175,6 +174,7 @@ export default function PRDetailPage() {
             filesCount={pr.files_count}
             files={pr.files}
             canComment={pr.status === "open"}
+            target={nav.target}
           />
         )}
       </div>

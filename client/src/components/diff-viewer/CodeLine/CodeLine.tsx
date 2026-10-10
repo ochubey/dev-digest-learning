@@ -18,6 +18,8 @@ export function CodeLine({
   commenting,
   findings,
   prId = null,
+  highlighted,
+  rowRef,
 }: {
   ln: Line;
   path: string;
@@ -26,6 +28,10 @@ export function CodeLine({
   /** Smart Diff findings anchored to this row; caller passes [] when hidden. */
   findings?: FindingRecord[];
   prId?: string | null;
+  /** Deep-link target row: tinted and marked with data-highlighted. */
+  highlighted?: boolean;
+  /** Attached to the row so the FileCard can scroll to it. */
+  rowRef?: React.Ref<HTMLDivElement>;
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -48,7 +54,15 @@ export function CodeLine({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={lineRowFor(ln.kind)}>
+      <div
+        ref={rowRef}
+        data-highlighted={highlighted ? "true" : undefined}
+        style={
+          highlighted
+            ? { ...lineRowFor(ln.kind), outline: "2px solid var(--accent, #58a6ff)", outlineOffset: -2 }
+            : lineRowFor(ln.kind)
+        }
+      >
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button

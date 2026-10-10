@@ -1,0 +1,56 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  row: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 12px",
+    borderBottom: "1px solid var(--border-strong)",
+    background: "var(--bg-elevated)",
+  } satisfies CSSProperties,
+  handle: { color: "var(--text-muted)", cursor: "grab", display: "inline-flex" } satisfies CSSProperties,
+  handleDisabled: {
+    color: "var(--text-muted)",
+    opacity: 0.35,
+    cursor: "not-allowed",
+    display: "inline-flex",
+  } satisfies CSSProperties,
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  text: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
+  name: {
+    fontSize: 14,
+    fontWeight: 500,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  folder: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  tokens: { fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  state: { fontSize: 12, color: "var(--warn)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  via: { fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  moveBtn: {
+    display: "inline-grid",
+    placeItems: "center",
+    width: 24,
+    height: 24,
+    border: "1px solid transparent",
+    borderRadius: 5,
+    background: "transparent",
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  lock: { color: "var(--text-muted)", display: "inline-flex" } satisfies CSSProperties,
+} as const;

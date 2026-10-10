@@ -1,0 +1,63 @@
+{
+  "summary": {
+    "attachedOf": "{attached} of {total} attached",
+    "attached": "{count} attached"
+  },
+  "filter": {
+    "label": "Filter documents",
+    "placeholder": "Filter documents…"
+  },
+  "reindex": {
+    "label": "Re-index",
+    "busy": "Re-indexing…"
+  },
+  "loading": "Loading documents…",
+  "empty": {
+    "title": "No documents found",
+    "body": "Add markdown files to the repository's main branch, then Re-index."
+  },
+  "truncated": "Showing the first {max} of {total} documents.",
+  "noRepo": "Add a repository first, then come back to attach project documents.",
+  "noMatch": {
+    "title": "No documents match \"{text}\"",
+    "clear": "Clear filter"
+  },
+  "error": {
+    "title": "Couldn’t read the documents",
+    "body": "The repository could not be reached. Your attached documents are unchanged.",
+    "retry": "Retry"
+  },
+  "limit": {
+    "reached": "You can attach up to {max} documents. Detach one to add another."
+  },
+  "writeError": "Couldn’t save the change. The previous list was restored.",
+  "row": {
+    "handle": "Drag to reorder {path}",
+    "attach": "Attach {path}",
+    "preview": "Preview",
+    "previewLabel": "Preview {path}",
+    "moveUp": "Move {path} up",
+    "moveDown": "Move {path} down",
+    "notFound": "Not found on main",
+    "notVerified": "Not verified",
+    "via": "via {skill}",
+    "inherited": "Inherited from a skill, read-only",
+    "tokens": "{tokens} tokens"
+  },
+  "footer": {
+    "total": "{count, plural, one {# file} other {# files}} · {tokens} tokens total",
+    "softCap": "over 4K soft cap",
+    "note": "Injected as an untrusted block (## Project context) into every run."
+  },
+  "preview": {
+    "close": "Close",
+    "loading": "Loading preview…",
+    "notOnMain": "This document is no longer on main",
+    "notText": "This document isn’t valid UTF-8 text, so it can’t be previewed",
+    "error": "Couldn’t load this document",
+    "retry": "Retry",
+    "usedBy": "{count, plural, one {Used by # agent} other {Used by # agents}}",
+    "attach": "Attach",
+    "attached": "Attached"
+  }
+}

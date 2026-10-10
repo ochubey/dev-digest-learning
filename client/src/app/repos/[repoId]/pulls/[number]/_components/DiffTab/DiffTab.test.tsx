@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import type { PrFile, SmartDiff } from "@devdigest/shared";
 import prReview from "../../../../../../../../messages/en/prReview.json";
 import shell from "../../../../../../../../messages/en/shell.json";
+import brief from "../../../../../../../../messages/en/brief.json";
 
 const smartDiffState: { data: SmartDiff | undefined; isError: boolean } = {
   data: undefined,
@@ -20,11 +21,18 @@ vi.mock("@/lib/hooks/smart-diff", () => ({
   useSmartDiff: () => smartDiffState,
 }));
 
+const info = vi.fn();
+vi.mock("@/lib/toast", () => ({
+  notify: { info: (m: string) => info(m), error: vi.fn(), success: vi.fn(), toast: vi.fn() },
+}));
+
 import { DiffTab } from "./DiffTab";
 
 beforeEach(() => {
   smartDiffState.data = undefined;
   smartDiffState.isError = false;
+  info.mockReset();
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
 
@@ -194,5 +202,63 @@ describe("DiffTab smart-diff groups", () => {
     expect(screen.getByTestId("grouping-unavailable").textContent).toBe(
       prReview.smartDiff.groupingUnavailable,
     );
+  });
+});
+
+type Target = { file: string; line: number | null } | null;
+const tabWith = (target: Target) => (
+  <NextIntlClientProvider locale="en" messages={{ prReview, shell, brief }}>
+    <DiffTab prId="pr1" filesCount={FILES.length} files={FILES} canComment={false} target={target} />
+  </NextIntlClientProvider>
+);
+
+describe("DiffTab deep-link target", () => {
+  it("expands the target file in flat mode (AC-37)", () => {
+    render(tabWith({ file: "src/a.ts", line: 1 }));
+    expect(screen.getByText("corebody")).toBeInTheDocument();
+    expect(screen.getAllByTestId("file-card").filter((c) => c.getAttribute("data-highlighted"))).toHaveLength(1);
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it("opens a collapsed-by-default group that holds the target (AC-41)", () => {
+    smartDiffState.data = SMART;
+    render(tabWith({ file: "README.md", line: null }));
+    goSmart();
+    const docs = screen.getAllByTestId("smart-diff-group").find((g) => g.getAttribute("data-role") === "docs")!;
+    expect(within(docs).getByTestId("smart-diff-group-header")).toHaveAttribute("aria-expanded", "true");
+    expect(within(docs).getByText("docbody")).toBeInTheDocument();
+    // other collapsed group stays closed
+    const boiler = screen.getAllByTestId("smart-diff-group").find((g) => g.getAttribute("data-role") === "boilerplate")!;
+    expect(within(boiler).getByTestId("smart-diff-group-header")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("toasts once per distinct unknown path (AC-83)", () => {
+    const { rerender } = render(tabWith({ file: "nope/a.ts", line: null }));
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith(brief.card.notInDiff);
+    rerender(tabWith({ file: "nope/a.ts", line: 3 }));
+    expect(info).toHaveBeenCalledTimes(1);
+    rerender(tabWith({ file: "nope/b.ts", line: null }));
+    expect(info).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not scroll again when the target card remounts (expand-all); a new target scrolls once", () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    smartDiffState.data = SMART;
+    const { rerender } = render(tabWith({ file: "src/a.ts", line: 1 }));
+    goSmart();
+    expect(spy).toHaveBeenCalledTimes(1);
+    const core = screen.getAllByTestId("smart-diff-group").find((g) => g.getAttribute("data-role") === "core")!;
+    fireEvent.click(within(core).getByTestId("group-toggle-files"));
+    fireEvent.click(within(core).getByTestId("group-toggle-files"));
+    expect(spy).toHaveBeenCalledTimes(1);
+    rerender(tabWith({ file: "src/a.ts", line: 1 }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    rerender(tabWith({ file: "src/a.test.ts", line: 1 }));
+    expect(spy).toHaveBeenCalledTimes(2);
+    rerender(tabWith(null));
+    rerender(tabWith({ file: "src/a.test.ts", line: 1 }));
+    expect(spy).toHaveBeenCalledTimes(3);
   });
 });

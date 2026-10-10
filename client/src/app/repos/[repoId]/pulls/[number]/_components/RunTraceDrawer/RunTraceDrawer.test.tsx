@@ -85,4 +85,73 @@ describe("A5 Run Trace drawer (smoke)", () => {
     // LiveLogStream renders its filter input
     expect(screen.getByPlaceholderText("Filter log…")).toBeInTheDocument();
   });
+
+  describe("project context (SPEC-02)", () => {
+    const BLOCK = '<untrusted source="specs/public-api.md">Public API rules SENTINEL</untrusted>';
+    const withPc = (over: Partial<RunTrace> = {}): RunTrace => ({
+      ...TRACE,
+      specs_read: [
+        { path: "specs/public-api.md", tokens: 512, status: "injected", reason: null, origin: "agent", skill_name: null },
+        { path: "docs/gone.md", tokens: null, status: "skipped", reason: "not_found", origin: "skill", skill_name: "Sec" },
+        { path: "specs/big.md", tokens: null, status: "skipped", reason: "over_budget", origin: "agent", skill_name: null },
+      ],
+      project_context: { commit_sha: "abc", injected_tokens: 512, soft_cap_exceeded: false },
+      prompt_assembly: {
+        ...TRACE.prompt_assembly,
+        project_context_blocks: [{ path: "specs/public-api.md", tokens: 512, text: BLOCK }],
+      },
+      ...over,
+    });
+
+    it("Specs read: injected path + tokens, skipped with reason, none", () => {
+      currentTrace = withPc();
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      expect(screen.getByText("specs/public-api.md · 512 tok")).toBeInTheDocument();
+      const skipped = screen.getAllByTestId("spec-skipped")[0]!;
+      expect(skipped).toHaveTextContent("docs/gone.md");
+      expect(skipped).toHaveTextContent("Skipped: not found on main");
+      const big = screen.getAllByTestId("spec-skipped")[1]!;
+      expect(big).toHaveTextContent("specs/big.md");
+      expect(big).toHaveTextContent("Skipped: over the 32,000-token ceiling");
+      expect(big).not.toHaveTextContent(/tok/);
+      cleanup();
+      currentTrace = TRACE;
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      expect(screen.getByText("none")).toBeInTheDocument();
+    });
+
+    it("opening a project context entry shows the stored block text incl. <untrusted source=", () => {
+      currentTrace = withPc();
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      fireEvent.click(screen.getByText("Prompt assembly"));
+      expect(screen.getByText("Project context — attached specs (untrusted)")).toBeInTheDocument();
+      // Same number as the Specs read row (body tokens); the prompt block label is the last match.
+      fireEvent.click(screen.getAllByText("specs/public-api.md · 512 tok").at(-1)!);
+      const pre = screen.getByText((_, el) => el?.tagName === "PRE" && el.textContent === BLOCK);
+      expect(pre).toBeInTheDocument();
+    });
+
+    it("soft-cap note only above 4000", () => {
+      currentTrace = withPc({ project_context: { commit_sha: "abc", injected_tokens: 4001, soft_cap_exceeded: true } });
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      expect(screen.getByTestId("spec-soft-cap")).toHaveTextContent("4,000");
+      cleanup();
+      currentTrace = withPc();
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      expect(screen.queryByTestId("spec-soft-cap")).not.toBeInTheDocument();
+    });
+
+    it("legacy fixtures render without error", () => {
+      currentTrace = {
+        ...TRACE,
+        specs_read: ["specs/old.md"],
+        prompt_assembly: { ...TRACE.prompt_assembly, specs: "old specs body" },
+      };
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      expect(screen.getByText("specs/old.md")).toBeInTheDocument();
+      fireEvent.click(screen.getByText("Prompt assembly"));
+      expect(screen.getByText("Project context (dynamic)")).toBeInTheDocument();
+      expect(screen.queryByTestId("spec-soft-cap")).not.toBeInTheDocument();
+    });
+  });
 });

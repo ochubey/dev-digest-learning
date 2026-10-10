@@ -1,4 +1,4 @@
-/* SkillEditor — Config / Preview / Versions tabs for the selected (or new)
+/* SkillEditor — Config / Preview / Versions / Context tabs for the selected (or new)
    skill. Tab state is local (not URL-synced) since the Skills Lab page
    already tracks selection itself; simpler than AgentEditor's ?tab= pattern
    for this scope. */
@@ -8,6 +8,7 @@ import React from "react";
 import { Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { ConfigTab } from "./_components/ConfigTab";
+import { ContextTab } from "./_components/ContextTab";
 import { PreviewTab } from "./_components/PreviewTab";
 import { VersionsTab } from "./_components/VersionsTab";
 import { TABS } from "./constants";
@@ -48,6 +49,7 @@ export function SkillEditor({
       <div style={s.body}>
         {tab === "preview" && <PreviewTab body={skill?.body ?? ""} />}
         {tab === "versions" && <VersionsTab skillId={skill?.id ?? null} currentBody={skill?.body ?? ""} />}
+        {tab === "context" && <ContextTab skill={skill} />}
         {tab === "config" && <ConfigTab skill={skill} onCreated={onCreated} onDeleted={onDeleted} />}
       </div>
     </div>

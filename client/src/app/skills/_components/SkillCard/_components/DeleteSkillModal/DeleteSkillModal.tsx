@@ -8,11 +8,25 @@ import type { Skill } from "@devdigest/shared";
 import { useDeleteSkill } from "../../../../../../lib/hooks/skills";
 import { s } from "./styles";
 
-export function DeleteSkillModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
+export function DeleteSkillModal({
+  skill,
+  onClose,
+  onDeleted,
+}: {
+  skill: Skill;
+  onClose: () => void;
+  /** Called after a successful delete, after the modal closed. */
+  onDeleted?: () => void;
+}) {
   const del = useDeleteSkill();
 
   const confirm = () => {
-    del.mutate(skill.id, { onSuccess: () => onClose() });
+    del.mutate(skill.id, {
+      onSuccess: () => {
+        onClose();
+        onDeleted?.();
+      },
+    });
   };
 
   return (

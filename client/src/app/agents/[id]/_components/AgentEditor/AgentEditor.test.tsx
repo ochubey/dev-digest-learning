@@ -5,6 +5,10 @@ import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../messages/en/agents.json";
 import { ToastProvider } from "../../../../../lib/toast";
 
+vi.mock("./_components/ContextTab", () => ({
+  ContextTab: () => <div data-testid="agent-context-tab" />,
+}));
+
 // Mock the data hooks so the editor renders without a network/query client.
 vi.mock("../../../../../lib/hooks/agents", () => ({
   useUpdateAgent: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, data: undefined }),
@@ -45,5 +49,11 @@ describe("A2 Agent Editor (smoke)", () => {
     expect(screen.getByText("Config")).toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
     expect(screen.getByText("Save agent")).toBeInTheDocument();
+  });
+
+  it("renders the Context tab", () => {
+    renderWithIntl(<AgentEditor agent={AGENT} tab="context" onTab={() => {}} />);
+    expect(screen.getByText("Context")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-context-tab")).toBeInTheDocument();
   });
 });

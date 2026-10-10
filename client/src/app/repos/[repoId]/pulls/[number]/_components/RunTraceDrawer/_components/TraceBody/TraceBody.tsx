@@ -5,9 +5,17 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
+import { SOFT_CAP_TOKENS } from "@/components/project-context/constants";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import { PROMPT_COLORS } from "../../constants";
-import { formatSeconds, formatTokens, formatSkillTokens } from "../../helpers";
+import {
+  formatSeconds,
+  formatTokens,
+  formatSkillTokens,
+  normalizeSpecsRead,
+  projectContextEntries,
+  specsTokenSummary,
+} from "../../helpers";
 import { formatCost } from "@/components/run-cost-badge";
 import { s } from "../../styles";
 import { TraceSection } from "../TraceSection";
@@ -19,6 +27,9 @@ import { Row, Stat } from "../atoms";
 export function TraceBody({ trace, findings }: { trace: RunTrace; findings: FindingRecord[] }) {
   const t = useTranslations("runs");
   const stats = trace.stats;
+  const specRows = normalizeSpecsRead(trace.specs_read);
+  const specsSummary = specsTokenSummary(specRows, trace.project_context);
+  const pcEntries = projectContextEntries(trace);
   return (
     <>
       <TraceSection icon="Settings" title={t("trace.configuration")}>
@@ -49,15 +60,33 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
             </Row>
           )}
           <Row label={t("trace.config.specsRead")}>
-            <div style={s.specsWrap}>
-              {trace.specs_read.length === 0 ? (
-                <span style={s.specsNone}>{t("trace.config.none")}</span>
-              ) : (
-                trace.specs_read.map((sp, i) => (
-                  <span key={i} className="mono" style={s.spec}>
-                    {sp}
-                  </span>
-                ))
+            <div style={s.specsCol}>
+              <div style={s.specsWrap}>
+                {specRows.length === 0 ? (
+                  <span style={s.specsNone}>{t("trace.config.none")}</span>
+                ) : (
+                  specRows.map((sp, i) =>
+                    sp.status === "skipped" ? (
+                      <span key={i} data-testid="spec-skipped" style={s.specsWrap}>
+                        <span className="mono" style={s.specSkipped}>
+                          {sp.path}
+                        </span>
+                        <span style={s.specSkipReason}>
+                          {t("trace.config.specSkipped", { reason: sp.reason ? t(`trace.config.specReason.${sp.reason}`) : "?" })}
+                        </span>
+                      </span>
+                    ) : (
+                      <span key={i} className="mono" style={s.spec}>
+                        {sp.tokens == null ? sp.path : t("trace.config.specTokens", { path: sp.path, tokens: sp.tokens })}
+                      </span>
+                    ),
+                  )
+                )}
+              </div>
+              {specsSummary.softCapExceeded && (
+                <span data-testid="spec-soft-cap" style={s.specsNote}>
+                  {t("trace.config.specsSoftCap", { tokens: specsSummary.tokens, cap: SOFT_CAP_TOKENS })}
+                </span>
               )}
             </div>
           </Row>
@@ -94,9 +123,21 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
         {trace.prompt_assembly.repo_map != null && (
           <PromptBlock label={t("trace.prompt.repoMap")} text={trace.prompt_assembly.repo_map} color={PROMPT_COLORS.repoMap} />
         )}
-        {trace.prompt_assembly.specs != null && (
-          <PromptBlock label={t("trace.prompt.specs")} text={trace.prompt_assembly.specs} color={PROMPT_COLORS.specs} />
+        {pcEntries.length > 0 && pcEntries[0]!.path !== null && (
+          <div style={s.promptSectionLabel}>{t("trace.prompt.projectContext")}</div>
         )}
+        {pcEntries.map((e, i) => (
+          <PromptBlock
+            key={e.path ?? `legacy-${i}`}
+            label={
+              e.path === null
+                ? t("trace.prompt.specs")
+                : t("trace.config.specTokens", { path: e.path, tokens: e.tokens ?? 0 })
+            }
+            text={e.text}
+            color={PROMPT_COLORS.specs}
+          />
+        ))}
         {trace.prompt_assembly.callers != null && (
           <PromptBlock label={t("trace.prompt.callers")} text={trace.prompt_assembly.callers} color={PROMPT_COLORS.callers} />
         )}

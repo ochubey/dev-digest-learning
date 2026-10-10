@@ -278,6 +278,83 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
+/** Folder names that act as source groups (first matching folder segment wins). */
+export const PROJECT_CONTEXT_FOLDERS = ['specs', 'docs', 'insights'] as const;
+/** All source badges: the folder groups plus `root` (file in repo root) and `other`. */
+export const PROJECT_CONTEXT_SOURCES = ['specs', 'docs', 'insights', 'root', 'other'] as const;
+/** Most documents discovery lists; the rest are reported via `total` + `truncated`. */
+export const PROJECT_CONTEXT_MAX_DISCOVERED = 500;
+/** Above this many attached tokens the UI warns (never blocks). */
+export const PROJECT_CONTEXT_SOFT_CAP_TOKENS = 4000;
+/** Run-time ceiling: docs past this budget are skipped as `over_budget`. */
+export const PROJECT_CONTEXT_HARD_CEILING_TOKENS = 32000;
+
+/** Most documents one agent or skill can attach. */
+export const PROJECT_CONTEXT_MAX_ATTACHED = 50;
+/** Longest accepted document path, in characters. */
+export const PROJECT_CONTEXT_MAX_PATH_LENGTH = 300;
+
+export const ContextSource = z.enum(PROJECT_CONTEXT_SOURCES);
+export type ContextSource = z.infer<typeof ContextSource>;
+
+export const ContextDoc = z.object({
+  path: z.string(),
+  name: z.string(),
+  folder: z.string(),
+  source: ContextSource,
+  tokens: z.number().int(),
+});
+export type ContextDoc = z.infer<typeof ContextDoc>;
+
+export const ContextDiscovery = z.object({
+  repo_id: z.string(),
+  branch: z.string(),
+  commit_sha: z.string(),
+  docs: z.array(ContextDoc),
+  /** Eligible documents on main before the cap. */
+  total: z.number().int(),
+  /** True when `total` exceeds PROJECT_CONTEXT_MAX_DISCOVERED and `docs` was cut. */
+  truncated: z.boolean(),
+});
+export type ContextDiscovery = z.infer<typeof ContextDiscovery>;
+
+export const ContextDocPreview = z.object({
+  path: z.string(),
+  source: ContextSource,
+  tokens: z.number().int(),
+  used_by: z.number().int(),
+  content: z.string(),
+  commit_sha: z.string(),
+});
+export type ContextDocPreview = z.infer<typeof ContextDocPreview>;
+
+export const ContextAttachments = z.object({
+  paths: z.array(z.string()),
+  version: z.number().int(),
+});
+export type ContextAttachments = z.infer<typeof ContextAttachments>;
+
+export const InheritedContextDoc = z.object({
+  path: z.string(),
+  skill_id: z.string(),
+  skill_name: z.string(),
+});
+export type InheritedContextDoc = z.infer<typeof InheritedContextDoc>;
+
+export const AgentContextAttachments = ContextAttachments.extend({
+  inherited: z.array(InheritedContextDoc),
+});
+export type AgentContextAttachments = z.infer<typeof AgentContextAttachments>;
+
+export const ContextAttachmentsInput = z.object({
+  paths: z.array(z.string().max(PROJECT_CONTEXT_MAX_PATH_LENGTH)).max(PROJECT_CONTEXT_MAX_ATTACHED),
+});
+export type ContextAttachmentsInput = z.infer<typeof ContextAttachmentsInput>;
+
+export const DefaultContextRepo = z.object({ repo_id: z.string().nullable() });
+export type DefaultContextRepo = z.infer<typeof DefaultContextRepo>;
+
+/** @deprecated Superseded by ContextDoc / ContextDocPreview; kept for legacy callers. */
 export const SpecFile = z.object({
   path: z.string(),
   content: z.string().nullish(),

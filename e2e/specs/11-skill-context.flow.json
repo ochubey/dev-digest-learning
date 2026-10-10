@@ -1,0 +1,17 @@
+{
+  "name": "Skill detail is master-detail and its Context tab shows the project context picker",
+  "description": "From /skills, click the seeded breaking-change-detector card: it navigates straight to /skills/<id> (no preview drawer) and the left 'Skills' list is present. Loading the same skill with ?tab=context opens the Context tab: the 'Project context to use' title and the Repository picker are visible. Read-only (no attach/detach clicks, no model call). Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/skills"], "label": "load the skills page" },
+    { "cmd": ["wait", "--text", "breaking-change-detector"], "label": "seeded skill card is visible" },
+    { "cmd": ["find", "text", "breaking-change-detector", "click"], "label": "open the skill editor from the card" },
+    { "cmd": ["wait", "--url", "/skills/"], "label": "skill editor route reached" },
+    { "cmd": ["wait", "--url", "tab=config"], "label": "card click lands on the config tab" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('h1')].some((h) => h.textContent.trim() === 'Skills')"], "label": "left skills list heading is present" },
+    { "cmd": ["wait", "--fn", "document.querySelectorAll('aside [aria-current=\"true\"]').length === 1"], "label": "the open skill is highlighted in the left list" },
+    { "cmd": ["eval", "location.search = '?tab=context'"], "label": "open the Context tab via the deep link" },
+    { "cmd": ["wait", "--url", "tab=context"], "label": "context tab is active in the URL" },
+    { "cmd": ["wait", "--text", "Project context to use"], "label": "context tab title is visible" },
+    { "cmd": ["wait", "--text", "Repository"], "label": "repository picker is visible" }
+  ]
+}

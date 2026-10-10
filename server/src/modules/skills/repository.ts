@@ -1,3 +1,4 @@
+import { sameOrderedList } from '../_shared/lists.js';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
@@ -104,6 +105,31 @@ export class SkillsRepository {
     const [row] = await this.db
       .update(t.skills)
       .set({ enabled })
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+      .returning();
+    return row;
+  }
+
+  /**
+   * Replace the ordered project-context attachment list. A differing list
+   * snapshots the current body and bumps `version` (like `update`); an identical
+   * list is a no-op. Returns undefined if the skill is unknown.
+   */
+  async setContextPaths(
+    workspaceId: string,
+    id: string,
+    paths: string[],
+  ): Promise<SkillRow | undefined> {
+    const existing = await this.getById(workspaceId, id);
+    if (!existing) return undefined;
+    const current = existing.contextPaths;
+    if (sameOrderedList(current, paths)) {
+      return existing;
+    }
+    await this.snapshotVersion(existing);
+    const [row] = await this.db
+      .update(t.skills)
+      .set({ contextPaths: paths, version: existing.version + 1 })
       .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
       .returning();
     return row;

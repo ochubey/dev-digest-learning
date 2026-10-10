@@ -53,7 +53,8 @@
       "skills": "Skills",
       "evals": "Evals",
       "stats": "Stats",
-      "ci": "CI"
+      "ci": "CI",
+      "context": "Context"
     }
   },
   "config": {
@@ -100,5 +101,11 @@
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."
+  },
+  "context": {
+    "title": "Project context",
+    "hint": "Markdown documents from the repository’s main branch that this agent reads on every run.",
+    "repoLabel": "Repository",
+    "repoPlaceholder": "Select a repository"
   }
 }

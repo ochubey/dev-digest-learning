@@ -51,10 +51,16 @@ export const PromptAssembly = z.object({
       when no skills were linked/enabled for this run. */
   skills_meta: z.array(SkillPromptMeta).nullish(),
   memory: z.string().nullish(),
+  /** Legacy single-string specs block (pre project-context traces). */
   specs: z.string().nullish(),
-  /** Callers-of-changed-symbols digest (repo-intel); null when absent. */
+  /** One block per injected project-context doc, in effective order. */
+  project_context_blocks: z
+    .array(z.object({ path: z.string(), tokens: z.number().int(), text: z.string() }))
+    .nullish(),
+  /** Callers-of-changed-symbols digest (T1.3); null when absent. */
   callers: z.string().nullish(),
-  /** Repo skeleton / map (repo-intel); null when absent. */
+  /** Repo skeleton / map (T3); null when absent. Enables per-slot token
+      attribution in the run trace. */
   repo_map: z.string().nullish(),
   /** PR author's description/body (truncated); null when absent. */
   pr_description: z.string().nullish(),
@@ -63,6 +69,26 @@ export const PromptAssembly = z.object({
   user: z.string(),
 });
 export type PromptAssembly = z.infer<typeof PromptAssembly>;
+
+export const SpecSkipReason = z.enum([
+  'not_found',
+  'read_error',
+  'not_text',
+  'invalid_path',
+  'over_budget',
+  'empty',
+]);
+export type SpecSkipReason = z.infer<typeof SpecSkipReason>;
+
+export const SpecReadEntry = z.object({
+  path: z.string(),
+  tokens: z.number().int().nullable(),
+  status: z.enum(['injected', 'skipped']),
+  reason: SpecSkipReason.nullish(),
+  origin: z.enum(['agent', 'skill']),
+  skill_name: z.string().nullish(),
+});
+export type SpecReadEntry = z.infer<typeof SpecReadEntry>;
 
 export const MemoryPulled = z.object({
   pr: z.number().int().nullish(),
@@ -95,7 +121,15 @@ export const RunTrace = z.object({
   tool_calls: z.array(ToolCall),
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
-  specs_read: z.array(z.string()),
+  /** Legacy traces store plain path strings; new ones store SpecReadEntry. */
+  specs_read: z.array(z.union([z.string(), SpecReadEntry])),
+  project_context: z
+    .object({
+      commit_sha: z.string().nullable(),
+      injected_tokens: z.number().int(),
+      soft_cap_exceeded: z.boolean(),
+    })
+    .nullish(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;

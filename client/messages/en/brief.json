@@ -9,7 +9,7 @@
   "noHistory": "No prior PRs overlap these files.",
   "overlap": "{count} overlap",
   "unavailable": "Brief not available yet.",
-  "unavailableHint": "Run a review or open the PR to compute it.",
+  "unavailableHint": "Generate a brief to see the summary, risks and where to focus your review.",
   "intent": {
     "label": "Intent",
     "inScope": "In Scope",
@@ -43,5 +43,71 @@
     "blame": "blame",
     "noHistory": "No history available for this line.",
     "noCommits": "No commits found for this line."
+  },
+  "overview": {
+    "description": "Description"
+  },
+  "card": {
+    "title": "PR brief",
+    "generate": "Generate brief",
+    "regenerate": "Regenerate",
+    "regenerating": "Regenerating…",
+    "summary": "Summary",
+    "reviewFocus": "Review focus",
+    "noFocus": "No specific review focus points.",
+    "risksNotAssessed": "Risks could not be assessed because the PR diff was unavailable.",
+    "stale": "Stale: the PR changed since this brief",
+    "generatedAt": "Generated {when}",
+    "costTokens": "Generation cost and tokens: {parts}",
+    "costTokensCost": "cost {cost}",
+    "costTokensIn": "input tokens {count, number}",
+    "costTokensOut": "output tokens {count, number}",
+    "costTokensInWord": "in",
+    "costTokensOutWord": "out",
+    "missing": "Generated without: {list}",
+    "rateLimitedLabel": "Generation was started recently. Please wait before trying again.",
+    "rateLimited": "Generation was started recently. Try again in {seconds, plural, one {# second} other {# seconds}}.",
+    "generateError": "Couldn’t generate the brief. Please try again.",
+    "retry": "Retry",
+    "loadError": "Couldn’t load the brief.",
+    "expandRisk": "Show details: {title}",
+    "openRef": "Open {file}",
+    "notInDiff": "File not in this PR’s diff",
+    "lineAdjusted": "Line adjusted to the nearest changed line",
+    "inputsChanged": "Inputs changed since this brief — Regenerate"
+  },
+  "missingInput": {
+    "intent": "intent",
+    "blast": "blast radius",
+    "description": "PR description",
+    "linked_issue": "linked issue",
+    "specs": "specs",
+    "diff": "diff"
+  },
+  "severity": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "riskKind": {
+    "security": "Security",
+    "db_migration": "Database migration",
+    "breaking_api": "Breaking API change",
+    "perf": "Performance",
+    "deps": "Dependencies",
+    "correctness": "Correctness",
+    "other": "Other",
+    "unknown": "Risk"
+  },
+  "stats": {
+    "files": "{count, plural, one {# file} other {# files}}",
+    "sources": "Sources",
+    "role": {
+      "core": "Core",
+      "tests": "Tests",
+      "wiring": "Wiring",
+      "docs": "Docs",
+      "boilerplate": "Boilerplate"
+    }
   }
 }

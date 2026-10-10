@@ -21,6 +21,10 @@ interface SmartDiffGroupProps {
   findingFiles?: number;
   /** Findings in the group by severity; only used to colour the badge by the top severity. */
   findingCounts?: SeverityCounts;
+  /** Deep-link target; a group holding the file opens even if collapsed by default. */
+  target?: { file: string; line: number | null } | null;
+  /** Shared "already scrolled for this target" marker (see FileCard). */
+  scrolledRef?: React.MutableRefObject<string | null>;
 }
 
 const SEVERITIES: readonly Severity[] = ["CRITICAL", "WARNING", "SUGGESTION"];
@@ -32,11 +36,20 @@ export function SmartDiffGroup({
   findings,
   findingFiles = 0,
   findingCounts,
+  target,
+  scrolledRef,
 }: SmartDiffGroupProps) {
   const t = useTranslations("prReview");
   const empty = files.length === 0;
   const topSev = findingCounts ? SEVERITIES.find((sev) => findingCounts[sev as keyof SeverityCounts] > 0) : undefined;
-  const [open, setOpen] = React.useState(!empty && !COLLAPSED_BY_DEFAULT.has(role));
+  const hasTarget = !!target && files.some((f) => f.path === target.file);
+  const [open, setOpen] = React.useState(
+    !empty && (hasTarget || !COLLAPSED_BY_DEFAULT.has(role)),
+  );
+  // The URL may re-target a file inside an already-mounted, collapsed group.
+  React.useEffect(() => {
+    if (hasTarget) setOpen(true);
+  }, [hasTarget, target?.file]);
   // Files start collapsed; the button toggles them all. `version` remounts the viewer so
   // every FileCard picks up the new default.
   const [filesOpen, setFilesOpen] = React.useState(false);
@@ -96,6 +109,8 @@ export function SmartDiffGroup({
           defaultOpen={filesOpen}
           commenting={commenting}
           findings={findings}
+          target={target}
+          scrolledRef={scrolledRef}
         />
       )}
     </div>

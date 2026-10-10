@@ -6,19 +6,22 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const SERVER_FILE = 'server/src/vendor/shared/contracts/brief.ts';
-const CLIENT_FILE = 'client/src/vendor/shared/contracts/brief.ts';
+const pair = (name: string) => ({
+  server: `server/src/vendor/shared/contracts/${name}`,
+  client: `client/src/vendor/shared/contracts/${name}`,
+});
 
 const read = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)));
 
 describe('vendored contracts parity', () => {
-  it('brief.ts is byte-identical on server and client', () => {
-    const a = read(SERVER_FILE);
-    const b = read(CLIENT_FILE);
-    expect(
-      a.equals(b),
-      `${SERVER_FILE} and ${CLIENT_FILE} differ; keep the vendored copies identical`,
-    ).toBe(true);
-  });
+  for (const name of ['brief.ts', 'trace.ts', 'platform.ts']) {
+    it(`${name} byte-identical`, () => {
+      const { server, client } = pair(name);
+      expect(
+        read(server).equals(read(client)),
+        `${server} and ${client} differ; keep the vendored copies identical`,
+      ).toBe(true);
+    });
+  }
 });
