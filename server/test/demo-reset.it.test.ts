@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
-import { seed } from '../src/db/seed.js';
+import { seed, SEED_PROJECT_CONTEXT_RUN_ID } from '../src/db/seed.js';
 import { resetDemoProject } from '../src/db/demo-reset.js';
 import * as t from '../src/db/schema.js';
 
@@ -98,7 +98,11 @@ d('resetDemoProject (Testcontainers pg)', () => {
     // demo: analysis gone
     expect(await db().select().from(t.prIntent).where(eq(t.prIntent.prId, p482.id))).toEqual([]);
     expect(await db().select().from(t.prBrief).where(eq(t.prBrief.prId, p482.id))).toEqual([]);
-    expect(await db().select().from(t.agentRuns).where(eq(t.agentRuns.prId, p482.id))).toEqual([]);
+    // only the seeded project-context run (and its trace) survives
+    expect((await db().select().from(t.agentRuns).where(eq(t.agentRuns.prId, p482.id))).map((r) => r.id)).toEqual([
+      SEED_PROJECT_CONTEXT_RUN_ID,
+    ]);
+    expect(await db().select().from(t.runTraces).where(eq(t.runTraces.runId, SEED_PROJECT_CONTEXT_RUN_ID))).toHaveLength(1);
     expect((await reviewsOf(p482.id)).map((r) => r.model)).toEqual(['seed']);
     expect(await db().select().from(t.findings).where(eq(t.findings.reviewId, real!.id))).toEqual([]);
     const after = await pr(482);

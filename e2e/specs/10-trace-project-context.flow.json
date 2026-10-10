@@ -1,0 +1,20 @@
+{
+  "name": "Run trace shows the project context that was injected",
+  "description": "From PR #482, open the seeded project-context run trace through the ?tab=findings&trace=<id> deep link (the id is SEED_PROJECT_CONTEXT_RUN_ID in server/src/db/seed.ts). The Specs read row lists the two seeded documents as 'path · N tok'. Opening Prompt assembly and the specs/security-baseline.md block shows the stored text: the <untrusted source=...> wrapper, the document body and the closing tag. Read-only seeded data (no model call). Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "Add rate limiting to public API endpoints"], "label": "seeded PR title row is visible" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["eval", "location.search = '?tab=findings&trace=5eed0000-0000-4000-8000-000000000c01'"], "label": "open the seeded run trace via the deep link" },
+    { "cmd": ["wait", "--text", "Specs read"], "label": "trace drawer renders the Specs read row" },
+    { "cmd": ["wait", "--fn", "/specs\\/security-baseline\\.md · \\d+ tok/.test(document.body.textContent)"], "label": "Specs read lists security-baseline with its token count" },
+    { "cmd": ["wait", "--fn", "/docs\\/architecture\\.md · \\d+ tok/.test(document.body.textContent)"], "label": "Specs read lists architecture with its token count" },
+    { "cmd": ["find", "text", "Prompt assembly", "click"], "label": "expand the Prompt assembly section" },
+    { "cmd": ["wait", "--text", "Project context — attached specs (untrusted)"], "label": "project context group label is visible" },
+    { "cmd": ["eval", "[...document.querySelectorAll('span')].filter((e) => e.children.length === 0 && e.textContent.startsWith('specs/security-baseline.md · ')).pop().click()"], "label": "open the security-baseline project context block" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('pre')].some((p) => p.textContent.includes('<untrusted source=\"specs/security-baseline.md\">') && p.textContent.includes('Secrets (API keys, tokens) must never be committed or logged.') && p.textContent.includes('</untrusted>'))"], "label": "block holds the untrusted wrapper, the document text and the closing tag" }
+  ]
+}

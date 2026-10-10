@@ -1,0 +1,16 @@
+{
+  "name": "Agent Context tab lists the project documents with the seeded attachments first",
+  "description": "From /agents, open the seeded Security Reviewer and switch to ?tab=context. The server runs with PROJECT_DOCS_SOURCE=fixture (set by scripts/e2e.sh and e2e-web.yml), so the picker lists the 4 deterministic documents of acme/payments-api. The seed attaches 2 of them (specs/security-baseline.md, docs/architecture.md), so the header badge reads '2 of 4 attached', those two rows come first in DOM order, and the footer reads '2 files · N tokens total'. Read-only (no attach/detach clicks, no model call). Assumes a freshly-seeded DB where acme/payments-api is the only repo and a server started with PROJECT_DOCS_SOURCE=fixture (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/agents"], "label": "load the agents page" },
+    { "cmd": ["wait", "--text", "Security Reviewer"], "label": "seeded agent card is visible" },
+    { "cmd": ["find", "text", "Security Reviewer", "click"], "label": "open the Security Reviewer editor" },
+    { "cmd": ["wait", "--url", "/agents/"], "label": "agent editor route reached" },
+    { "cmd": ["eval", "location.search = '?tab=context'"], "label": "open the Context tab via the deep link" },
+    { "cmd": ["wait", "--url", "tab=context"], "label": "context tab is active in the URL" },
+    { "cmd": ["wait", "--fn", "document.querySelectorAll('[data-testid=\"context-doc-row\"][data-path]').length === 4"], "label": "all 4 fixture documents are listed" },
+    { "cmd": ["wait", "--fn", "document.body.textContent.includes('2 of 4 attached')"], "label": "header badge shows 2 of 4 attached" },
+    { "cmd": ["wait", "--fn", "(() => { const p = [...document.querySelectorAll('[data-testid=\"context-doc-row\"][data-path]')].map((r) => r.getAttribute('data-path')); return p[0] === 'specs/security-baseline.md' && p[1] === 'docs/architecture.md'; })()"], "label": "the 2 attached documents come first, in attach order" },
+    { "cmd": ["wait", "--fn", "/2 files · [\\d.]+K? tokens total/.test(document.querySelector('[data-testid=\"context-footer-total\"]')?.textContent ?? '')"], "label": "footer shows the attached total" }
+  ]
+}

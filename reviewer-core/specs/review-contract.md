@@ -6,7 +6,7 @@ Required: `systemPrompt`, `model`, `diff` (already-parsed `UnifiedDiff`),
 `llm` (an `LLMProvider`). Everything else is optional and **omitted, not
 empty-string'd**, when not supplied — `assemblePrompt` leaves out a prompt
 section entirely rather than rendering `""`: `skills`, `memory`, `specs`,
-`callers`, `repoMap`, `prDescription`, `intent` (deprecated string), `intentObj`,
+`projectContext`, `callers`, `repoMap`, `prDescription`, `intent` (deprecated string), `intentObj`,
 `task`.
 
 `intentObj?: Intent` — structured derived intent. When present, the prompt gets a
@@ -14,6 +14,14 @@ bounded, `wrapUntrusted` `## Intent` section (`renderIntent`) and the trusted
 `SCOPE_INSTRUCTIONS` are appended to the system prompt; it also drives the
 scope policy below. Absent, or confidence < 0.5, or empty in/out lists → scope
 filter inactive (every finding `in`).
+
+`projectContext?: ProjectContextDoc[]` (`{ path, content }`, in effective order) —
+project documents attached to the agent/skills. Each one is rendered whole (never
+summarised) by `wrapProjectDoc` as `<untrusted source="<path>">…</untrusted>`
+(path attribute-escaped; a body cannot forge the closing or an opening tag) under
+`## Project context`, in every chunk call, and the trusted `PROJECT_CONTEXT_GUARD`
+is appended to the system prompt. When present it replaces the legacy `specs`
+section. Scope, grounding and verdict never read it.
 
 `strategy` picks `'auto' | 'single-pass' | 'map-reduce'` — `'auto'` (the
 default) only chunks per-file when the diff is **both** over
@@ -36,6 +44,8 @@ file; a large single-file diff still goes single-pass.
   `llm/openrouter.ts`). `null` propagates if *any* chunk's cost is
   unknown — a partial cost across chunks is treated as no cost, not summed
   with a hole in it.
+- `projectContext: { path, text }[]` — the wrapped blocks exactly as sent
+  (`[]` when none), so the caller can store them in the run trace and count tokens.
 - `assembly` / `chunks` / `raw` — for the caller's own run-trace/logging
   needs; the engine doesn't persist anything itself.
 - `review.findings` — in-scope (`scope='in'`) findings ONLY; they drive score,
