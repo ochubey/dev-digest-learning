@@ -48,3 +48,12 @@ describe("client copy of project-context contracts", () => {
     expect(PROJECT_CONTEXT_SOFT_CAP_TOKENS).toBe(4000);
   });
 });
+
+describe('client project-context constants mirror the shared contract', () => {
+  it('SOURCE_ORDER and SOFT_CAP_TOKENS equal the shared values', async () => {
+    const shared = await import('@devdigest/shared');
+    const local = await import('../components/project-context/constants');
+    expect([...local.SOURCE_ORDER]).toEqual([...shared.PROJECT_CONTEXT_FOLDERS]);
+    expect(local.SOFT_CAP_TOKENS).toBe(shared.PROJECT_CONTEXT_SOFT_CAP_TOKENS);
+  });
+});

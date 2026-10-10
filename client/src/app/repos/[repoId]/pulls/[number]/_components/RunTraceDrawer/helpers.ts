@@ -1,5 +1,5 @@
 import type { LogLine } from "@devdigest/ui";
-import { PROJECT_CONTEXT_SOFT_CAP_TOKENS } from "@devdigest/shared";
+import { SOFT_CAP_TOKENS } from "@/components/project-context/constants";
 import type { RunTrace, SpecReadEntry, SpecSkipReason } from "@devdigest/shared";
 
 interface RawEvent {
@@ -82,5 +82,5 @@ export function specsTokenSummary(
   const tokens =
     stored?.injected_tokens ??
     rows.reduce((n, r) => (r.status === "injected" ? n + (r.tokens ?? 0) : n), 0);
-  return { tokens, softCapExceeded: tokens > PROJECT_CONTEXT_SOFT_CAP_TOKENS };
+  return { tokens, softCapExceeded: tokens > SOFT_CAP_TOKENS };
 }

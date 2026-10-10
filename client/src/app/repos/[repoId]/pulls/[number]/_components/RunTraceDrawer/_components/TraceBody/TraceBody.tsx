@@ -5,7 +5,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
-import { PROJECT_CONTEXT_SOFT_CAP_TOKENS } from "@devdigest/shared";
+import { SOFT_CAP_TOKENS } from "@/components/project-context/constants";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import { PROMPT_COLORS } from "../../constants";
 import {
@@ -85,7 +85,7 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
               </div>
               {specsSummary.softCapExceeded && (
                 <span data-testid="spec-soft-cap" style={s.specsNote}>
-                  {t("trace.config.specsSoftCap", { tokens: specsSummary.tokens, cap: PROJECT_CONTEXT_SOFT_CAP_TOKENS })}
+                  {t("trace.config.specsSoftCap", { tokens: specsSummary.tokens, cap: SOFT_CAP_TOKENS })}
                 </span>
               )}
             </div>
