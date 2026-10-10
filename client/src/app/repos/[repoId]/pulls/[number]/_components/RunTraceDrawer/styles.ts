@@ -97,6 +97,15 @@ export const s = {
   specsWrap: { display: "flex", gap: 6, flexWrap: "wrap" } satisfies CSSProperties,
   specsNone: { color: "var(--text-muted)" } satisfies CSSProperties,
   spec: { fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
+  specSkipped: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+    textDecoration: "line-through",
+  } satisfies CSSProperties,
+  specSkipReason: { fontSize: 12, color: "var(--warn)", fontStyle: "italic" } satisfies CSSProperties,
+  promptSectionLabel: { fontSize: 12, color: "var(--text-muted)", margin: "8px 0 4px" } satisfies CSSProperties,
+  specsCol: { display: "flex", flexDirection: "column", gap: 4 } satisfies CSSProperties,
+  specsNote: { fontSize: 12, color: "var(--warn)" } satisfies CSSProperties,
   statsRow: { display: "flex", gap: 10 } satisfies CSSProperties,
   rawPre: {
     margin: 0,
