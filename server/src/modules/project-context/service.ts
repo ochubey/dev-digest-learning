@@ -9,6 +9,7 @@ import type {
 import type { Container } from '../../platform/container.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import { DISCOVERY_READ_CONCURRENCY, TOKEN_CACHE_SIZE } from './constants.js';
+import { mapLimit } from './map-limit.js';
 import { decodeUtf8Strict, filterDocEntries } from './docs.js';
 import { countUsedBy, effectiveDocs, validateAttachList } from './effective.js';
 import { classifySource, isContextDocPath, normalizeContextPath } from './paths.js';
@@ -23,20 +24,6 @@ export type PreviewResult =
 
 /** Fixed text: never provider messages or document content. */
 export const DISCOVERY_FAILED_TEXT = 'Could not read documents from the repository';
-
-/** Run `fn` over `items` with at most `limit` in flight; results keep input order. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
-}
 
 /** Authorization (404 / 403) happens before ANY source call. */
 export class ProjectContextService {
@@ -113,9 +100,10 @@ export class ProjectContextService {
   }
 
   async preview(workspaceId: string, repoId: string, rawPath: string): Promise<PreviewResult> {
+    // Authorize first (404 / 403), then validate the path (400); no source call before both.
+    const repo = await this.loadRepo(workspaceId, repoId);
     const path = normalizeContextPath(rawPath);
     if (!isContextDocPath(path)) throw new AppError('invalid_path', 'Invalid document path', 400);
-    const repo = await this.loadRepo(workspaceId, repoId);
     const ref = { owner: repo.owner, name: repo.name };
 
     let source: ProjectDocsSource;
@@ -191,12 +179,13 @@ export class ProjectContextService {
   private validate(paths: string[]): string[] {
     const v = validateAttachList(paths);
     if (!v.ok) {
-      throw new AppError(
-        v.reason === 'duplicate' ? 'duplicate_path' : 'invalid_path',
-        v.reason === 'duplicate' ? 'Duplicate document path' : 'Invalid document path',
-        400,
-        { path: v.path },
-      );
+      const [code, message] =
+        v.reason === 'duplicate'
+          ? ['duplicate_path', 'Duplicate document path']
+          : v.reason === 'too_many'
+            ? ['too_many_paths', 'Too many documents attached']
+            : ['invalid_path', 'Invalid document path'];
+      throw new AppError(code!, message!, 400, { path: v.path });
     }
     return v.paths;
   }

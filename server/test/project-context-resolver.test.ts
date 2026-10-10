@@ -78,8 +78,8 @@ describe('resolveProjectContext', () => {
       [doc('specs/a.md'), doc('specs/b.md'), doc('specs/c.md'), doc('specs/d.md')],
     ).p;
     expect(out.entries.map((e) => e.status)).toEqual(['injected', 'injected', 'skipped', 'skipped']);
-    expect(out.entries[2]).toMatchObject({ reason: 'over_budget', tokens: 13000 });
-    expect(out.entries[3]).toMatchObject({ reason: 'over_budget' });
+    expect(out.entries[2]).toMatchObject({ reason: 'over_budget', tokens: null });
+    expect(out.entries[3]).toMatchObject({ reason: 'over_budget', tokens: null });
     expect(out.injectedTokens).toBe(32000);
   });
 
@@ -89,5 +89,46 @@ describe('resolveProjectContext', () => {
     expect(out.softCapExceeded).toBe(true);
     const at = await run({ 'specs/a.md': 'a'.repeat(4000) }, [doc('specs/a.md')]).p;
     expect(at.softCapExceeded).toBe(false);
+  });
+
+  it('skipped entries never carry a token count (AC-53)', async () => {
+    const out = await run(
+      { 'specs/a.md': 'x'.repeat(32000), 'specs/b.md': 'y', 'specs/c.md': null, 'specs/d.md': ' ' },
+      [doc('specs/a.md'), doc('specs/b.md'), doc('specs/c.md'), doc('specs/d.md')],
+    ).p;
+    for (const e of out.entries.filter((e) => e.status === 'skipped')) expect(e.tokens, e.path).toBeNull();
+    expect(out.entries[1]).toMatchObject({ reason: 'over_budget', tokens: null });
+    expect(out.injectedTokens).toBe(32000);
+  });
+
+  it('never reads more than 50 paths', async () => {
+    const files: Record<string, string> = {};
+    const effective = Array.from({ length: 60 }, (_, i) => {
+      files[`docs/d${i}.md`] = 'x';
+      return doc(`docs/d${i}.md`);
+    });
+    const { source, p } = run(files, effective);
+    const out = await p;
+    expect(reads(source)).toHaveLength(50);
+    expect(out.entries).toHaveLength(60);
+    expect(out.injected).toHaveLength(50);
+    expect(out.entries[55]).toMatchObject({ status: 'skipped', reason: 'over_budget', tokens: null });
+  });
+
+  it('accepts a source factory; a failing factory degrades to read_error with sha null', async () => {
+    const src = new MockProjectDocsSource({ heads: { main: 'sha1' }, files: { sha1: { 'specs/a.md': 'AA' } } });
+    const ok = await resolveProjectContext({
+      source: async () => src, repo, branch: 'main', effective: [doc('specs/a.md')], tokenizer,
+    });
+    expect(ok.commitSha).toBe('sha1');
+    expect(ok.injected).toHaveLength(1);
+
+    const bad = await resolveProjectContext({
+      source: async () => { throw new Error('no token'); },
+      repo, branch: 'main', effective: [doc('specs/a.md'), doc('../x.md')], tokenizer,
+    });
+    expect(bad.commitSha).toBeNull();
+    expect(bad.entries.map((e) => e.reason)).toEqual(['read_error', 'invalid_path']);
+    expect(bad.injected).toEqual([]);
   });
 });

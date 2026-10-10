@@ -12,7 +12,7 @@ import {
 import { wrapProjectDoc } from '@devdigest/reviewer-core';
 import type { RunTrace } from '@devdigest/shared';
 import { TiktokenTokenizer } from '../adapters/tokenizer/index.js';
-import { PROJECT_DOCS_FIXTURE } from './fixtures/project-docs.js';
+import { PROJECT_DOCS_FIXTURE, PROJECT_DOCS_FIXTURE_SHA } from './fixtures/project-docs.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -559,7 +559,7 @@ async function seedProjectContextRun(
       status: 'injected' as const,
       origin: 'agent' as const,
     })),
-    project_context: { commit_sha: null, injected_tokens: injectedTokens, soft_cap_exceeded: false },
+    project_context: { commit_sha: PROJECT_DOCS_FIXTURE_SHA, injected_tokens: injectedTokens, soft_cap_exceeded: false },
     log: [],
   };
   await db.insert(t.runTraces).values({ runId: SEED_PROJECT_CONTEXT_RUN_ID, trace }).onConflictDoNothing();

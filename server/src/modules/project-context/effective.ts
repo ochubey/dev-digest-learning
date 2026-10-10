@@ -1,3 +1,4 @@
+import { PROJECT_CONTEXT_MAX_ATTACHED, PROJECT_CONTEXT_MAX_PATH_LENGTH } from './constants.js';
 import { isContextDocPath, normalizeContextPath } from './paths.js';
 
 export interface SkillContext {
@@ -43,15 +44,18 @@ export function effectiveDocs(
 
 export type AttachValidation =
   | { ok: true; paths: string[] }
-  | { ok: false; reason: 'invalid_path' | 'duplicate'; path: string };
+  | { ok: false; reason: 'invalid_path' | 'duplicate' | 'too_many'; path: string };
 
-/** Validate an attach list: every path valid, no duplicates after `./` trim. Returns normalized paths. */
+/** Validate an attach list: at most 50 paths, every path valid and short, no duplicates after `./` trim. Returns normalized paths. */
 export function validateAttachList(paths: string[]): AttachValidation {
+  if (paths.length > PROJECT_CONTEXT_MAX_ATTACHED) {
+    return { ok: false, reason: 'too_many', path: paths[PROJECT_CONTEXT_MAX_ATTACHED] as string };
+  }
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of paths) {
     const path = normalizeContextPath(raw);
-    if (!isContextDocPath(path)) return { ok: false, reason: 'invalid_path', path: raw };
+    if (raw.length > PROJECT_CONTEXT_MAX_PATH_LENGTH || !isContextDocPath(path)) return { ok: false, reason: 'invalid_path', path: raw };
     if (seen.has(path)) return { ok: false, reason: 'duplicate', path: raw };
     seen.add(path);
     out.push(path);

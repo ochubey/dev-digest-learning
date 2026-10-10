@@ -58,16 +58,35 @@ d('project context attachments (DB)', () => {
 
   it('stores only ordered paths (sentinel absent from agents, skills, agent_versions, skill_versions)', async () => {
     const SENTINEL = 'SENTINEL-DOC-BODY-9f3a';
+    const SENTINEL_PATH = 'specs/sentinel.md';
+    const [repo] = await pg.handle.db.select().from(t.repos);
+    const source = new MockProjectDocsSource({
+      heads: { [repo!.defaultBranch]: 'sha-s' },
+      files: { 'sha-s': { [SENTINEL_PATH]: `# Doc\n${SENTINEL}\n`, 'docs/a.md': 'plain' } },
+    });
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test', LOG_LEVEL: 'silent' } as NodeJS.ProcessEnv);
+    const service = new ProjectContextService(new Container(config, pg.handle.db, { projectDocs: source }));
+
+    // The sentinel body really flows through discovery and preview...
+    const discovery = await service.discover(ws, repo!.id);
+    expect(discovery.docs.map((d) => d.path)).toContain(SENTINEL_PATH);
+    const preview = await service.preview(ws, repo!.id, SENTINEL_PATH);
+    expect(preview.kind === 'ok' && preview.preview.content).toContain(SENTINEL);
+
+    // ...then a real attach through the service/repository on an agent and a skill.
     const agent = await newAgent();
     const skill = await newSkill();
-    const paths = ['specs/b.md', 'docs/a.md', 'insights/c.md'];
-    await agents.setContextPaths(ws, agent.id, paths);
-    await skills.setContextPaths(ws, skill.id, paths);
+    const paths = ['specs/b.md', SENTINEL_PATH, 'insights/c.md'];
+    await service.setAgentContext(ws, agent.id, paths);
+    await service.setSkillContext(ws, skill.id, paths);
+    // A second change snapshots a version row for both.
+    await service.setAgentContext(ws, agent.id, [...paths, 'docs/a.md']);
+    await service.setSkillContext(ws, skill.id, [...paths, 'docs/a.md']);
 
     const [a] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.id, agent.id));
     const [s] = await pg.handle.db.select().from(t.skills).where(eq(t.skills.id, skill.id));
-    expect(a!.contextPaths).toEqual(paths);
-    expect(s!.contextPaths).toEqual(paths);
+    expect(a!.contextPaths).toEqual([...paths, 'docs/a.md']);
+    expect(s!.contextPaths).toEqual([...paths, 'docs/a.md']);
 
     const dump = JSON.stringify([
       await pg.handle.db.select().from(t.agents),
@@ -75,7 +94,8 @@ d('project context attachments (DB)', () => {
       await pg.handle.db.select().from(t.agentVersions),
       await pg.handle.db.select().from(t.skillVersions),
     ]);
-    expect(dump).not.toContain(SENTINEL);
+    expect(dump).toContain(SENTINEL_PATH); // the attached path IS stored
+    expect(dump).not.toContain(SENTINEL); // the body never is
   });
 
   it('agent version +1 per list change, unchanged on identical list', async () => {

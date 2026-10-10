@@ -14,7 +14,6 @@ import { loadLine, resolveRefsLine, llmDetails, llmCallsLine, reviewIntentPolicy
 import { intentFilesFromDiff } from '../intent/diff-files.js';
 import { resolveFeatureModel } from '../settings/feature-models.js';
 import { effectiveDocs } from '../project-context/effective.js';
-import type { ProjectDocsSource } from '../project-context/ports.js';
 import { resolveProjectContext, type ResolvedProjectContext } from '../project-context/resolver.js';
 import { projectContextSummaryLine, projectContextSkipLine } from '../project-context/log-lines.js';
 import { randomUUID } from 'node:crypto';
@@ -457,16 +456,8 @@ export class ReviewRunExecutor {
       );
       if (docs.length > 0) {
         pc = await resolveProjectContext({
-          // A missing token must not fail the run (AC-49/AC-50): degrade to read_error entries.
-          source: await this.container.projectDocs().catch(
-            (err: unknown): ProjectDocsSource => ({
-              resolveBranchHead: async () => {
-                throw err;
-              },
-              listTree: async () => [],
-              readBlob: async () => null,
-            }),
-          ),
+          // A missing token degrades to read_error entries inside the resolver (AC-49/AC-50).
+          source: () => this.container.projectDocs(),
           repo: { owner: repo.owner, name: repo.name },
           branch: repo.defaultBranch,
           effective: docs,
@@ -688,9 +679,10 @@ export class ReviewRunExecutor {
         skills_meta: skillsMeta.length > 0 ? skillsMeta : null,
         ...(pc && (outcome.projectContext?.length ?? 0) > 0
           ? {
+              // Label shows the BODY tokens (same number as Specs read); text stays as sent.
               project_context_blocks: outcome.projectContext.map((b) => ({
                 path: b.path,
-                tokens: this.container.tokenizer.count(b.text),
+                tokens: pc.injected.find((d) => d.path === b.path)?.tokens ?? this.container.tokenizer.count(b.text),
                 text: b.text,
               })),
             }

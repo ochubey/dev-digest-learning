@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
+import { PROJECT_DOCS_FIXTURE_SHA } from '../src/db/fixtures/project-docs.js';
 import { seed, SEED_PROJECT_CONTEXT_RUN_ID, SEED_CONTEXT_PATHS } from '../src/db/seed.js';
 import { RunTrace } from '@devdigest/shared';
 import * as t from '../src/db/schema.js';
@@ -122,6 +123,7 @@ d('demo seed (Testcontainers pg)', () => {
     expect(blocks.map((b) => b.path)).toEqual(SEED_CONTEXT_PATHS);
     expect(blocks[0]!.text).toMatch(/^<untrusted source="specs\/security-baseline\.md">\n[\s\S]+\n<\/untrusted>$/);
     expect(blocks[0]!.text).toContain('Secrets (API keys, tokens) must never be committed or logged.');
+    expect(trace.project_context!.commit_sha).toBe(PROJECT_DOCS_FIXTURE_SHA);
     expect(trace.project_context!.injected_tokens).toBeGreaterThan(0);
     expect(trace.project_context!.soft_cap_exceeded).toBe(false);
   });

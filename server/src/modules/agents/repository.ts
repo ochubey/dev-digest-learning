@@ -1,3 +1,4 @@
+import { sameOrderedList } from '../_shared/lists.js';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
@@ -158,7 +159,7 @@ export class AgentsRepository {
     const existing = await this.getById(workspaceId, id);
     if (!existing) return undefined;
     const current = existing.contextPaths;
-    if (current.length === paths.length && current.every((p, i) => p === paths[i])) {
+    if (sameOrderedList(current, paths)) {
       return existing;
     }
     const nextVersion = existing.version + 1;

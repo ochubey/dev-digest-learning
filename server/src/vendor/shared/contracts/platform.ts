@@ -284,6 +284,11 @@ export const PROJECT_CONTEXT_SOFT_CAP_TOKENS = 4000;
 /** Run-time ceiling: docs past this budget are skipped as `over_budget`. */
 export const PROJECT_CONTEXT_HARD_CEILING_TOKENS = 32000;
 
+/** Most documents one agent or skill can attach. */
+export const PROJECT_CONTEXT_MAX_ATTACHED = 50;
+/** Longest accepted document path, in characters. */
+export const PROJECT_CONTEXT_MAX_PATH_LENGTH = 300;
+
 export const ContextSource = z.enum(PROJECT_CONTEXT_FOLDERS);
 export type ContextSource = z.infer<typeof ContextSource>;
 
@@ -332,7 +337,9 @@ export const AgentContextAttachments = ContextAttachments.extend({
 });
 export type AgentContextAttachments = z.infer<typeof AgentContextAttachments>;
 
-export const ContextAttachmentsInput = z.object({ paths: z.array(z.string()) });
+export const ContextAttachmentsInput = z.object({
+  paths: z.array(z.string().max(PROJECT_CONTEXT_MAX_PATH_LENGTH)).max(PROJECT_CONTEXT_MAX_ATTACHED),
+});
 export type ContextAttachmentsInput = z.infer<typeof ContextAttachmentsInput>;
 
 export const DefaultContextRepo = z.object({ repo_id: z.string().nullable() });

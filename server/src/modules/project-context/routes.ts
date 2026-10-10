@@ -4,7 +4,6 @@ import { z } from 'zod';
 import {
   AgentContextAttachments,
   ContextAttachments,
-  ContextAttachmentsInput,
   ContextDiscovery,
   ContextDocPreview,
   DefaultContextRepo,
@@ -16,6 +15,12 @@ import { ProjectContextService } from './service.js';
 
 const DocsQuery = z.object({ refresh: z.string().optional() });
 const PreviewQuery = z.object({ path: z.string() });
+/**
+ * Lenient on purpose: the limits of `ContextAttachmentsInput` (50 paths, 300 chars) are
+ * enforced by `validateAttachList` so an over-limit list is a 400 like every other bad
+ * list, not the app-wide 422 for schema failures.
+ */
+const AttachBody = z.object({ paths: z.array(z.string()) });
 const CodedError = z.object({ code: z.string(), error: z.string() });
 
 /**
@@ -111,7 +116,7 @@ export default async function projectContextRoutes(appBase: FastifyInstance) {
 
   app.put(
     '/agents/:id/context',
-    { schema: { params: IdParams, body: ContextAttachmentsInput, response: { 200: AgentContextAttachments } } },
+    { schema: { params: IdParams, body: AttachBody, response: { 200: AgentContextAttachments } } },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return service.setAgentContext(workspaceId, req.params.id, req.body.paths);
@@ -129,7 +134,7 @@ export default async function projectContextRoutes(appBase: FastifyInstance) {
 
   app.put(
     '/skills/:id/context',
-    { schema: { params: IdParams, body: ContextAttachmentsInput, response: { 200: ContextAttachments } } },
+    { schema: { params: IdParams, body: AttachBody, response: { 200: ContextAttachments } } },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return service.setSkillContext(workspaceId, req.params.id, req.body.paths);

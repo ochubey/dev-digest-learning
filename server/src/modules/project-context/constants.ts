@@ -2,6 +2,8 @@ export {
   PROJECT_CONTEXT_FOLDERS,
   PROJECT_CONTEXT_SOFT_CAP_TOKENS,
   PROJECT_CONTEXT_HARD_CEILING_TOKENS,
+  PROJECT_CONTEXT_MAX_ATTACHED,
+  PROJECT_CONTEXT_MAX_PATH_LENGTH,
 } from '@devdigest/shared';
 
 /** Parallel blob reads during discovery. */

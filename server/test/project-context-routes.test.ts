@@ -119,6 +119,35 @@ describe('project-context routes', () => {
     expect(store.writes).toHaveLength(0);
   });
 
+  it('PUT beyond the limits -> 400 on agent and skill routes, row unchanged', async () => {
+    const { app } = await setup();
+    const fifty = Array.from({ length: 50 }, (_, i) => `docs/d${i}.md`);
+    const tooMany = [...fifty, 'docs/d50.md'];
+    const longPath = `docs/${'a'.repeat(296)}.md`; // 301 chars
+    for (const url of [`/agents/${AGENT_ID}/context`, `/skills/${SKILL_ID}/context`]) {
+      const many = await app.inject({ method: 'PUT', url, payload: { paths: tooMany } });
+      expect(many.statusCode, `${url} 51 paths`).toBe(400);
+      const long = await app.inject({ method: 'PUT', url, payload: { paths: [longPath] } });
+      expect(long.statusCode, `${url} long path`).toBe(400);
+      const ok = await app.inject({ method: 'PUT', url, payload: { paths: fifty } });
+      expect(ok.statusCode, `${url} 50 paths`).toBe(200);
+    }
+  });
+
+  it('PUT skill duplicate (incl. ./ form) -> 400, row unchanged', async () => {
+    const { app } = await setup();
+    const before = [...store.skills.get(SKILL_ID)!.contextPaths];
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/skills/${SKILL_ID}/context`,
+      payload: { paths: ['docs/a.md', './docs/a.md'] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code ?? res.json().error).toBeTruthy();
+    expect(store.skills.get(SKILL_ID)!.contextPaths).toEqual(before);
+    expect(store.writes).toHaveLength(0);
+  });
+
   it('PUT persists full ordered list', async () => {
     const { app } = await setup();
     const res = await app.inject({
@@ -174,6 +203,17 @@ describe('project-context routes', () => {
         url: `/repos/${REPO_ID}/context/docs/preview?path=${encodeURIComponent(p)}`,
       });
       expect(res.statusCode, p).toBe(400);
+    }
+    expect(source.calls).toHaveLength(0);
+  });
+
+  it('preview: other-workspace repo + invalid path -> 403, unknown repo + invalid path -> 404, zero source calls', async () => {
+    const foreign = seedStore({ repoWs: OTHER_WS, agentWs: OTHER_WS, skillWs: OTHER_WS });
+    const { app, source } = await setup({ store: foreign });
+    for (const p of ['../../.env', '/etc/passwd', 'src/index.ts']) {
+      const q = `?path=${encodeURIComponent(p)}`;
+      expect((await app.inject({ method: 'GET', url: `/repos/${REPO_ID}/context/docs/preview${q}` })).statusCode, p).toBe(403);
+      expect((await app.inject({ method: 'GET', url: `/repos/${UNKNOWN}/context/docs/preview${q}` })).statusCode, p).toBe(404);
     }
     expect(source.calls).toHaveLength(0);
   });

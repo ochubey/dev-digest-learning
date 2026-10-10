@@ -17,7 +17,7 @@ vi.mock('@devdigest/reviewer-core', async (orig) => ({
   reviewPullRequest: (...a: unknown[]) => reviewPullRequest(...a),
 }));
 
-import { ReviewRunExecutor } from './run-executor.js';
+import { ReviewRunExecutor, RunCancelledError } from './run-executor.js';
 
 const SENTINEL = 'BODY-SENTINEL-9f3a';
 const TIP = 'tip-sha-123';
@@ -141,8 +141,8 @@ describe('ReviewRunExecutor project context', () => {
       { path: 'docs/gone.md', tokens: null, status: 'skipped', reason: 'not_found', origin: 'agent', skill_name: null },
     ]);
     expect(s.trace().prompt_assembly.project_context_blocks).toEqual([
-      { path: 'specs/inh.md', tokens: `<untrusted source="specs/inh.md">${SENTINEL}</untrusted>`.length, text: `<untrusted source="specs/inh.md">${SENTINEL}</untrusted>` },
-      { path: 'docs/own.md', tokens: 'wrapped own'.length, text: 'wrapped own' },
+      { path: 'specs/inh.md', tokens: `inherited ${SENTINEL}`.length, text: `<untrusted source="specs/inh.md">${SENTINEL}</untrusted>` },
+      { path: 'docs/own.md', tokens: 3, text: 'wrapped own' },
     ]);
     expect((s.reviewRepo.completeAgentRun.mock.calls[0]![1] as { status: string }).status).toBe('done');
     const msgs = s.events.map((e) => e.msg);
@@ -192,6 +192,18 @@ describe('ReviewRunExecutor project context', () => {
     expect(s.trace().specs_read.map((e: { reason: string }) => e.reason)).toEqual(['not_found', 'invalid_path']);
     expect(s.trace().prompt_assembly.project_context_blocks ?? null).toBeNull();
     expect(s.trace().project_context).toEqual({ commit_sha: TIP, injected_tokens: 0, soft_cap_exceeded: false });
+    expect((s.reviewRepo.completeAgentRun.mock.calls[0]![1] as { status: string }).status).toBe('done');
+  });
+
+  it('cancelled after resolution -> cancelled trace keeps specs_read + sha (AC-60)', async () => {
+    reviewPullRequest.mockRejectedValue(new RunCancelledError());
+    const s = setup({ files: { 'docs/a.md': 'aa' }, agentPaths: ['docs/a.md', 'docs/gone.md'] });
+    await s.run();
+    expect((s.reviewRepo.completeAgentRun.mock.calls[0]![1] as { status: string }).status).toBe('cancelled');
+    expect(s.trace().specs_read).toHaveLength(2);
+    expect(s.trace().specs_read[0]).toMatchObject({ path: 'docs/a.md', status: 'injected', tokens: 2 });
+    expect(s.trace().specs_read[1]).toMatchObject({ path: 'docs/gone.md', status: 'skipped', reason: 'not_found', tokens: null });
+    expect(s.trace().project_context).toEqual({ commit_sha: TIP, injected_tokens: 2, soft_cap_exceeded: false });
   });
 
   it('docs source unavailable (no GitHub token) -> run continues, every doc read_error, sha null', async () => {

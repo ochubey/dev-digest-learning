@@ -1,3 +1,4 @@
+import { sameOrderedList } from '../_shared/lists.js';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
@@ -122,7 +123,7 @@ export class SkillsRepository {
     const existing = await this.getById(workspaceId, id);
     if (!existing) return undefined;
     const current = existing.contextPaths;
-    if (current.length === paths.length && current.every((p, i) => p === paths[i])) {
+    if (sameOrderedList(current, paths)) {
       return existing;
     }
     await this.snapshotVersion(existing);

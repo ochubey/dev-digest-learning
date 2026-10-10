@@ -61,3 +61,13 @@ describe('project-context effective', () => {
     expect(countUsedBy(P, agents, skills)).toBe(3);
   });
 });
+
+describe('validateAttachList limits', () => {
+  it('rejects more than 50 paths and paths longer than 300 chars', async () => {
+    const { validateAttachList } = await import('../src/modules/project-context/effective.js');
+    const fifty = Array.from({ length: 50 }, (_, i) => `docs/d${i}.md`);
+    expect(validateAttachList(fifty).ok).toBe(true);
+    expect(validateAttachList([...fifty, 'docs/d50.md'])).toMatchObject({ ok: false, reason: 'too_many' });
+    expect(validateAttachList([`docs/${'a'.repeat(296)}.md`])).toMatchObject({ ok: false, reason: 'invalid_path' });
+  });
+});
