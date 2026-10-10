@@ -226,7 +226,7 @@ export class BriefService {
     const now = this.opts.now ?? (() => new Date());
     const base = { prId: pr.id, truncated: [] as BriefLogMeta["truncated"], missing: [] as BriefMissingInput[] };
 
-    // Model: the Risk Brief setting; no fallback to any other model or provider.
+    // Model: the Risk Brief setting. An unset default routes via OpenRouter only when its own provider key is missing.
     const choice = await (this.opts.resolveModel
       ? this.opts.resolveModel(workspaceId)
       : resolveFeatureModel(this.container, workspaceId, 'risk_brief'));
