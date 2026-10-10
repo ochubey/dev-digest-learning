@@ -15,9 +15,12 @@
 export {
   assemblePrompt,
   wrapUntrusted,
+  wrapProjectDoc,
   renderIntent,
   INJECTION_GUARD,
   SCOPE_INSTRUCTIONS,
+  PROJECT_CONTEXT_GUARD,
+  type ProjectContextDoc,
   type PromptParts,
   type AssembledPrompt,
 } from './prompt.js';
