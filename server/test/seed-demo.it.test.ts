@@ -35,8 +35,8 @@ d('demo seed (Testcontainers pg)', () => {
   let pg: PgFixture;
   beforeAll(async () => {
     pg = await startPg();
-    await seed(pg.handle.db);
-    await seed(pg.handle.db); // idempotent
+    await seed(pg.handle.db, { demoContext: true });
+    await seed(pg.handle.db, { demoContext: true }); // idempotent
   });
   afterAll(async () => {
     await pg?.stop();
@@ -133,5 +133,21 @@ d('demo seed (Testcontainers pg)', () => {
     const reviews = await pg.handle.db.select().from(t.reviews).where(eq(t.reviews.prId, p.id));
     expect(reviews.filter((r) => r.runId === SEED_PROJECT_CONTEXT_RUN_ID)).toEqual([]);
     expect(reviews).toHaveLength(1);
+  });
+});
+
+d('demo seed without the fixture docs source (Testcontainers pg)', () => {
+  let pg: PgFixture;
+  beforeAll(async () => {
+    pg = await startPg();
+    await seed(pg.handle.db);
+  });
+  afterAll(async () => {
+    await pg?.stop();
+  });
+
+  it('attaches no demo documents: against a real repo those paths would be skipped as not_found', async () => {
+    const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Security Reviewer'));
+    expect(agent!.contextPaths).toEqual([]);
   });
 });

@@ -39,7 +39,16 @@ export const SEED_PROJECT_CONTEXT_RUN_ID = '5eed0000-0000-4000-8000-000000000c01
 /** Project docs attached to the seeded Security Reviewer: 2 of the 4 fixture docs, so "attached first" is observable. */
 export const SEED_CONTEXT_PATHS = ['specs/security-baseline.md', 'docs/architecture.md'];
 
-export async function seed(db: Db): Promise<{ workspaceId: string; userId: string }> {
+export interface SeedOptions {
+  /**
+   * Attach the demo documents (SEED_CONTEXT_PATHS) to Security Reviewer. Only meaningful with the
+   * fixture docs source (PROJECT_DOCS_SOURCE=fixture): against a real repository those paths do
+   * not exist on main and every run would skip them as not_found.
+   */
+  demoContext?: boolean;
+}
+
+export async function seed(db: Db, opts: SeedOptions = {}): Promise<{ workspaceId: string; userId: string }> {
   // ---- workspace + user (no-auth defaults) ----
   let [ws] = await db
     .select()
@@ -486,7 +495,7 @@ Flag route/handler signature changes that remove or rename a required parameter,
     .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'Security Reviewer')));
   if (securityAgent) {
     // Top-up only while nothing is attached, so a user's own attach/detach is not overwritten.
-    if (securityAgent.contextPaths.length === 0) {
+    if (opts.demoContext && securityAgent.contextPaths.length === 0) {
       await db.update(t.agents).set({ contextPaths: SEED_CONTEXT_PATHS }).where(eq(t.agents.id, securityAgent.id));
     }
     if (pr482) {
@@ -574,7 +583,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1);
   }
   const handle = createDb(url);
-  seed(handle.db)
+  seed(handle.db, { demoContext: process.env.PROJECT_DOCS_SOURCE === 'fixture' })
     .then(async (r) => {
       console.log('✓ seeded', r);
       await handle.close();
