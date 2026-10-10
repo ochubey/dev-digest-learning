@@ -13,6 +13,10 @@ import { IntentService } from '../intent/service.js';
 import { loadLine, resolveRefsLine, llmDetails, llmCallsLine, reviewIntentPolicy } from '../intent/log-lines.js';
 import { intentFilesFromDiff } from '../intent/diff-files.js';
 import { resolveFeatureModel } from '../settings/feature-models.js';
+import { effectiveDocs } from '../project-context/effective.js';
+import type { ProjectDocsSource } from '../project-context/ports.js';
+import { resolveProjectContext, type ResolvedProjectContext } from '../project-context/resolver.js';
+import { projectContextSummaryLine, projectContextSkipLine } from '../project-context/log-lines.js';
 import { randomUUID } from 'node:crypto';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -126,6 +130,19 @@ function logRunMetrics(
     review: outcome.llmCalls,
     correlationId,
   });
+}
+
+/** `project_context` trace block; absent (not null) when the run had no project context. */
+function projectContextSummary(pc?: ResolvedProjectContext): Pick<RunTrace, 'project_context'> | Record<string, never> {
+  return pc
+    ? {
+        project_context: {
+          commit_sha: pc.commitSha,
+          injected_tokens: pc.injectedTokens,
+          soft_cap_exceeded: pc.softCapExceeded,
+        },
+      }
+    : {};
 }
 
 // A reduced "Review per file" — same schema as Review (the model returns a small
@@ -411,6 +428,8 @@ export class ReviewRunExecutor {
 
     runLog.info(`Starting review with agent "${agent.name}" (${agent.provider}/${agent.model})`);
 
+    // Held outside the try so failure/cancel traces keep the resolved entries (AC-60).
+    let pc: ResolvedProjectContext | undefined;
     try {
       // (container.llm throws if the provider key is missing — caught below and
       // persisted as a failed run.)
@@ -429,6 +448,40 @@ export class ReviewRunExecutor {
         name: l.skill.name,
         tokens: this.container.tokenizer.count(l.skill.body),
       }));
+
+      // Project context (SPEC-02): enabled skills' docs (skill order) then the agent's own.
+      // Nothing effective -> no source call and no trace/prompt change (AC-47).
+      const docs = effectiveDocs(
+        enabledSkills.map((l) => ({ id: l.skill.id, name: l.skill.name, contextPaths: l.skill.contextPaths ?? [] })),
+        agent.contextPaths ?? [],
+      );
+      if (docs.length > 0) {
+        pc = await resolveProjectContext({
+          // A missing token must not fail the run (AC-49/AC-50): degrade to read_error entries.
+          source: await this.container.projectDocs().catch(
+            (err: unknown): ProjectDocsSource => ({
+              resolveBranchHead: async () => {
+                throw err;
+              },
+              listTree: async () => [],
+              readBlob: async () => null,
+            }),
+          ),
+          repo: { owner: repo.owner, name: repo.name },
+          branch: repo.defaultBranch,
+          effective: docs,
+          tokenizer: this.container.tokenizer,
+        });
+        const skipped = pc.entries.filter((e) => e.status === 'skipped');
+        runLog.info(
+          projectContextSummaryLine({
+            injected: pc.injected.length,
+            tokens: pc.injectedTokens,
+            skipped: skipped.length,
+          }),
+        );
+        for (const e of skipped) runLog.info(projectContextSkipLine(e.path, e.reason ?? 'unknown'));
+      }
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
@@ -451,6 +504,10 @@ export class ReviewRunExecutor {
         // Skills feature — enabled, ordered skill bodies (empty array omits the
         // section entirely inside assemblePrompt).
         ...(enabledSkills.length > 0 ? { skills: enabledSkills.map((l) => l.skill.body) } : {}),
+        // Project context docs (untrusted; wrapped by reviewer-core). Omitted when none injected.
+        ...(pc && pc.injected.length > 0
+          ? { projectContext: pc.injected.map((d) => ({ path: d.path, content: d.content })) }
+          : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -482,7 +539,7 @@ export class ReviewRunExecutor {
       });
 
       const { review, findingRows } = await this.persistReview(workspaceId, pull, agent, runId, outcome, runLog);
-      await this.finishRun(runId, pull, agent, outcome, start, runLog, skillsMeta);
+      await this.finishRun(runId, pull, agent, outcome, start, runLog, skillsMeta, pc);
 
       return { review, findings: findingRows, grounding: outcome.grounding, raw: outcome.review };
     } catch (err) {
@@ -504,7 +561,7 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
+        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, pc))
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
@@ -589,6 +646,7 @@ export class ReviewRunExecutor {
     start: number,
     runLog: RunLogger,
     skillsMeta: ReadonlyArray<unknown> = [],
+    pc?: ResolvedProjectContext,
   ): Promise<void> {
     // reviewer-core already computes costUsd per LLM call (summed across
     // map-reduce chunks, preferring OpenRouter's live billed cost over our
@@ -628,6 +686,15 @@ export class ReviewRunExecutor {
       prompt_assembly: {
         ...outcome.assembly,
         skills_meta: skillsMeta.length > 0 ? skillsMeta : null,
+        ...(pc && (outcome.projectContext?.length ?? 0) > 0
+          ? {
+              project_context_blocks: outcome.projectContext.map((b) => ({
+                path: b.path,
+                tokens: this.container.tokenizer.count(b.text),
+                text: b.text,
+              })),
+            }
+          : {}),
       } as RunTrace['prompt_assembly'],
       tool_calls: outcome.chunks.map((c) => ({
         tool: 'review_file',
@@ -637,7 +704,8 @@ export class ReviewRunExecutor {
       })),
       raw_output: outcome.raw,
       memory_pulled: [],
-      specs_read: [],
+      specs_read: pc ? pc.entries : [],
+      ...projectContextSummary(pc),
       // Persisted log = the run's FULL event buffer (incl. shared pre-work:
       // diff load + intent), not just events recorded inside this method.
       log: runLog.logFor(runId),
@@ -758,6 +826,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     grounding: string,
     durationMs = 0,
+    pc?: ResolvedProjectContext,
   ): RunTrace {
     return {
       config: {
@@ -780,7 +849,8 @@ export class ReviewRunExecutor {
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],
-      specs_read: [],
+      specs_read: pc ? pc.entries : [],
+      ...projectContextSummary(pc),
       log: this.container.runBus.buffer(runId).map((e) => ({ t: e.t, kind: e.kind, msg: e.msg })),
     };
   }
