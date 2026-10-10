@@ -1,4 +1,4 @@
-/* /skills/:id — the full Skill Editor route (Config / Preview / Versioning
+/* /skills/:id — the full Skill Editor route (Config / Context / Preview / Versioning
    tabs), reached from the Skills Lab grid's preview drawer via "Open". Tab
    state lives in ?tab= (mirrors the Agent Editor's pattern). */
 "use client";
@@ -10,6 +10,7 @@ import { AppShell } from "../../../components/app-shell";
 import { useSkill } from "../../../lib/hooks/skills";
 import { ApiError } from "../../../lib/api";
 import { SkillEditor } from "../_components/SkillEditor";
+import { TABS } from "../_components/SkillEditor/constants";
 import { SKILL_TYPE_COLOR } from "../../../components/skill-type";
 
 export default function SkillDetailPage() {
@@ -20,7 +21,7 @@ export default function SkillDetailPage() {
 
   const { data: skill, isLoading, isError, error, refetch } = useSkill(id);
 
-  const VALID_TABS = ["config", "preview", "versions"];
+  const VALID_TABS = TABS.map((tb) => (typeof tb === "string" ? tb : tb.key));
   const tab = VALID_TABS.includes(search.get("tab") ?? "") ? search.get("tab")! : "config";
   const setTab = (t: string) => {
     const sp = new URLSearchParams(search.toString());
