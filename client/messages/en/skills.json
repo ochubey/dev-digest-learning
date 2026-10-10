@@ -97,5 +97,13 @@
     "bodyLabel": "Skill body (Markdown)",
     "bodyHint": "Saving a changed body creates a new immutable version.",
     "version": "v{version}"
+  },
+  "projectContext": {
+    "tab": "Context",
+    "title": "Project context to use",
+    "hint": "Any agent using this skill inherits these documents.",
+    "noneAttached": "No project context attached to this skill.",
+    "serializesAs": "Serializes as",
+    "disabledUnsaved": "Save the skill first, then you can attach project documents."
   }
 }

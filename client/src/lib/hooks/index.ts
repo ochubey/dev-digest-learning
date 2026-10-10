@@ -11,3 +11,4 @@ export * from "./conventions";
 export * from "./smart-diff";
 export * from "./blast";
 export * from "./brief";
+export * from "./project-context";
