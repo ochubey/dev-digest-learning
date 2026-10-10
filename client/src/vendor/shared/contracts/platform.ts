@@ -278,6 +278,67 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
+export const PROJECT_CONTEXT_FOLDERS = ['specs', 'docs', 'insights'] as const;
+/** Above this many attached tokens the UI warns (never blocks). */
+export const PROJECT_CONTEXT_SOFT_CAP_TOKENS = 4000;
+/** Run-time ceiling: docs past this budget are skipped as `over_budget`. */
+export const PROJECT_CONTEXT_HARD_CEILING_TOKENS = 32000;
+
+export const ContextSource = z.enum(PROJECT_CONTEXT_FOLDERS);
+export type ContextSource = z.infer<typeof ContextSource>;
+
+export const ContextDoc = z.object({
+  path: z.string(),
+  name: z.string(),
+  folder: z.string(),
+  source: ContextSource,
+  tokens: z.number().int(),
+});
+export type ContextDoc = z.infer<typeof ContextDoc>;
+
+export const ContextDiscovery = z.object({
+  repo_id: z.string(),
+  branch: z.string(),
+  commit_sha: z.string(),
+  docs: z.array(ContextDoc),
+});
+export type ContextDiscovery = z.infer<typeof ContextDiscovery>;
+
+export const ContextDocPreview = z.object({
+  path: z.string(),
+  source: ContextSource,
+  tokens: z.number().int(),
+  used_by: z.number().int(),
+  content: z.string(),
+  commit_sha: z.string(),
+});
+export type ContextDocPreview = z.infer<typeof ContextDocPreview>;
+
+export const ContextAttachments = z.object({
+  paths: z.array(z.string()),
+  version: z.number().int(),
+});
+export type ContextAttachments = z.infer<typeof ContextAttachments>;
+
+export const InheritedContextDoc = z.object({
+  path: z.string(),
+  skill_id: z.string(),
+  skill_name: z.string(),
+});
+export type InheritedContextDoc = z.infer<typeof InheritedContextDoc>;
+
+export const AgentContextAttachments = ContextAttachments.extend({
+  inherited: z.array(InheritedContextDoc),
+});
+export type AgentContextAttachments = z.infer<typeof AgentContextAttachments>;
+
+export const ContextAttachmentsInput = z.object({ paths: z.array(z.string()) });
+export type ContextAttachmentsInput = z.infer<typeof ContextAttachmentsInput>;
+
+export const DefaultContextRepo = z.object({ repo_id: z.string().nullable() });
+export type DefaultContextRepo = z.infer<typeof DefaultContextRepo>;
+
+/** @deprecated Superseded by ContextDoc / ContextDocPreview; kept for legacy callers. */
 export const SpecFile = z.object({
   path: z.string(),
   content: z.string().nullish(),

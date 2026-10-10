@@ -18,12 +18,31 @@ import {
   Settings,
   Repo,
   PrDetail,
+  ContextDoc,
+  ContextDiscovery,
+  ContextDocPreview,
+  AgentContextAttachments,
+  ContextAttachmentsInput,
+  DefaultContextRepo,
+  PROJECT_CONTEXT_FOLDERS,
+  PROJECT_CONTEXT_SOFT_CAP_TOKENS,
+  PROJECT_CONTEXT_HARD_CEILING_TOKENS,
 } from '@devdigest/shared';
 
 /**
  * Contract tests — parse/round-trip the fixtures from data.jsx/data2.jsx
  * so feature agents can rely on the schemas matching the prototype data.
  */
+
+const baseTrace = {
+  config: { agent: 'Security Reviewer', model: 'gpt-4.1', pr: 482, source: 'local' },
+  stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null, findings: 0, grounding: '0/0' },
+  tool_calls: [],
+  raw_output: '{}',
+  memory_pulled: [],
+  log: [],
+};
+
 describe('AI contracts parse fixtures', () => {
   it('Review + Finding (data.jsx VERDICT/FINDINGS)', () => {
     const review = Review.parse({
@@ -182,6 +201,66 @@ describe('AI contracts parse fixtures', () => {
       log: [{ t: '00.00', kind: 'info', msg: 'started' }],
     });
     expect(trace.tool_calls).toHaveLength(1);
+  });
+
+  it('RunTrace parses legacy specs_read strings + specs string', () => {
+    const t = RunTrace.parse({
+      ...baseTrace,
+      prompt_assembly: { system: 's', user: 'u', specs: '## Specs\nlegacy text' },
+      specs_read: ['specs/a.md', 'specs/b.md'],
+    });
+    expect(t.specs_read).toEqual(['specs/a.md', 'specs/b.md']);
+    expect(t.prompt_assembly.specs).toBe('## Specs\nlegacy text');
+    expect(t.project_context).toBeUndefined();
+    expect(t.prompt_assembly.project_context_blocks).toBeUndefined();
+  });
+
+  it('RunTrace parses SpecReadEntry + project_context_blocks', () => {
+    const t = RunTrace.parse({
+      ...baseTrace,
+      prompt_assembly: {
+        system: 's',
+        user: 'u',
+        project_context_blocks: [{ path: 'specs/a.md', tokens: 12, text: '<untrusted source="specs/a.md">x</untrusted>' }],
+      },
+      specs_read: [
+        { path: 'specs/a.md', tokens: 12, status: 'injected', origin: 'agent' },
+        { path: 'docs/b.md', tokens: null, status: 'skipped', reason: 'not_found', origin: 'skill', skill_name: 'sec' },
+        'legacy.md',
+      ],
+      project_context: { commit_sha: 'abc123', injected_tokens: 12, soft_cap_exceeded: false },
+    });
+    expect(t.specs_read).toHaveLength(3);
+    expect(t.project_context?.commit_sha).toBe('abc123');
+    expect(t.prompt_assembly.project_context_blocks?.[0].tokens).toBe(12);
+    expect(() =>
+      RunTrace.parse({
+        ...baseTrace,
+        prompt_assembly: { system: 's', user: 'u' },
+        specs_read: [{ path: 'x', tokens: null, status: 'skipped', reason: 'bogus', origin: 'agent' }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe('project-context', () => {
+  it('ContextDiscovery/AgentContextAttachments parse', () => {
+    const doc = { path: 'specs/a.md', name: 'a.md', folder: 'specs', source: 'specs', tokens: 640 };
+    const d = ContextDiscovery.parse({ repo_id: 'r1', branch: 'main', commit_sha: 'abc', docs: [doc] });
+    expect(d.docs[0].tokens).toBe(640);
+    const a = AgentContextAttachments.parse({
+      paths: ['specs/a.md'],
+      version: 2,
+      inherited: [{ path: 'docs/b.md', skill_id: 's1', skill_name: 'Sec' }],
+    });
+    expect(a.inherited).toHaveLength(1);
+    expect(ContextAttachmentsInput.parse({ paths: [] }).paths).toEqual([]);
+    expect(DefaultContextRepo.parse({ repo_id: null }).repo_id).toBeNull();
+    expect(ContextDocPreview.parse({ path: 'specs/a.md', source: 'specs', tokens: 1, used_by: 3, content: 'x', commit_sha: 'abc' }).used_by).toBe(3);
+    expect(() => ContextDoc.parse({ ...doc, source: 'src' })).toThrow();
+    expect(PROJECT_CONTEXT_FOLDERS).toEqual(['specs', 'docs', 'insights']);
+    expect(PROJECT_CONTEXT_SOFT_CAP_TOKENS).toBe(4000);
+    expect(PROJECT_CONTEXT_HARD_CEILING_TOKENS).toBe(32000);
   });
 });
 

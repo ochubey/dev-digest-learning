@@ -55,7 +55,7 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
               ) : (
                 trace.specs_read.map((sp, i) => (
                   <span key={i} className="mono" style={s.spec}>
-                    {sp}
+                    {typeof sp === "string" ? sp : sp.path}
                   </span>
                 ))
               )}
