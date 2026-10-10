@@ -25,6 +25,8 @@ import {
   ContextAttachmentsInput,
   DefaultContextRepo,
   PROJECT_CONTEXT_FOLDERS,
+  PROJECT_CONTEXT_SOURCES,
+  PROJECT_CONTEXT_MAX_DISCOVERED,
   PROJECT_CONTEXT_SOFT_CAP_TOKENS,
   PROJECT_CONTEXT_HARD_CEILING_TOKENS,
 } from '@devdigest/shared';
@@ -246,8 +248,14 @@ describe('AI contracts parse fixtures', () => {
 describe('project-context', () => {
   it('ContextDiscovery/AgentContextAttachments parse', () => {
     const doc = { path: 'specs/a.md', name: 'a.md', folder: 'specs', source: 'specs', tokens: 640 };
-    const d = ContextDiscovery.parse({ repo_id: 'r1', branch: 'main', commit_sha: 'abc', docs: [doc] });
+    const d = ContextDiscovery.parse({ repo_id: 'r1', branch: 'main', commit_sha: 'abc', docs: [doc], total: 1, truncated: false });
     expect(d.docs[0].tokens).toBe(640);
+    expect(d.total).toBe(1);
+    expect(d.truncated).toBe(false);
+    expect(() => ContextDiscovery.parse({ repo_id: 'r1', branch: 'main', commit_sha: 'abc', docs: [doc] })).toThrow();
+    for (const source of ['specs', 'docs', 'insights', 'root', 'other']) {
+      expect(ContextDoc.parse({ ...doc, source }).source).toBe(source);
+    }
     const a = AgentContextAttachments.parse({
       paths: ['specs/a.md'],
       version: 2,
@@ -259,6 +267,8 @@ describe('project-context', () => {
     expect(ContextDocPreview.parse({ path: 'specs/a.md', source: 'specs', tokens: 1, used_by: 3, content: 'x', commit_sha: 'abc' }).used_by).toBe(3);
     expect(() => ContextDoc.parse({ ...doc, source: 'src' })).toThrow();
     expect(PROJECT_CONTEXT_FOLDERS).toEqual(['specs', 'docs', 'insights']);
+    expect(PROJECT_CONTEXT_SOURCES).toEqual(['specs', 'docs', 'insights', 'root', 'other']);
+    expect(PROJECT_CONTEXT_MAX_DISCOVERED).toBe(500);
     expect(PROJECT_CONTEXT_SOFT_CAP_TOKENS).toBe(4000);
     expect(PROJECT_CONTEXT_HARD_CEILING_TOKENS).toBe(32000);
   });

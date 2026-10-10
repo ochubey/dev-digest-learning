@@ -25,7 +25,7 @@ import {
   useSetSkillContext,
   useSkillContext,
 } from "@/lib/hooks/project-context";
-import { MAX_ATTACHED } from "../constants";
+import { MAX_ATTACHED, MAX_DISCOVERED } from "../constants";
 import { ContextDocRow } from "../ContextDocRow";
 import { ContextFooter } from "../ContextFooter";
 import { ContextDocPreviewDrawer } from "../ContextDocPreviewDrawer";
@@ -146,6 +146,12 @@ export function ContextDocPicker({ repoId, owner, hideSummary }: ContextDocPicke
           <Button size="sm" icon="RefreshCw" onClick={() => void docsQ.refetch()}>
             {t("error.retry")}
           </Button>
+        </div>
+      )}
+
+      {docsQ.data?.truncated && (
+        <div role="status" style={s.limitNote}>
+          {t("truncated", { max: MAX_DISCOVERED, total: docsQ.data.total })}
         </div>
       )}
 

@@ -55,11 +55,27 @@ describe('resolveProjectContext', () => {
     expect(out.entries[0]).toMatchObject({ status: 'skipped', reason: 'empty' });
   });
 
-  it('../secrets.md -> invalid_path with no read call', async () => {
-    const { source, p } = run({}, [doc('../secrets.md'), doc('src/x.md')]);
+  it('ineligible paths -> invalid_path with no read call', async () => {
+    const { source, p } = run({}, [
+      doc('../secrets.md'),
+      doc('node_modules/p/r.md'),
+      doc('.claude/s.md'),
+      doc('CHANGELOG.md'),
+      doc('docs/e.txt'),
+    ]);
     const out = await p;
-    expect(out.entries.map((e) => e.reason)).toEqual(['invalid_path', 'invalid_path']);
+    expect(out.entries.map((e) => e.reason)).toEqual(Array(5).fill('invalid_path'));
     expect(reads(source)).toHaveLength(0);
+  });
+
+  it('root and nested markdown re-validate and are read', async () => {
+    const { source, p } = run(
+      { 'README.md': 'R', 'client/specs/x.md': 'XX', 'src/x.md': 'S' },
+      [doc('README.md'), doc('client/specs/x.md'), doc('src/x.md')],
+    );
+    const out = await p;
+    expect(out.entries.map((e) => e.status)).toEqual(['injected', 'injected', 'injected']);
+    expect(reads(source)).toHaveLength(3);
   });
 
   it('head unresolvable -> all read_error, sha null', async () => {

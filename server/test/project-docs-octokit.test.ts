@@ -44,7 +44,7 @@ describe('OctokitProjectDocsSource', () => {
     expect(getTree).toHaveBeenCalledWith({ owner: 'o', repo: 'r', tree_sha: 'tip', recursive: 'true' });
   });
 
-  it('truncated falls back per folder', async () => {
+  it('truncated falls back to walking every non-ignored top-level tree', async () => {
     const getTree = vi.fn(async (args: { tree_sha: string; recursive?: string }) => {
       if (args.recursive) return { data: { truncated: true, tree: [] } };
       if (args.tree_sha === 'tip') {
@@ -55,6 +55,8 @@ describe('OctokitProjectDocsSource', () => {
               { path: 'specs', mode: '040000', type: 'tree', sha: 'T-specs' },
               { path: 'docs', mode: '040000', type: 'tree', sha: 'T-docs' },
               { path: 'src', mode: '040000', type: 'tree', sha: 'T-src' },
+              { path: 'node_modules', mode: '040000', type: 'tree', sha: 'T-nm' },
+              { path: '.github', mode: '040000', type: 'tree', sha: 'T-gh' },
               { path: 'README.md', mode: '100644', type: 'blob', sha: 'r' },
             ],
           },
@@ -77,16 +79,57 @@ describe('OctokitProjectDocsSource', () => {
       if (args.tree_sha === 'T-sub') {
         return { data: { truncated: false, tree: [{ path: 'b.md', mode: '100644', type: 'blob', sha: 'b2' }] } };
       }
+      if (args.tree_sha === 'T-src') {
+        return {
+          data: {
+            truncated: false,
+            tree: [
+              { path: 'notes.md', mode: '100644', type: 'blob', sha: 'b4' },
+              { path: 'dist', mode: '040000', type: 'tree', sha: 'T-dist' },
+              { path: '.cache', mode: '040000', type: 'tree', sha: 'T-cache' },
+            ],
+          },
+        };
+      }
       throw new Error(`unexpected tree ${args.tree_sha}`);
     });
     const s = sourceWith({ git: { getTree } });
     const out = await s.listTree(repo, 'tip');
     const paths = out.map((e) => `${e.kind}:${e.path}`).sort();
     expect(paths).toEqual(
-      ['blob:docs/sub/b.md', 'blob:specs/a.md', 'symlink:docs/l.md', 'tree:docs/sub'].sort(),
+      [
+        'blob:README.md',
+        'blob:docs/sub/b.md',
+        'blob:specs/a.md',
+        'blob:src/notes.md',
+        'symlink:docs/l.md',
+        'tree:docs/sub',
+        'tree:docs',
+        'tree:specs',
+        'tree:src',
+      ].sort(),
     );
-    // src is never walked
-    expect(getTree.mock.calls.some((c) => (c[0] as { tree_sha: string }).tree_sha === 'T-src')).toBe(false);
+    // ignored directories (dot-folders, node_modules, dist, ...) are never fetched
+    const fetched = getTree.mock.calls.map((c) => (c[0] as { tree_sha: string }).tree_sha);
+    for (const ignored of ['T-nm', 'T-gh', 'T-dist', 'T-cache']) expect(fetched).not.toContain(ignored);
+    expect(fetched).toContain('T-src');
+  });
+
+  it('truncated fallback stops after a bounded number of tree requests', async () => {
+    let n = 0;
+    const getTree = vi.fn(async (args: { tree_sha: string; recursive?: string }) => {
+      if (args.recursive) return { data: { truncated: true, tree: [] } };
+      n++;
+      // every tree holds one more subdirectory: an endless chain
+      return {
+        data: { truncated: false, tree: [{ path: 'd', mode: '040000', type: 'tree', sha: `T-${n}` }] },
+      };
+    });
+    const s = sourceWith({ git: { getTree } });
+    const out = await s.listTree(repo, 'tip');
+    const nonRecursive = getTree.mock.calls.filter((c) => !(c[0] as { recursive?: string }).recursive);
+    expect(nonRecursive.length).toBe(200);
+    expect(out.length).toBeGreaterThan(0);
   });
 
   it('getContent returns bytes; 404 -> null; directory -> null; 5xx throws', async () => {
@@ -134,7 +177,7 @@ describe('FixtureProjectDocsSource', () => {
     expect(a).toBe(b);
     const tree = await s.listTree(acme, a);
     const paths = tree.filter((e) => e.kind === 'blob').map((e) => e.path);
-    expect(paths).toHaveLength(4);
+    expect(paths).toHaveLength(6);
     expect(paths).toContain('specs/security-baseline.md');
     const body = await s.readBlob(acme, 'specs/security-baseline.md', a);
     expect(new TextDecoder().decode(body!)).toContain('# ');

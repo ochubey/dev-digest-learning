@@ -40,6 +40,7 @@ vi.mock("@dnd-kit/core", async () => {
 });
 
 import { ApiError } from "@/lib/api";
+import { sourceOfPath } from "../helpers";
 import { ContextDocPicker } from "./ContextDocPicker";
 
 const mkDoc = (path: string, tokens: number): ContextDoc => {
@@ -48,7 +49,7 @@ const mkDoc = (path: string, tokens: number): ContextDoc => {
     path,
     name: parts[parts.length - 1]!,
     folder: parts.slice(0, -1).join("/"),
-    source: parts[0] as ContextDoc["source"],
+    source: sourceOfPath(path),
     tokens,
   };
 };
@@ -65,22 +66,26 @@ const DOCS7: ContextDoc[] = [
 
 interface Server {
   docs: ContextDoc[];
+  total?: number;
+  truncated?: boolean;
   paths: string[];
   inherited: InheritedContextDoc[];
   version: number;
 }
 let server: Server;
-const discovery = (docs: ContextDoc[]): ContextDiscovery => ({
+const discovery = (docs: ContextDoc[], extra: { total?: number; truncated?: boolean } = {}): ContextDiscovery => ({
   repo_id: "r1",
   branch: "main",
   commit_sha: "abc",
   docs,
+  total: extra.total ?? docs.length,
+  truncated: extra.truncated ?? false,
 });
 
 function route() {
   get.mockImplementation(async (url: string) => {
     if (url === "/repos/r1/context/docs" || url === "/repos/r1/context/docs?refresh=1")
-      return discovery(server.docs);
+      return discovery(server.docs, { total: server.total, truncated: server.truncated });
     if (url === "/agents/ag1/context")
       return { paths: server.paths, version: server.version, inherited: server.inherited };
     throw new Error(`unexpected GET ${url}`);
@@ -174,9 +179,37 @@ describe("ContextDocPicker", () => {
     renderPicker();
     expect(await screen.findByText("No documents found")).toBeInTheDocument();
     expect(
-      screen.getByText("Add markdown to specs/ · docs/ · insights/ in the repo, then Re-index."),
+      screen.getByText("Add markdown files to the repository's main branch, then Re-index."),
     ).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("specs/ ·");
     expect(screen.getAllByRole("button", { name: "Re-index" }).length).toBeGreaterThan(0);
+  });
+
+  it("truncated discovery shows the first-500 notice; complete discovery does not", async () => {
+    server.truncated = true;
+    server.total = 731;
+    renderPicker();
+    expect(await screen.findByText("Showing the first 500 of 731 documents.")).toBeInTheDocument();
+    cleanup();
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    server.truncated = false;
+    renderPicker();
+    await screen.findAllByTestId("context-doc-row");
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  it("root and other documents get their own badge and order after insights", async () => {
+    server.docs = [
+      mkDoc("src/o.md", 1),
+      mkDoc("README.md", 2),
+      mkDoc("insights/i.md", 3),
+      mkDoc("client/specs/x.md", 4),
+    ];
+    renderPicker();
+    await screen.findAllByTestId("context-doc-row");
+    expect(rowPaths()).toEqual(["client/specs/x.md", "insights/i.md", "README.md", "src/o.md"]);
+    const badges = screen.getAllByTestId("context-doc-source").map((b) => b.textContent);
+    expect(badges).toEqual(["specs", "insights", "root", "other"]);
   });
 
   it("no repository -> empty state with Re-index disabled and a hint", async () => {

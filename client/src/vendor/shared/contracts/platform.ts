@@ -278,7 +278,12 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
+/** Folder names that act as source groups (first matching folder segment wins). */
 export const PROJECT_CONTEXT_FOLDERS = ['specs', 'docs', 'insights'] as const;
+/** All source badges: the folder groups plus `root` (file in repo root) and `other`. */
+export const PROJECT_CONTEXT_SOURCES = ['specs', 'docs', 'insights', 'root', 'other'] as const;
+/** Most documents discovery lists; the rest are reported via `total` + `truncated`. */
+export const PROJECT_CONTEXT_MAX_DISCOVERED = 500;
 /** Above this many attached tokens the UI warns (never blocks). */
 export const PROJECT_CONTEXT_SOFT_CAP_TOKENS = 4000;
 /** Run-time ceiling: docs past this budget are skipped as `over_budget`. */
@@ -289,7 +294,7 @@ export const PROJECT_CONTEXT_MAX_ATTACHED = 50;
 /** Longest accepted document path, in characters. */
 export const PROJECT_CONTEXT_MAX_PATH_LENGTH = 300;
 
-export const ContextSource = z.enum(PROJECT_CONTEXT_FOLDERS);
+export const ContextSource = z.enum(PROJECT_CONTEXT_SOURCES);
 export type ContextSource = z.infer<typeof ContextSource>;
 
 export const ContextDoc = z.object({
@@ -306,6 +311,10 @@ export const ContextDiscovery = z.object({
   branch: z.string(),
   commit_sha: z.string(),
   docs: z.array(ContextDoc),
+  /** Eligible documents on main before the cap. */
+  total: z.number().int(),
+  /** True when `total` exceeds PROJECT_CONTEXT_MAX_DISCOVERED and `docs` was cut. */
+  truncated: z.boolean(),
 });
 export type ContextDiscovery = z.infer<typeof ContextDiscovery>;
 

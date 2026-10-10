@@ -82,10 +82,11 @@ describe('project-context routes', () => {
     const res = await app.inject({ method: 'GET', url: `/repos/${REPO_ID}/context/docs?refresh=1` });
     expect(res.statusCode).toBe(200);
     expect(res.json().docs.map((d: { path: string }) => d.path)).toEqual([
+      'specs/skill.md',
       'docs/bin.md',
       'docs/own.md',
-      'specs/skill.md',
     ]);
+    expect(res.json()).toMatchObject({ total: 3, truncated: false });
   });
 
   it('discovery 502 leaves agent rows unchanged', async () => {
@@ -117,6 +118,20 @@ describe('project-context routes', () => {
       expect(res.statusCode).toBe(400);
     }
     expect(store.writes).toHaveLength(0);
+  });
+
+  it('PUT accepts root and nested markdown; rejects dot-folder and node_modules paths', async () => {
+    const { app } = await setup();
+    const url = `/agents/${AGENT_ID}/context`;
+    const ok = await app.inject({ method: 'PUT', url, payload: { paths: ['README.md', 'client/specs/x.md'] } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().paths).toEqual(['README.md', 'client/specs/x.md']);
+    const writes = store.writes.length;
+    for (const bad of ['.claude/s.md', 'node_modules/p/r.md', 'CHANGELOG.md']) {
+      const res = await app.inject({ method: 'PUT', url, payload: { paths: [bad] } });
+      expect(res.statusCode, bad).toBe(400);
+    }
+    expect(store.writes).toHaveLength(writes);
   });
 
   it('PUT beyond the limits -> 400 on agent and skill routes, row unchanged', async () => {
@@ -216,6 +231,27 @@ describe('project-context routes', () => {
       expect((await app.inject({ method: 'GET', url: `/repos/${UNKNOWN}/context/docs/preview${q}` })).statusCode, p).toBe(404);
     }
     expect(source.calls).toHaveLength(0);
+  });
+
+  it('preview accepts README.md and client/specs/x.md; rejects .claude/s.md and node_modules paths without reads', async () => {
+    const { app, source } = await setup({
+      source: new MockProjectDocsSource({
+        heads: { main: 'sha-main' },
+        files: { 'sha-main': { 'README.md': 'root', 'client/specs/x.md': 'nested' } },
+      }),
+    });
+    const url = (p: string) => `/repos/${REPO_ID}/context/docs/preview?path=${encodeURIComponent(p)}`;
+    const root = await app.inject({ method: 'GET', url: url('README.md') });
+    expect(root.statusCode).toBe(200);
+    expect(root.json()).toMatchObject({ source: 'root', content: 'root' });
+    const nested = await app.inject({ method: 'GET', url: url('client/specs/x.md') });
+    expect(nested.statusCode).toBe(200);
+    expect(nested.json()).toMatchObject({ source: 'specs', content: 'nested' });
+    const reads = source.calls.length;
+    for (const p of ['.claude/s.md', 'node_modules/p/r.md', 'node_modules/../x.md']) {
+      expect((await app.inject({ method: 'GET', url: url(p) })).statusCode, p).toBe(400);
+    }
+    expect(source.calls).toHaveLength(reads);
   });
 
   it('preview: 200 with content, 404 not_on_main, 422 not_text', async () => {

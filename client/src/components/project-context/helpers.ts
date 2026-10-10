@@ -1,5 +1,5 @@
 import type { ContextDoc, ContextSource, InheritedContextDoc } from "@devdigest/shared";
-import { SERIALIZE_HEADINGS, SOFT_CAP_TOKENS, SOURCE_ORDER } from "./constants";
+import { SERIALIZE_HEADINGS, SOFT_CAP_TOKENS, SOURCE_FOLDERS, SOURCE_ORDER } from "./constants";
 
 /** One displayed row of the picker. */
 export interface ContextRow {
@@ -26,9 +26,14 @@ export function formatDocTokens(n: number): string {
   return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
 }
 
-export function sourceOfPath(path: string): ContextSource | null {
-  const top = path.split("/")[0];
-  return SOURCE_ORDER.find((s) => s === top) ?? null;
+/** Mirrors the server's classifySource: first specs/docs/insights folder segment wins (the file name is not a folder), else `root` for a root file, else `other`. */
+export function sourceOfPath(path: string): ContextSource {
+  const folders = path.split("/").slice(0, -1);
+  for (const f of folders) {
+    const hit = SOURCE_FOLDERS.find((s) => s === f);
+    if (hit) return hit;
+  }
+  return folders.length === 0 ? "root" : "other";
 }
 
 function fromDoc(doc: ContextDoc, kind: ContextRow["kind"], extra: Partial<ContextRow> = {}): ContextRow {
@@ -67,7 +72,7 @@ function fromPath(path: string, kind: ContextRow["kind"], extra: Partial<Context
 /**
  * Rows in display order (AC-14, AC-28): inherited (effective order) first, then
  * the agent's own attached paths in attached order, then every other doc grouped
- * specs/docs/insights, each by path. `docs === undefined` means discovery is
+ * specs/docs/insights/root/other, each by path. `docs === undefined` means discovery is
  * unavailable: attached rows stay visible as "unverified".
  */
 export function buildRows(

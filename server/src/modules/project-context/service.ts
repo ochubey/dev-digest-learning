@@ -2,13 +2,19 @@ import type {
   AgentContextAttachments,
   ContextAttachments,
   ContextDiscovery,
+  ContextSource,
   ContextDoc,
   ContextDocPreview,
   DefaultContextRepo,
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { DISCOVERY_READ_CONCURRENCY, TOKEN_CACHE_SIZE } from './constants.js';
+import {
+  DISCOVERY_READ_CONCURRENCY,
+  PROJECT_CONTEXT_FOLDERS,
+  PROJECT_CONTEXT_MAX_DISCOVERED,
+  TOKEN_CACHE_SIZE,
+} from './constants.js';
 import { mapLimit } from './map-limit.js';
 import { decodeUtf8Strict, filterDocEntries } from './docs.js';
 import { countUsedBy, effectiveDocs, validateAttachList } from './effective.js';
@@ -24,6 +30,11 @@ export type PreviewResult =
 
 /** Fixed text: never provider messages or document content. */
 export const DISCOVERY_FAILED_TEXT = 'Could not read documents from the repository';
+
+/** Display / cap order of the source groups (AC-14). */
+const SOURCE_RANK: Record<ContextSource, number> = Object.fromEntries(
+  [...PROJECT_CONTEXT_FOLDERS, 'root', 'other'].map((s, i) => [s, i]),
+) as Record<ContextSource, number>;
 
 /** Authorization (404 / 403) happens before ANY source call. */
 export class ProjectContextService {
@@ -79,7 +90,11 @@ export class ProjectContextService {
     try {
       const source = await this.container.projectDocs();
       const sha = await source.resolveBranchHead(ref, repo.defaultBranch);
-      const entries = filterDocEntries(await source.listTree(ref, sha));
+      const eligible = filterDocEntries(await source.listTree(ref, sha))
+        .map((e) => ({ e, rank: SOURCE_RANK[classifySource(e.path)] }))
+        .sort((a, b) => a.rank - b.rank || (a.e.path < b.e.path ? -1 : a.e.path > b.e.path ? 1 : 0))
+        .map((x) => x.e);
+      const entries = eligible.slice(0, PROJECT_CONTEXT_MAX_DISCOVERED);
       const docs = await mapLimit(entries, DISCOVERY_READ_CONCURRENCY, async (e) => {
         let tokens = this.tokenCache.get(e.blobSha);
         if (tokens === undefined) {
@@ -90,8 +105,14 @@ export class ProjectContextService {
         }
         return toDoc(e.path, tokens);
       });
-      docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-      return { repo_id: repo.id, branch: repo.defaultBranch, commit_sha: sha, docs };
+      return {
+        repo_id: repo.id,
+        branch: repo.defaultBranch,
+        commit_sha: sha,
+        docs,
+        total: eligible.length,
+        truncated: eligible.length > entries.length,
+      };
     } catch (err) {
       throw new AppError('discovery_failed', DISCOVERY_FAILED_TEXT, 502, {
         errorClass: err instanceof Error ? err.name : 'Error',
@@ -127,7 +148,7 @@ export class ProjectContextService {
       kind: 'ok',
       preview: {
         path,
-        source: classifySource(path)!,
+        source: classifySource(path),
         tokens: this.container.tokenizer.count(content),
         used_by: countUsedBy(path, usage.agents, usage.skills),
         content,
@@ -197,7 +218,7 @@ function toDoc(path: string, tokens: number): ContextDoc {
     path,
     name: path.slice(slash + 1),
     folder: path.slice(0, slash),
-    source: classifySource(path)!,
+    source: classifySource(path),
     tokens,
   };
 }

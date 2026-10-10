@@ -9,6 +9,7 @@ import {
   serializeAsText,
   moveItem,
   reorderOnDrop,
+  sourceOfPath,
 } from "./helpers";
 
 const doc = (path: string, tokens: number): ContextDoc => {
@@ -17,7 +18,7 @@ const doc = (path: string, tokens: number): ContextDoc => {
     path,
     name: parts[parts.length - 1]!,
     folder: parts.slice(0, -1).join("/"),
-    source: parts[0] as ContextDoc["source"],
+    source: sourceOfPath(path),
     tokens,
   };
 };
@@ -29,6 +30,20 @@ const DOCS: ContextDoc[] = [
   doc("specs/a.md", 100),
   doc("docs/a.md", 20),
 ];
+
+describe("sourceOfPath", () => {
+  it("first specs/docs/insights folder segment wins; root; other", () => {
+    expect(sourceOfPath("specs/a.md")).toBe("specs");
+    expect(sourceOfPath("docs/sub/b.MD")).toBe("docs");
+    expect(sourceOfPath("insights/c.md")).toBe("insights");
+    expect(sourceOfPath("client/specs/x.md")).toBe("specs");
+    expect(sourceOfPath("server/docs/specs/x.md")).toBe("docs");
+    expect(sourceOfPath("README.md")).toBe("root");
+    expect(sourceOfPath("docs.md")).toBe("root");
+    expect(sourceOfPath("src/d.md")).toBe("other");
+    expect(sourceOfPath("src/docs.md")).toBe("other");
+  });
+});
 
 describe("formatDocTokens", () => {
   it("formatDocTokens 640 / 1000 -> 1K / 1234 -> 1.2K", () => {
@@ -52,6 +67,31 @@ describe("buildRows", () => {
     ]);
     expect(rows.slice(0, 2).every((r) => r.attached)).toBe(true);
     expect(rows.slice(2).every((r) => !r.attached)).toBe(true);
+  });
+
+  it("order across all five groups: attached, specs, docs, insights, root, other", () => {
+    const docs = [
+      doc("src/z.md", 1),
+      doc("README.md", 1),
+      doc("insights/i.md", 1),
+      doc("docs/d.md", 1),
+      doc("client/specs/x.md", 1),
+      doc("specs/s.md", 1),
+      doc("CONTRIBUTING.md", 1),
+      doc("lib/a.md", 1),
+    ];
+    const rows = buildRows(docs, ["src/z.md"]);
+    expect(rows.map((r) => r.path)).toEqual([
+      "src/z.md",
+      "client/specs/x.md",
+      "specs/s.md",
+      "docs/d.md",
+      "insights/i.md",
+      "CONTRIBUTING.md",
+      "README.md",
+      "lib/a.md",
+    ]);
+    expect(rows.map((r) => r.source)).toEqual(["other", "specs", "specs", "docs", "insights", "root", "root", "other"]);
   });
 
   it("an attached path missing from discovery is a stale row, kept in attached order", () => {
@@ -140,6 +180,16 @@ describe("serializeAs", () => {
       { source: "specs", heading: "## Project specifications", paths: ["specs/s.md"] },
       { source: "docs", heading: "## Project docs", paths: ["docs/d2.md", "docs/d1.md"] },
       { source: "insights", heading: "## Project insights", paths: ["insights/i.md"] },
+    ]);
+  });
+
+  it("serializeAs puts root and other docs last under their own headings", () => {
+    const groups = serializeAs(["src/o.md", "README.md", "client/specs/x.md", "docs/d.md"]);
+    expect(groups).toEqual([
+      { source: "specs", heading: "## Project specifications", paths: ["client/specs/x.md"] },
+      { source: "docs", heading: "## Project docs", paths: ["docs/d.md"] },
+      { source: "root", heading: "## Project root docs", paths: ["README.md"] },
+      { source: "other", heading: "## Other project docs", paths: ["src/o.md"] },
     ]);
   });
 

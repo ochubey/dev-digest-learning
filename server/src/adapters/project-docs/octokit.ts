@@ -2,9 +2,11 @@ import { Octokit } from 'octokit';
 import type { RepoRef } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 import type { ProjectDocsSource, TreeEntry } from '../../modules/project-context/ports.js';
-import { PROJECT_CONTEXT_FOLDERS } from '../../modules/project-context/constants.js';
+import { isIgnoredFolder } from '../../modules/project-context/paths.js';
 
 const TIMEOUT = 30_000;
+/** Upper bound of tree requests in the truncated-tree fallback (root included). */
+const MAX_FALLBACK_TREE_REQUESTS = 200;
 
 interface RawTreeItem {
   path?: string;
@@ -49,26 +51,25 @@ export class OctokitProjectDocsSource implements ProjectDocsSource {
     return this.listTreePerFolder(repo, sha);
   }
 
-  /** Fallback for a truncated recursive tree: walk only the context folders, one tree per call. */
+  /**
+   * Fallback for a truncated recursive tree: walk every non-ignored directory one tree per
+   * call, breadth first, stopping after MAX_FALLBACK_TREE_REQUESTS requests (partial result).
+   */
   private async listTreePerFolder(repo: RepoRef, sha: string): Promise<TreeEntry[]> {
-    const root = await this.getTree(repo, sha, false);
     const out: TreeEntry[] = [];
-    const folders = (PROJECT_CONTEXT_FOLDERS as readonly string[]).slice();
-    for (const item of root.tree) {
-      if (item.type !== 'tree' || !item.path || !item.sha || !folders.includes(item.path)) continue;
-      await this.walk(repo, item.sha, `${item.path}/`, out);
+    const queue: { sha: string; prefix: string }[] = [{ sha, prefix: '' }];
+    for (let requests = 0; queue.length > 0 && requests < MAX_FALLBACK_TREE_REQUESTS; requests++) {
+      const next = queue.shift()!;
+      const res = await this.getTree(repo, next.sha, false);
+      for (const item of res.tree) {
+        if (item.type === 'tree' && item.path && isIgnoredFolder(item.path)) continue;
+        const entry = toEntry(item, next.prefix);
+        if (!entry) continue;
+        out.push(entry);
+        if (entry.kind === 'tree') queue.push({ sha: entry.blobSha, prefix: `${entry.path}/` });
+      }
     }
     return out;
-  }
-
-  private async walk(repo: RepoRef, treeSha: string, prefix: string, out: TreeEntry[]): Promise<void> {
-    const res = await this.getTree(repo, treeSha, false);
-    for (const item of res.tree) {
-      const entry = toEntry(item, prefix);
-      if (!entry) continue;
-      out.push(entry);
-      if (entry.kind === 'tree') await this.walk(repo, entry.blobSha, `${entry.path}/`, out);
-    }
   }
 
   private async getTree(

@@ -14,8 +14,9 @@
   "loading": "Loading documents…",
   "empty": {
     "title": "No documents found",
-    "body": "Add markdown to specs/ · docs/ · insights/ in the repo, then Re-index."
+    "body": "Add markdown files to the repository's main branch, then Re-index."
   },
+  "truncated": "Showing the first {max} of {total} documents.",
   "noRepo": "Add a repository first, then come back to attach project documents.",
   "noMatch": {
     "title": "No documents match \"{text}\"",

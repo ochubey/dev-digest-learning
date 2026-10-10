@@ -103,5 +103,5 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
 | `08-pr-brief` | PR #482 → Overview → PR Brief card empty state ("Generate brief", no model call); `?tab=diff&file=src%2Fconfig.ts&line=12` deep link → `src/config.ts` file card expanded and highlighted (uses `eval` to navigate) |
-| `09-agent-context` | `/agents` → Security Reviewer → `?tab=context` → the 4 fixture documents listed, "2 of 4 attached" badge, attached rows first, footer "2 files · N tokens total" (needs the API started with `PROJECT_DOCS_SOURCE=fixture`) |
+| `09-agent-context` | `/agents` → Security Reviewer → `?tab=context` → the 6 fixture documents listed (including a root `README.md` and `client/specs/ui-components.md`), "2 of 6 attached" badge, attached rows first, footer "2 files · N tokens total" (needs the API started with `PROJECT_DOCS_SOURCE=fixture`) |
 | `10-trace-project-context` | PR #482 → `?tab=findings&trace=<seeded run id>` → Specs read lists the seeded documents as "path · N tok"; Prompt assembly → project context block holds `<untrusted source="specs/security-baseline.md">`, the document text and `</untrusted>` |

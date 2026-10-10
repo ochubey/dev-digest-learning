@@ -2,7 +2,7 @@
 Spec ID: SPEC-02
 Status: approved
 
-Revision note: rev 2 — OQ-1, OQ-2 and OQ-3 answered by the user (recommended defaults accepted, see D-13..D-15); remaining non-blocking open questions keep their stated defaults. First draft: The user's decisions are recorded as D-1..D-12. Items marked `[NEEDS CLARIFICATION]` carry a recommended default and refer to an open question (OQ-n); the ACs are written against that default and change if the answer differs. OQ-1..OQ-3 can change the spec materially and must be answered before approval.
+Revision note: rev 3 — folder scope widened (D-16): discovery lists every markdown file of the main branch instead of three fixed folders, because the lecture describes the page as scanning "all MD files" of the project and the three folder names were only the course project's own layout; AC-1, AC-4, AC-9, AC-14, AC-15 and OQ-4 changed. Rev 2 — OQ-1, OQ-2 and OQ-3 answered by the user (recommended defaults accepted, see D-13..D-15); remaining non-blocking open questions keep their stated defaults. First draft: The user's decisions are recorded as D-1..D-12. Items marked `[NEEDS CLARIFICATION]` carry a recommended default and refer to an open question (OQ-n); the ACs are written against that default and change if the answer differs. OQ-1..OQ-3 can change the spec materially and must be answered before approval.
 
 ## Problem and user
 
@@ -10,13 +10,13 @@ A review agent knows the diff, the PR description, the derived Intent, its skill
 
 User: a DevDigest workspace member who configures review agents and skills, and who later reads a run trace to understand what the agent was given.
 
-Project Context lets that user attach project markdown documents (from the repository's `specs/`, `docs/` and `insights/` folders on the main branch) to an agent, or to a skill so that every agent using the skill inherits them. Only the document paths are stored. When a review runs, the attached documents are read in full from the main branch and injected, in the chosen order, into the review prompt as delimited untrusted data. The run trace shows exactly which documents were injected, their token sizes, and the full injected text. No extra model call is made.
+Project Context lets that user attach project markdown documents (markdown files of the repository's main branch, grouped as specs, docs, insights, root or other) to an agent, or to a skill so that every agent using the skill inherits them. Only the document paths are stored. When a review runs, the attached documents are read in full from the main branch and injected, in the chosen order, into the review prompt as delimited untrusted data. The run trace shows exactly which documents were injected, their token sizes, and the full injected text. No extra model call is made.
 
 ## Goals / Non-goals
 
 ### Goals
 
-- **G1 Discovery.** In the Agent editor and the Skill editor the user sees the list of markdown documents available on the repository's main branch under `specs/`, `docs/` and `insights/`, each with its folder, source and token size, and can filter it.
+- **G1 Discovery.** In the Agent editor and the Skill editor the user sees the list of markdown documents available on the repository's main branch (anywhere in the tree, minus build and vendor noise), each with its folder, source group and token size, and can filter it.
 - **G2 Attach and order.** The user attaches and detaches documents, and orders the attached ones, for an agent and for a skill. Only paths and their order are stored. Agents inherit the documents of their linked skills.
 - **G3 Preview.** The user can read any listed document in a read-only preview that shows its source, its token size and how many agents use it.
 - **G4 Injection.** At run time the attached documents are read in full from the main branch and injected in order into the `## Project context` section of the review prompt, each as a delimited untrusted block behind the injection guard. They cannot change review policy. No extra LLM call.
@@ -40,7 +40,7 @@ Project Context lets that user attach project markdown documents (from the repos
 
 ## User stories
 
-- **US-1 (G1).** As a workspace member editing an agent, I open its Context tab and see every markdown document under `specs/`, `docs/` and `insights/` on the repo's main branch, with its folder, a source badge and its token size, so I know what I can attach.
+- **US-1 (G1).** As a workspace member editing an agent, I open its Context tab and see every markdown document on the repo's main branch (specs, docs, insights, root files such as README.md, and other folders), with its folder, a source badge and its token size, so I know what I can attach.
 - **US-2 (G2).** As that member, I tick a document to attach it and untick it to detach it, and the change is saved without an extra Save step.
 - **US-3 (G2, G4).** As that member, I drag attached documents into the order I want, because earlier documents appear earlier in the assembled `## Project context` block.
 - **US-4 (G1).** As that member, I type in the filter to narrow a long list by file name or folder.
@@ -58,13 +58,13 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal. "
 
 ### Discovery (G1)
 
-- **AC-1 (P1, G1).** ПОКИ the Context tab of the Agent editor is open and discovery has succeeded, the system (shall) list one row per markdown file (`.md`, case-insensitive) found at the tip of the discovery repository's main branch under the top-level folders `specs/`, `docs/` and `insights/`, including subfolders. `[NEEDS CLARIFICATION: OQ-4 — folder scope]`
-  *Verify:* service test with a stubbed repository tree containing `specs/a.md`, `docs/sub/b.md`, `insights/c.MD`, `src/d.md`, `docs/e.txt` asserts exactly the first three are returned; component test asserts three rows.
+- **AC-1 (P1, G1).** ПОКИ the Context tab of the Agent editor is open and discovery has succeeded, the system (shall) list one row per markdown file (`.md`, case-insensitive) found at the tip of the discovery repository's main branch anywhere in the tree, except paths excluded by AC-15, up to 500 documents; ПОКИ more than 500 exist, the system (shall) list the first 500 in the AC-14 group order and show a notice "Showing the first 500 of N documents."
+  *Verify:* service test with a stubbed repository tree containing `specs/a.md`, `docs/sub/b.md`, `insights/c.MD`, `README.md`, `client/specs/x.md`, `src/d.md`, `docs/e.txt`, `node_modules/p/r.md`, `.claude/s.md` asserts exactly `specs/a.md`, `docs/sub/b.md`, `insights/c.MD`, `README.md`, `client/specs/x.md` and `src/d.md` are returned; a tree with 501 markdown files returns 500 and the notice; component test asserts the rows.
 - **AC-2 (P1, G1).** The system (shall) discover documents only from the main branch tip, never from the PR head, another branch or a local working tree, so a document that exists only on an unmerged branch is not listed (D-2).
   *Verify:* service test where the stub returns a file only for a non-main ref asserts it is absent; the request to the repository source names the main branch ref.
 - **AC-3 (P1, G1).** The system (shall) show in each row: a drag handle, an attach checkbox, the file name, the folder path, a source badge and a Preview control.
   *Verify:* component test asserts all six elements per row.
-- **AC-4 (P2, G1).** The system (shall) derive the source badge (`specs`, `docs` or `insights`) from the document's top-level folder only, by code.
+- **AC-4 (P2, G1).** The system (shall) derive the source badge by code: `specs`, `docs` or `insights` when any folder segment of the path equals that name (the first such segment wins, so `client/specs/x.md` is `specs`), `root` for a file in the repository root, and `other` for every remaining path.
   *Verify:* unit test of the source classifier for each folder and for a nested path.
 - **AC-5 (P2, G1).** The system (shall) show for each listed document its token count, computed by the server tokenizer from the document body only (not the name, folder or description), as `N tokens` with counts from 1,000 up shown in thousands with one decimal and a `K` suffix, trailing `.0` removed (for example `1.2K`, `3K`, `640`) (D-8).
   *Verify:* service test with a fixed body asserts the count equals the tokenizer count of the body; component test asserts the formatting for 640, 1,000 and 1,234.
@@ -74,7 +74,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal. "
   *Verify:* component test types `SEC` and asserts only `security-baseline.md` remains and the badge and footer are unchanged.
 - **AC-8 (P2, G1).** ЯКЩО the filter matches no row while at least one document is discovered, ТОДІ the system (shall) show "No documents match "<text>"" with a control that clears the filter, and not the "No documents found" empty state.
   *Verify:* component test.
-- **AC-9 (P1, G6).** ЯКЩО discovery succeeds with zero documents, ТОДІ the system (shall) show the empty state titled "No documents found" with the body "Add markdown to specs/ · docs/ · insights/ in the repo, then Re-index." and a "Re-index" action.
+- **AC-9 (P1, G6).** ЯКЩО discovery succeeds with zero documents, ТОДІ the system (shall) show the empty state titled "No documents found" with the body "Add markdown files to the repository's main branch, then Re-index." and a "Re-index" action.
   *Verify:* component test with an empty list.
 - **AC-10 (P2, G1).** КОЛИ the user activates "Re-index", the system (shall) repeat discovery against the current main branch tip and refresh the list, the header badge and the footer; ПОКИ it runs, the action (shall) be disabled and show a busy state.
   *Verify:* component test asserts one refresh request, the disabled busy state while pending, and the new list on resolve; service test asserts the refreshed discovery reads the new main tip.
@@ -84,9 +84,9 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal. "
   *Verify:* component test with an attached path missing from the discovered list asserts the marker, a working detach, no Preview control, and the total without it.
 - **AC-13 (P1, G6).** ЯКЩО discovery fails (repository unreachable, not cloned, auth or rate-limit error), ТОДІ the system (shall) show an error message with a Retry action, keep the attached paths visible as rows (marked as not verified), and (shall) not change the stored attachments.
   *Verify:* component test with a failing discovery query asserts the error, Retry, the attached rows, and no write request; route test asserts the error response leaves agent rows unchanged.
-- **AC-14 (P2, G1).** The system (shall) order rows as: attached documents first in their attached order, then the remaining documents grouped by source in the order `specs`, `docs`, `insights`, each group sorted by path ascending.
+- **AC-14 (P2, G1).** The system (shall) order rows as: attached documents first in their attached order, then the remaining documents grouped by source in the order `specs`, `docs`, `insights`, `root`, `other`, each group sorted by path ascending.
   *Verify:* component test with a mixed fixture asserts the row order.
-- **AC-15 (P1, G1).** The system (shall) exclude from discovery any path that is absolute, contains a `..` segment or a NUL character, or does not start with one of the three folders, and (shall) never follow a symbolic link to a file outside them.
+- **AC-15 (P1, G1).** The system (shall) exclude from discovery any path that is absolute, contains a `..` segment or a NUL character, does not end with `.md` (case-insensitive), has any folder segment that starts with a dot or is named `node_modules`, `vendor`, `dist`, `build`, `out`, `coverage` or `.next`, is named `CHANGELOG.md` (case-insensitive), or is a symbolic link or submodule entry, and (shall) apply the same rules to attached, previewed and run-time paths.
   *Verify:* unit test of the path validator per case; service test with a symlinked entry asserts it is absent.
 
 ### Attach, order and persistence (G2)
@@ -225,7 +225,9 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal. "
 
 | Case | Expected behavior | AC |
 |---|---|---|
-| Repo has no `specs/`, `docs/` or `insights/` | Empty state with Re-index. | AC-9 |
+| Repo has no markdown files on main | Empty state with Re-index. | AC-9 |
+| Repo has more than 500 markdown files | First 500 in group order with a notice. | AC-1 |
+| Docs live in the root (README.md, CONTRIBUTING.md) or in a package folder (`client/specs/`) | Listed; source `root` or `specs`/`docs`. | AC-1, AC-4 |
 | Filter matches nothing | "No documents match" with clear; not the empty state. | AC-8 |
 | Document added on a branch, not merged | Not listed; not readable at run time. | AC-2, AC-41 |
 | Document merged after the list was loaded | Appears after Re-index or reload. | AC-10 |
@@ -266,7 +268,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal. "
 | Input | Provenance | Notes |
 |---|---|---|
 | Document list (paths under the three folders on main) | [deterministic: new discovery in the server, reading the repository at the main branch tip] | No existing adapter lists a directory: `GitHubClient` has only `readRepoFile(repo, path, sha)` and `GitClient.readFile` reads the clone's working tree. Discovery needs a listing capability at the main ref (constraint, not a design choice here). |
-| Source badge | [deterministic: top-level folder classifier] | |
+| Source badge | [deterministic: path classifier] | |
 | Token count per document | [reused: server `container.tokenizer` (TiktokenTokenizer), as used for `skills_meta` in `run-executor.ts`] | Body only (D-8). The design's `len/4` estimate is replaced by the real tokenizer. |
 | Document body for preview | [deterministic: repository read at main tip] | Read on demand; not stored. |
 | Document body at run time | [reused: `GitHubClient.readRepoFile(repo, path, ref)` or the repo-intel clone at `origin/<default_branch>`] | One commit per run (AC-41). The clone's working tree is at `origin/<default_branch>` only after a resync, so the working tree as is is not a safe source. |
@@ -282,7 +284,7 @@ Each AC carries its priority (P1 blocking, P2 required, P3 wish) and its goal. "
 
 Fed to the model by this feature:
 
-- Project document bodies from the repository (`specs/`, `docs/`, `insights/`), which anyone who can merge to main controls.
+- Project document bodies from the repository's markdown files, which anyone who can merge to main controls.
 - Project document paths and file names, used as block labels and shown in the UI and the trace.
 
 They are passed as clearly delimited data blocks, one per document, inside `## Project context` in the user message, after the injection guard in the system message, which states that content inside the blocks is data, may contain instructions, and cannot change the task, the output format, the scope policy or the severity of findings (AC-43). Text inside a block is escaped so it cannot close its block, open a fake block or forge a label (AC-45). Paths are validated before they are listed, stored, labeled or read (AC-15, AC-51, AC-64). Document content cannot change policy: severity, scope, the blocker gate and grounding are applied by code (AC-46). The preview renders markdown without raw HTML (AC-36). Skill bodies remain in the existing skills section and are not affected by this feature.
@@ -308,6 +310,8 @@ Recorded from the user; not open.
 - **D-14. Caps (OQ-2).** 4,000 tokens is a soft cap only (AC-26, AC-58); a hard per-run ceiling of 32,000 tokens skips trailing documents with `over_budget` (AC-52); no cap on the number of documents.
 - **D-15. Inheritance (OQ-3).** Skill documents first (agent's skill order, then each skill's order), then the agent's own; first occurrence wins (AC-40); inherited documents are shown read-only with "via <skill>" and counted in the footer (AC-28).
 
+- **D-16. Folder scope (OQ-4).** Discovery lists every `.md` file of the main branch (cap 500, excluded: dot-folders, `node_modules`, `vendor`, `dist`, `build`, `out`, `coverage`, `CHANGELOG.md`). The three folder names are source groups (`specs`, `docs`, `insights`) plus `root` and `other`, not a filter. Reason: the lecture says the page scans all MD files; the three names were the course project's own layout and the design's hint text.
+
 ## Open questions
 
 OQ-1, OQ-2 and OQ-3 are resolved (D-13..D-15). Blocking (answers change ACs materially):
@@ -318,7 +322,7 @@ OQ-1, OQ-2 and OQ-3 are resolved (D-13..D-15). Blocking (answers change ACs mate
 
 Non-blocking (defaults applied in the ACs):
 
-- **OQ-4 Folder scope.** Top-level `specs/`, `docs/`, `insights/` only, recursive inside them (default), or also nested package folders such as `server/specs/` and `reviewer-core/specs/` (this repository uses them)? `.mdx` too? Default: top-level, recursive, `.md` only.
+- **OQ-4 Folder scope (RESOLVED → D-16: all markdown files of main, noise excluded).** Top-level `specs/`, `docs/`, `insights/` only, recursive inside them (default), or also nested package folders such as `server/specs/` and `reviewer-core/specs/` (this repository uses them)? `.mdx` too? Default: top-level, recursive, `.md` only.
 - **OQ-5 "Serializes as" vs order.** The skill design shows paths grouped by source under "Project specifications / docs / insights", while the agent design says order matters. Is the grouping only a preview of the skill's stored metadata, or also the injection order for skill documents? Default: preview only; injection follows attached order (AC-32, AC-40).
 - **OQ-6 "Used by N agents".** Count agents that inherit through skills? Count disabled agents? Default: distinct agents with the document in their effective list, through enabled skills, including disabled agents (AC-38).
 - **OQ-7 PR Brief.** The brief's `specDoc` comes from RefResolver (the first `*spec*` or `docs/` `.md` path mentioned in the PR body, read at the PR head SHA, ≤ 32 KB). Should Project Context replace or feed it? Default: no; the brief is unchanged (non-goal). A later spec can add it.

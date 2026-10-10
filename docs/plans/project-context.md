@@ -5,6 +5,16 @@ Execution mode: **single-agent, decided by the user** (section 9). Order: P1 →
 Decisions: A-1 = separate always-expanded Context tab in the Skill editor (OQ-12 default); A-2 = approved (`PROJECT_DOCS_SOURCE=fixture` in `scripts/e2e.sh` and `e2e-web.yml`).
 Author: `implementation-planner` (read-only); saved by the caller.
 
+## Rev 3 change (D-16: folder scope widened)
+
+Discovery lists every eligible `.md` file of main (cap 500) instead of `specs/`, `docs/`, `insights/` only. Touched tasks:
+
+- P1 contracts: `ContextSource` = specs | docs | insights | root | other (`PROJECT_CONTEXT_SOURCES`), `PROJECT_CONTEXT_MAX_DISCOVERED = 500`, `ContextDiscovery.total` + `truncated` (both copies identical).
+- P3a pure layer and adapters: `isContextDocPath` (shared by discovery, preview, attach validation, resolver re-validation), `classifySource`, `isIgnoredFolder`; Octokit truncated-tree fallback walks all non-ignored trees (max 200 requests); fixture gains `README.md` and `client/specs/ui-components.md`.
+- P3b service: discover sorts by group order then path, caps at 500, reports `total` / `truncated`.
+- P6 client: `SOURCE_ORDER`, `SERIALIZE_HEADINGS`, `SOURCE_COLOR`, `sourceOfPath`, truncated notice, new empty-state text.
+- P8 seed, e2e, docs: flow 09 (6 documents, "2 of 6 attached"), e2e and server READMEs. `run-executor.ts` untouched.
+
 ## 0. Spec gate
 
 - Status is `approved`. OQ-1..OQ-3 are resolved as D-13..D-15.

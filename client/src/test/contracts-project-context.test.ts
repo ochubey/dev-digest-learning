@@ -43,17 +43,27 @@ describe("client copy of project-context contracts", () => {
 
   it("parses discovery and attachments", () => {
     const doc = { path: "specs/a.md", name: "a.md", folder: "specs", source: "specs", tokens: 1 };
-    expect(ContextDiscovery.parse({ repo_id: "r", branch: "main", commit_sha: "c", docs: [doc] }).docs).toHaveLength(1);
+    const out = ContextDiscovery.parse({ repo_id: "r", branch: "main", commit_sha: "c", docs: [doc], total: 1, truncated: false });
+    expect(out.docs).toHaveLength(1);
+    expect(out.total).toBe(1);
+    expect(out.truncated).toBe(false);
+    for (const source of ["root", "other"]) {
+      expect(ContextDiscovery.parse({ repo_id: "r", branch: "main", commit_sha: "c", docs: [{ ...doc, source }], total: 1, truncated: false }).docs[0]?.source).toBe(source);
+    }
     expect(AgentContextAttachments.parse({ paths: [], version: 0, inherited: [] }).version).toBe(0);
     expect(PROJECT_CONTEXT_SOFT_CAP_TOKENS).toBe(4000);
   });
 });
 
 describe('client project-context constants mirror the shared contract', () => {
-  it('SOURCE_ORDER and SOFT_CAP_TOKENS equal the shared values', async () => {
+  it('SOURCE_ORDER, SOURCE_FOLDERS, MAX_DISCOVERED and SOFT_CAP_TOKENS equal the shared values', async () => {
     const shared = await import('@devdigest/shared');
     const local = await import('../components/project-context/constants');
-    expect([...local.SOURCE_ORDER]).toEqual([...shared.PROJECT_CONTEXT_FOLDERS]);
+    expect([...local.SOURCE_ORDER]).toEqual([...shared.PROJECT_CONTEXT_SOURCES]);
+    expect([...local.SOURCE_FOLDERS]).toEqual([...shared.PROJECT_CONTEXT_FOLDERS]);
+    expect(local.MAX_DISCOVERED).toBe(shared.PROJECT_CONTEXT_MAX_DISCOVERED);
+    expect(Object.keys(local.SERIALIZE_HEADINGS)).toEqual([...shared.PROJECT_CONTEXT_SOURCES]);
+    expect(Object.keys(local.SOURCE_COLOR)).toEqual([...shared.PROJECT_CONTEXT_SOURCES]);
     expect(local.SOFT_CAP_TOKENS).toBe(shared.PROJECT_CONTEXT_SOFT_CAP_TOKENS);
   });
 

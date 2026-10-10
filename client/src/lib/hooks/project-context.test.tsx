@@ -110,6 +110,8 @@ describe("useReindexContextDocs", () => {
       branch: "main",
       commit_sha: "abc",
       docs: [{ path: "specs/new.md", name: "new.md", folder: "specs", source: "specs", tokens: 10 }],
+      total: 1,
+      truncated: false,
     };
     get.mockResolvedValue(fresh);
     const { result } = renderHook(() => useReindexContextDocs("r1"), { wrapper });

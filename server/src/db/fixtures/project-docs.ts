@@ -36,5 +36,20 @@ The payments API is a Fastify service backed by Postgres.
 - Redis outages must fail open for read endpoints and fail closed for writes.
 - Limits are configured in \`src/config.ts\`, not hard-coded in handlers.
 `,
+    'README.md': `# Payments API
+
+Card payments service for the Acme storefront.
+
+- Run \`pnpm dev\` to start the API locally.
+- See \`docs/architecture.md\` for the service layout.
+`,
+    'client/specs/ui-components.md': `# UI components
+
+Shared rules for the checkout client components.
+
+- Components are presentational; data fetching lives in hooks.
+- Every interactive element needs an accessible name.
+- Money is formatted through the shared \`formatAmount\` helper.
+`,
   },
 };

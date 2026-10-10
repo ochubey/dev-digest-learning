@@ -9,18 +9,30 @@ const e = (path: string, kind: TreeEntry['kind'] = 'blob'): TreeEntry => ({
 });
 
 describe('project-context docs', () => {
-  it('keeps specs/a.md, docs/sub/b.md, insights/c.MD; drops src/d.md, docs/e.txt, symlinks, submodules', () => {
+  it('keeps every eligible markdown blob; drops noise folders, CHANGELOG, non-md, symlinks, submodules, trees', () => {
     const out = filterDocEntries([
       e('specs/a.md'),
       e('docs/sub/b.md'),
       e('insights/c.MD'),
+      e('README.md'),
       e('src/d.md'),
+      e('client/specs/x.md'),
       e('docs/e.txt'),
+      e('node_modules/p/r.md'),
+      e('.claude/s.md'),
+      e('CHANGELOG.md'),
       e('docs/link.md', 'symlink'),
       e('specs/vendored.md', 'submodule'),
       e('docs/sub', 'tree'),
     ]);
-    expect(out.map((x) => x.path)).toEqual(['specs/a.md', 'docs/sub/b.md', 'insights/c.MD']);
+    expect(out.map((x) => x.path)).toEqual([
+      'specs/a.md',
+      'docs/sub/b.md',
+      'insights/c.MD',
+      'README.md',
+      'src/d.md',
+      'client/specs/x.md',
+    ]);
   });
 
   it('strict UTF-8 rejects binary', () => {
