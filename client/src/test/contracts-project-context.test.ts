@@ -56,4 +56,17 @@ describe('client project-context constants mirror the shared contract', () => {
     expect([...local.SOURCE_ORDER]).toEqual([...shared.PROJECT_CONTEXT_FOLDERS]);
     expect(local.SOFT_CAP_TOKENS).toBe(shared.PROJECT_CONTEXT_SOFT_CAP_TOKENS);
   });
+
+  it('MAX_ATTACHED and MAX_PATH_LENGTH equal the shared values and the input schema enforces them', async () => {
+    const shared = await import('@devdigest/shared');
+    const local = await import('../components/project-context/constants');
+    expect(local.MAX_ATTACHED).toBe(shared.PROJECT_CONTEXT_MAX_ATTACHED);
+    expect(local.MAX_PATH_LENGTH).toBe(shared.PROJECT_CONTEXT_MAX_PATH_LENGTH);
+    const paths = (n: number) => Array.from({ length: n }, (_, i) => `docs/d${i}.md`);
+    expect(shared.ContextAttachmentsInput.safeParse({ paths: paths(local.MAX_ATTACHED) }).success).toBe(true);
+    expect(shared.ContextAttachmentsInput.safeParse({ paths: paths(local.MAX_ATTACHED + 1) }).success).toBe(false);
+    const long = (n: number) => `docs/${'a'.repeat(n - 8)}.md`;
+    expect(shared.ContextAttachmentsInput.safeParse({ paths: [long(local.MAX_PATH_LENGTH)] }).success).toBe(true);
+    expect(shared.ContextAttachmentsInput.safeParse({ paths: [long(local.MAX_PATH_LENGTH + 1)] }).success).toBe(false);
+  });
 });

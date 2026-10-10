@@ -13,6 +13,8 @@ export interface ContextDocPreviewDrawerProps {
   repoId: string;
   path: string;
   attached: boolean;
+  /** The attach limit is reached and this document is not attached. */
+  attachDisabled?: boolean;
   /** Toggle the attachment (same write as the row checkbox, AC-37). */
   onToggleAttach: () => void;
   onClose: () => void;
@@ -31,6 +33,7 @@ export function ContextDocPreviewDrawer({
   repoId,
   path,
   attached,
+  attachDisabled,
   onToggleAttach,
   onClose,
   returnFocus,
@@ -82,6 +85,7 @@ export function ContextDocPreviewDrawer({
 
   const data = q.data;
   const notOnMain = q.error instanceof ApiError && q.error.status === 404;
+  const notText = q.error instanceof ApiError && q.error.status === 422;
 
   return (
     <div style={s.overlay}>
@@ -117,6 +121,7 @@ export function ContextDocPreviewDrawer({
               kind={attached ? "primary" : "secondary"}
               icon={attached ? "Check" : "Plus"}
               aria-pressed={attached}
+              disabled={attachDisabled}
               onClick={onToggleAttach}
             >
               {attached ? t("preview.attached") : t("preview.attach")}
@@ -143,8 +148,10 @@ export function ContextDocPreviewDrawer({
             </div>
           ) : q.isError ? (
             <div role="alert" style={s.state}>
-              <span>{notOnMain ? t("preview.notOnMain") : t("preview.error")}</span>
-              {!notOnMain && (
+              <span>
+                {notOnMain ? t("preview.notOnMain") : notText ? t("preview.notText") : t("preview.error")}
+              </span>
+              {!notOnMain && !notText && (
                 <Button size="sm" icon="RefreshCw" onClick={() => void q.refetch()}>
                   {t("preview.retry")}
                 </Button>

@@ -50,7 +50,8 @@ export function normalizeSpecsRead(specsRead: RunTrace["specs_read"] | undefined
       ? { path: sp, tokens: null, status: "injected", reason: null, origin: "agent", skillName: null }
       : {
           path: sp.path,
-          tokens: sp.tokens,
+          // Skipped rows never show a count, whatever an older trace stored.
+          tokens: sp.status === "skipped" ? null : sp.tokens,
           status: sp.status,
           reason: sp.reason ?? null,
           origin: sp.origin,

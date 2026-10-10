@@ -258,6 +258,24 @@ describe("ContextDocPicker", () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it("at 50 attached, unattached rows cannot be attached and a message explains why", async () => {
+    const many = Array.from({ length: 51 }, (_, i) => mkDoc(`docs/d${String(i).padStart(2, "0")}.md`, 10));
+    server.docs = many;
+    server.paths = many.slice(0, 50).map((d) => d.path);
+    renderPicker();
+    await screen.findByText("50 of 51 attached");
+    expect(screen.getByText("You can attach up to 50 documents. Detach one to add another.")).toBeInTheDocument();
+    const blocked = screen.getByRole("checkbox", { name: "Attach docs/d50.md" });
+    expect(blocked).toBeDisabled();
+    fireEvent.click(blocked);
+    expect(put).not.toHaveBeenCalled();
+    // Attached rows can still be detached.
+    expect(screen.getByRole("checkbox", { name: "Attach docs/d00.md" })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Attach docs/d00.md" }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText(/You can attach up to 50/)).not.toBeInTheDocument());
+  });
+
   it("tick appends last; untick keeps order", async () => {
     server.paths = ["specs/a.md", "docs/b.md"];
     renderPicker();

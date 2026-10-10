@@ -55,12 +55,23 @@ describe("projectContextEntries", () => {
   });
 });
 
+describe("normalizeSpecsRead skipped rows (AC-53)", () => {
+  it("never carries a token count for a skipped row, even in older stored traces", () => {
+    const rows = normalizeSpecsRead([
+      { path: "specs/c.md", tokens: 9000, status: "skipped", reason: "over_budget", origin: "agent" },
+      { path: "specs/a.md", tokens: 5, status: "injected", reason: null, origin: "agent" },
+    ]);
+    expect(rows[0]).toMatchObject({ status: "skipped", reason: "over_budget", tokens: null });
+    expect(rows[1]!.tokens).toBe(5);
+  });
+});
+
 describe("specsTokenSummary", () => {
   it("uses the stored total, else sums injected rows; flags above 4000 only", () => {
     const rows = normalizeSpecsRead([
       { path: "specs/a.md", tokens: 2500, status: "injected", origin: "agent" },
       { path: "specs/b.md", tokens: 1500, status: "injected", origin: "agent" },
-      { path: "specs/c.md", tokens: 9000, status: "skipped", reason: "over_budget", origin: "agent" },
+      { path: "specs/c.md", tokens: null, status: "skipped", reason: "over_budget", origin: "agent" },
     ]);
     expect(specsTokenSummary(rows, undefined)).toEqual({ tokens: 4000, softCapExceeded: false });
     expect(specsTokenSummary(rows, { commit_sha: "x", injected_tokens: 4001, soft_cap_exceeded: true })).toEqual({

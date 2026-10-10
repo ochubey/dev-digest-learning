@@ -164,6 +164,15 @@ describe("ContextDocPreviewDrawer", () => {
     expect(await screen.findByRole("heading", { name: "Security baseline" })).toBeInTheDocument();
   });
 
+  it("422 not_text shows a distinct message without a Retry button", async () => {
+    get.mockRejectedValue(new ApiError("not text", 422));
+    renderDrawer();
+    expect(await screen.findByText("This document isn’t valid UTF-8 text, so it can’t be previewed")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn’t load this document")).not.toBeInTheDocument();
+  });
+
   it("labeled dialog, Escape closes, focus returns to Preview button", async () => {
     const docs: ContextDoc[] = [
       { path: PATH, name: "security-baseline.md", folder: "specs", source: "specs", tokens: 400 },

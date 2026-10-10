@@ -33,6 +33,7 @@ export const s = {
   } satisfies CSSProperties,
   errorText: { flex: 1, display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
   errorTitle: { fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
+  limitNote: { fontSize: 13, color: "var(--text-secondary)" } satisfies CSSProperties,
   writeError: {
     padding: "8px 12px",
     borderRadius: 8,

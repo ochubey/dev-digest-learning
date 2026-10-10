@@ -25,6 +25,7 @@ import {
   useSetSkillContext,
   useSkillContext,
 } from "@/lib/hooks/project-context";
+import { MAX_ATTACHED } from "../constants";
 import { ContextDocRow } from "../ContextDocRow";
 import { ContextFooter } from "../ContextFooter";
 import { ContextDocPreviewDrawer } from "../ContextDocPreviewDrawer";
@@ -81,8 +82,11 @@ export function ContextDocPicker({ repoId, owner, hideSummary }: ContextDocPicke
   );
 
   const save = (next: string[]) => writer.mutate(next);
-  const toggle = (path: string) =>
-    save(attached.includes(path) ? attached.filter((p) => p !== path) : [...attached, path]);
+  const atLimit = attached.length >= MAX_ATTACHED;
+  const toggle = (path: string) => {
+    if (attached.includes(path)) return save(attached.filter((p) => p !== path));
+    if (!atLimit) save([...attached, path]);
+  };
   const move = (path: string, delta: -1 | 1) => {
     const from = attached.indexOf(path);
     save(moveItem(attached, from, from + delta));
@@ -145,6 +149,12 @@ export function ContextDocPicker({ repoId, owner, hideSummary }: ContextDocPicke
         </div>
       )}
 
+      {atLimit && (
+        <div role="status" style={s.limitNote}>
+          {t("limit.reached", { max: MAX_ATTACHED })}
+        </div>
+      )}
+
       {writer.isError && (
         <div role="alert" style={s.writeError}>
           {t("writeError")}
@@ -171,6 +181,7 @@ export function ContextDocPicker({ repoId, owner, hideSummary }: ContextDocPicke
                         row={row}
                         canMoveUp={idx > 0}
                         canMoveDown={idx >= 0 && idx < attached.length - 1}
+                        attachDisabled={atLimit && !row.attached}
                         onToggle={toggle}
                         onMove={move}
                         onPreview={setPreviewPath}
@@ -211,6 +222,7 @@ export function ContextDocPicker({ repoId, owner, hideSummary }: ContextDocPicke
           repoId={repoId}
           path={previewPath}
           attached={attached.includes(previewPath)}
+          attachDisabled={atLimit && !attached.includes(previewPath)}
           onToggleAttach={() => toggle(previewPath)}
           onClose={() => setPreviewPath(null)}
           returnFocus={() =>

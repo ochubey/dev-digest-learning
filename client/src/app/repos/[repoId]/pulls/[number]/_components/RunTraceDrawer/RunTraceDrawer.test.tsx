@@ -93,11 +93,12 @@ describe("A5 Run Trace drawer (smoke)", () => {
       specs_read: [
         { path: "specs/public-api.md", tokens: 512, status: "injected", reason: null, origin: "agent", skill_name: null },
         { path: "docs/gone.md", tokens: null, status: "skipped", reason: "not_found", origin: "skill", skill_name: "Sec" },
+        { path: "specs/big.md", tokens: null, status: "skipped", reason: "over_budget", origin: "agent", skill_name: null },
       ],
       project_context: { commit_sha: "abc", injected_tokens: 512, soft_cap_exceeded: false },
       prompt_assembly: {
         ...TRACE.prompt_assembly,
-        project_context_blocks: [{ path: "specs/public-api.md", tokens: 530, text: BLOCK }],
+        project_context_blocks: [{ path: "specs/public-api.md", tokens: 512, text: BLOCK }],
       },
       ...over,
     });
@@ -106,9 +107,13 @@ describe("A5 Run Trace drawer (smoke)", () => {
       currentTrace = withPc();
       renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
       expect(screen.getByText("specs/public-api.md · 512 tok")).toBeInTheDocument();
-      const skipped = screen.getByTestId("spec-skipped");
+      const skipped = screen.getAllByTestId("spec-skipped")[0]!;
       expect(skipped).toHaveTextContent("docs/gone.md");
       expect(skipped).toHaveTextContent("Skipped: not found on main");
+      const big = screen.getAllByTestId("spec-skipped")[1]!;
+      expect(big).toHaveTextContent("specs/big.md");
+      expect(big).toHaveTextContent("Skipped: over the 32,000-token ceiling");
+      expect(big).not.toHaveTextContent(/tok/);
       cleanup();
       currentTrace = TRACE;
       renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
@@ -120,7 +125,8 @@ describe("A5 Run Trace drawer (smoke)", () => {
       renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
       fireEvent.click(screen.getByText("Prompt assembly"));
       expect(screen.getByText("Project context — attached specs (untrusted)")).toBeInTheDocument();
-      fireEvent.click(screen.getByText("specs/public-api.md · 530 tok"));
+      // Same number as the Specs read row (body tokens); the prompt block label is the last match.
+      fireEvent.click(screen.getAllByText("specs/public-api.md · 512 tok").at(-1)!);
       const pre = screen.getByText((_, el) => el?.tagName === "PRE" && el.textContent === BLOCK);
       expect(pre).toBeInTheDocument();
     });

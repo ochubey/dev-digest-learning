@@ -14,6 +14,8 @@ export interface ContextDocRowProps {
   /** Move controls for attached rows (keyboard alternative to dragging, AC-19). */
   canMoveUp: boolean;
   canMoveDown: boolean;
+  /** The attach limit is reached and this row is not attached: the checkbox is inert. */
+  attachDisabled?: boolean;
   onToggle: (path: string) => void;
   onMove: (path: string, delta: -1 | 1) => void;
   onPreview: (path: string) => void;
@@ -24,6 +26,7 @@ export function ContextDocRow({
   row,
   canMoveUp,
   canMoveDown,
+  attachDisabled,
   onToggle,
   onMove,
   onPreview,
@@ -60,11 +63,16 @@ export function ContextDocRow({
           >
             <Icon.Menu size={14} />
           </span>
-          <Checkbox
-            checked={row.attached}
-            onChange={() => onToggle(row.path)}
-            label={<span style={s.srOnly}>{t("row.attach", { path: row.path })}</span>}
-          />
+          {attachDisabled ? (
+            // The vendored Checkbox has no disabled state, so render an inert native one.
+            <input type="checkbox" disabled checked={false} readOnly aria-label={t("row.attach", { path: row.path })} />
+          ) : (
+            <Checkbox
+              checked={row.attached}
+              onChange={() => onToggle(row.path)}
+              label={<span style={s.srOnly}>{t("row.attach", { path: row.path })}</span>}
+            />
+          )}
         </>
       )}
       <div style={s.text}>

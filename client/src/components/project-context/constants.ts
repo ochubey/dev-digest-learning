@@ -17,6 +17,12 @@ export const SERIALIZE_HEADINGS: Record<ContextSource, string> = {
 /** Footer total turns into a warning above this many tokens (AC-26). */
 export const SOFT_CAP_TOKENS = 4000;
 
+/** Most documents one agent or skill can attach (mirrors PROJECT_CONTEXT_MAX_ATTACHED). */
+export const MAX_ATTACHED = 50;
+
+/** Longest accepted document path (mirrors PROJECT_CONTEXT_MAX_PATH_LENGTH). */
+export const MAX_PATH_LENGTH = 300;
+
 /** Source badge colors; the badge always also carries its text label. */
 export const SOURCE_COLOR: Record<ContextSource, string> = {
   specs: "var(--accent-text)",

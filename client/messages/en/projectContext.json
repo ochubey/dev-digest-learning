@@ -26,6 +26,9 @@
     "body": "The repository could not be reached. Your attached documents are unchanged.",
     "retry": "Retry"
   },
+  "limit": {
+    "reached": "You can attach up to {max} documents. Detach one to add another."
+  },
   "writeError": "Couldn’t save the change. The previous list was restored.",
   "row": {
     "handle": "Drag to reorder {path}",
@@ -49,6 +52,7 @@
     "close": "Close",
     "loading": "Loading preview…",
     "notOnMain": "This document is no longer on main",
+    "notText": "This document isn’t valid UTF-8 text, so it can’t be previewed",
     "error": "Couldn’t load this document",
     "retry": "Retry",
     "usedBy": "{count, plural, one {Used by # agent} other {Used by # agents}}",
