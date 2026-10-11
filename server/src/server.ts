@@ -12,13 +12,14 @@ async function main() {
   // Opt out with SEED_ON_BOOT=0.
   if (config.nodeEnv === 'development' && process.env.SEED_ON_BOOT !== '0') {
     try {
-      await seed(app.container.db, { demoContext: config.projectDocsSource === 'fixture' });
+      const demoContext = config.projectDocsSource === 'fixture';
+      await seed(app.container.db, { demoContext });
       app.log.info('demo data seeded');
       // Then return the demo repo (acme/payments-api) to a clean, un-analysed state on EVERY
       // restart: no Intent, no agent runs, no real reviews. Other repos are never touched.
       // Opt out with RESET_DEMO_ON_BOOT=0.
       if (process.env.RESET_DEMO_ON_BOOT !== '0') {
-        const { pulls } = await resetDemoProject(app.container.db);
+        const { pulls } = await resetDemoProject(app.container.db, { demoContext });
         app.log.info(`demo project reset to its clean seeded state (${pulls} PRs)`);
       }
     } catch (err) {

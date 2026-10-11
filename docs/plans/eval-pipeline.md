@@ -361,9 +361,9 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> inserted running run -> buildApp -> failed "interrupted", finished results kept`
 
 ### P5: Seed and experiment (after P4)
-- [ ] **T15** `server/src/db/fixtures/eval-cases.ts`. -> AC-73 -> `server/test/eval-seed-fixture.test.ts > >= 8 cases, >= 3 per kind; every fragment parses and its range intersects a hunk of its file; derived cases carry origin, others "seeded"; seeded runs parse as EvalSuiteRunDetail and their stored metrics equal scoreRun(results)`
-- [ ] **T16** `seed.ts`: cases (idempotent, OQ-10). In fixture mode: the Stripe finding accepted, Security Reviewer at v2 (A-3), the two runs. `demo-reset.ts` re-applies the fixture decision, and `server.ts` passes `demoContext`. -> AC-73, AC-74, AC-78, AC-86 (data) -> `server/test/seed-demo.it.test.ts > seeds >= 8 eval cases; second seed adds none; deleted seeded case not re-created; fixture on -> 2 runs at v1/v2, Stripe finding accepted after resetDemoProject; fixture off -> no runs, no decisions`
-- [ ] **T17** `server/test/helpers/prompt-aware-llm.ts`, a fake whose output depends on a system-prompt marker:
+- [x] **T15** `server/src/db/fixtures/eval-cases.ts`. -> AC-73 -> `server/test/eval-seed-fixture.test.ts > >= 8 cases, >= 3 per kind; every fragment parses and its range intersects a hunk of its file; derived cases carry origin, others "seeded"; seeded runs parse as EvalSuiteRunDetail and their stored metrics equal scoreRun(results)`
+- [x] **T16** `seed.ts`: cases (idempotent, OQ-10). In fixture mode: the Stripe finding accepted, Security Reviewer at v2 (A-3), the two runs. `demo-reset.ts` re-applies the fixture decision, and `server.ts` passes `demoContext`. -> AC-73, AC-74, AC-78, AC-86 (data) -> `server/test/seed-demo.it.test.ts > seeds >= 8 eval cases; second seed adds none; deleted seeded case not re-created; fixture on -> 2 runs at v1/v2, Stripe finding accepted after resetDemoProject; fixture off -> no runs, no decisions`
+- [x] **T17** `server/test/helpers/prompt-aware-llm.ts`, a fake whose output depends on a system-prompt marker:
   - GOOD: findings on the `must_find` ranges.
   - BROKEN: one finding on every added line, including `must_not_flag` zones.
   - SILENT: no findings.
