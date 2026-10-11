@@ -236,8 +236,8 @@ Owns:
 
 P3 builds against the P1 contracts with mocked network; it does not need P2 to compile.
 
-- [ ] **T11** Hooks file (3c) and the D-4 opt-out in `providers.tsx`; export from `hooks/index.ts`. -> AC-11, AC-12, AC-35, AC-42 -> `client/src/lib/hooks/multi-agent.test.tsx > refetches every 4 s while a column is running (fake timers)`, `> stops refetching when all columns are terminal`, `> 404 is not retried`
-- [ ] **T12** `ConfigureRun/constants.ts` and `helpers.ts`:
+- [x] **T11** Hooks file (3c) and the D-4 opt-out in `providers.tsx`; export from `hooks/index.ts`. -> AC-11, AC-12, AC-35, AC-42 -> `client/src/lib/hooks/multi-agent.test.tsx > refetches every 4 s while a column is running (fake timers)`, `> stops refetching when all columns are terminal`, `> 404 is not retried`
+- [x] **T12** `ConfigureRun/constants.ts` and `helpers.ts`:
   - `MAX_AGENTS = 5`;
   - `sortPullsNewestFirst`;
   - `defaultSelection(agents, presetIds)`;
@@ -248,7 +248,7 @@ P3 builds against the P1 contracts with mocked network; it does not need P2 to c
   - `runButtonState(n)` (`select|one|many`);
   - `configureRunHref`, `resultsHref` (D-10).
   -> AC-3, AC-5, AC-8, AC-9, AC-33 -> `ConfigureRun/helpers.test.ts > selectionEstimate: three agents, one without history -> T, C, suffix count 1`, `> agentEstimateLabel both forms`, `> sortPullsNewestFirst`, `> defaultSelection: preset ids win, else first 5 enabled`, `> configureRunHref encodes pr and agents`
-- [ ] **T13** `ConfigureRun.tsx` (+ local `AgentPickCard.tsx`, `styles.ts`, `index.ts`) and `multi-agent/page.tsx` as in 3c. -> AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-13, AC-33 -> `ConfigureRun/ConfigureRun.test.tsx`:
+- [x] **T13** `ConfigureRun.tsx` (+ local `AgentPickCard.tsx`, `styles.ts`, `index.ts`) and `multi-agent/page.tsx` as in 3c. -> AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-13, AC-33 -> `ConfigureRun/ConfigureRun.test.tsx`:
   - `> two-PR fixture lists "#n · title" newest first`
   - `> no ?pr: "Pick a pull request first", run button disabled`
   - `> 6 enabled + 1 disabled: 7 cards, first 5 enabled checked, others unchecked, estimate and "No run history" forms`
@@ -260,9 +260,9 @@ P3 builds against the P1 contracts with mocked network; it does not need P2 to c
   - `> rejecting mutation: toast with server message, PR and selection kept`
   - `> merged PR: warning shown, button enabled`
   - `> ?agents=a,b preselects exactly those agents`
-- [ ] **T14** `RunReviewDropdown` gains optional `repoId` and `prNumber` props. When both are set, it renders the item `t("runReview.multiAgent")` (icon `Users`) after "Run all enabled agents" and before the per-agent list, and it pushes `configureRunHref(repoId, { pr: prNumber })`. `PrDetailHeader` gains a `repoId` prop and passes `repoId` and `pr.number`; `page.tsx` passes `repoId`. -> AC-1 -> `RunReviewDropdown.test.tsx > "Multi-agent review…" sits between Run all and the agent list and navigates to /repos/<repoId>/multi-agent?pr=<number>`
-- [ ] **T15** `nav.ts`: WORKSPACE gains `{ key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" }` after `pulls` (no gKey). -> AC-2 -> `client/src/test/nav-multi-agent.test.tsx > WORKSPACE has "Multi-Agent Review" after Pull Requests; resolveHref -> /repos/r1/multi-agent; activeKeyFor matches the key`
-- [ ] **T16** i18n, in two files:
+- [x] **T14** `RunReviewDropdown` gains optional `repoId` and `prNumber` props. When both are set, it renders the item `t("runReview.multiAgent")` (icon `Users`) after "Run all enabled agents" and before the per-agent list, and it pushes `configureRunHref(repoId, { pr: prNumber })`. `PrDetailHeader` gains a `repoId` prop and passes `repoId` and `pr.number`; `page.tsx` passes `repoId`. -> AC-1 -> `RunReviewDropdown.test.tsx > "Multi-agent review…" sits between Run all and the agent list and navigates to /repos/<repoId>/multi-agent?pr=<number>`
+- [x] **T15** `nav.ts`: WORKSPACE gains `{ key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" }` after `pulls` (no gKey). -> AC-2 -> `client/src/test/nav-multi-agent.test.tsx > WORKSPACE has "Multi-Agent Review" after Pull Requests; resolveHref -> /repos/r1/multi-agent; activeKeyFor matches the key`
+- [x] **T16** i18n, in two files:
   - `multiAgent.json` `configure.*`: `title` "Configure run", `prLabel` "Pull request", `prPlaceholder` "Select a pull request", `prOption` "#{number} · {title}", `pickPrFirst` "Pick a pull request first", `agentsLabel` "Agents", `selectAll` "Select all", `clearAll` "Clear all", `limitHint` "Up to 5 agents per run", `noHistory` "No run history", `disabled` "disabled", `estimate` "≈ {seconds}s · ${cost} · parallel", `withoutHistory` " · {count} without history", `runSelect` "Select agents", `runOne` "Run 1 agent", `runMany` "Run multi-agent review ({count})".
   - `prReview.json` `runReview.multiAgent`: "Multi-agent review…".
   -> AC-1, AC-4, AC-7, AC-8, AC-9 -> asserted by T13/T14 tests (they load the real message files)

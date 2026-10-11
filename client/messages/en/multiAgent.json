@@ -1,0 +1,20 @@
+{
+  "configure": {
+    "title": "Configure run",
+    "prLabel": "Pull request",
+    "prPlaceholder": "Select a pull request",
+    "prOption": "#{number} · {title}",
+    "pickPrFirst": "Pick a pull request first",
+    "agentsLabel": "Agents",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "limitHint": "Up to 5 agents per run",
+    "noHistory": "No run history",
+    "disabled": "disabled",
+    "estimate": "≈ {seconds}s · ${cost} · parallel",
+    "withoutHistory": " · {count} without history",
+    "runSelect": "Select agents",
+    "runOne": "Run 1 agent",
+    "runMany": "Run multi-agent review ({count})"
+  }
+}

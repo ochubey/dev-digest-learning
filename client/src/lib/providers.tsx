@@ -41,6 +41,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         mutationCache: new MutationCache({
           onError: (err, _vars, _ctx, mutation) => {
             // Opt-out for mutations that show their own inline notice for a 429.
+            // Opt-out for mutations whose caller toasts the error itself (launch flow).
+            if (mutation.meta?.silent === true) return;
             if (mutation.meta?.silent429 && err instanceof ApiError && err.status === 429) return;
             notify.error(errorMessage(err));
           },
