@@ -4,7 +4,7 @@ import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
-import { isConfigChange } from './helpers.js';
+import { isConfigChange, versionConfigOf } from './helpers.js';
 
 /**
  * A2 — agents data-access. Owns `agents`, `agent_versions`, and the
@@ -179,17 +179,7 @@ export class AgentsRepository {
       .values({
         agentId: row.id,
         version,
-        configJson: {
-          provider: row.provider,
-          model: row.model,
-          system_prompt: row.systemPrompt,
-          output_schema: row.outputSchema,
-          strategy: row.strategy,
-          ci_fail_on: row.ciFailOn,
-          repo_intel: row.repoIntel,
-          skills,
-          context_paths: row.contextPaths,
-        },
+        configJson: versionConfigOf(row, skills),
       })
       .onConflictDoNothing();
   }

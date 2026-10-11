@@ -293,8 +293,8 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
 - Gate: `pnpm typecheck` in `server`, `client` and `reviewer-core`.
 
 ### P2: DB schema and migration (after P1)
-- [ ] **T3** Edit `server/src/db/schema/eval.ts` (section 3b) and run `pnpm db:generate`. Check the generated SQL for the partial unique index and the expression index. If drizzle-kit cannot emit the expression index, drop it and rely on the service check plus a transaction (record the fallback in INSIGHTS). -> AC-20, AC-22, AC-41, AC-10 -> covered by the T13/T14 integration tests.
-- [ ] **T4** Add `agents/helpers.ts#versionConfigOf(row, skillIds)`. `snapshotVersion` uses it (no behaviour change). -> AC-33 -> `server/test/eval-manifest.test.ts > versionConfigOf equals the snapshot shape` (plus the existing `agents-versions.it.test.ts` stays green).
+- [x] **T3** Edit `server/src/db/schema/eval.ts` (section 3b) and run `pnpm db:generate`. Check the generated SQL for the partial unique index and the expression index. If drizzle-kit cannot emit the expression index, drop it and rely on the service check plus a transaction (record the fallback in INSIGHTS). -> AC-20, AC-22, AC-41, AC-10 -> covered by the T13/T14 integration tests.
+- [x] **T4** Add `agents/helpers.ts#versionConfigOf(row, skillIds)`. `snapshotVersion` uses it (no behaviour change). -> AC-33 -> `server/test/eval-manifest.test.ts > versionConfigOf equals the snapshot shape` (plus the existing `agents-versions.it.test.ts` stays green).
 
 ### P3: Pure scoring and helpers (after P1; parallel with P2)
 - [ ] **T5** `matching.ts` and `scoring.ts`. -> AC-23, AC-24, AC-25, AC-26, AC-27, AC-28, AC-29, AC-30 -> `server/test/eval-scoring.test.ts`:
