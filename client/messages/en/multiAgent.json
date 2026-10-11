@@ -16,5 +16,36 @@
     "runSelect": "Select agents",
     "runOne": "Run 1 agent",
     "runMany": "Run multi-agent review ({count})"
+  },
+  "results": {
+    "title": "Multi-Agent Review",
+    "agentsParallel": "{count} agents · parallel",
+    "configureRun": "Configure run",
+    "viewColumns": "Columns",
+    "viewTabs": "Tabs",
+    "status": {
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "viewTrace": "View trace",
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}",
+    "noFindings": "No findings",
+    "alsoFlaggedBy": "Also flagged by {names}",
+    "deletedAgent": "Deleted agent",
+    "notFound": "Multi-agent run not found",
+    "loadError": "Couldn't load this multi-agent run",
+    "retry": "Retry",
+    "noColumns": "No agent runs left in this review.",
+    "score": "Score {score}",
+    "summary": "Summary"
+  },
+  "disagreements": {
+    "title": "Where agents disagree",
+    "onlyConflicts": "Show only conflicts",
+    "didNotFlag": "did not flag",
+    "noConflicts": "No disagreements: all finished agents agree.",
+    "needTwo": "Disagreements appear when at least two agents have finished."
   }
 }

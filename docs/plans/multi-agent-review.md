@@ -272,19 +272,19 @@ P3 builds against the P1 contracts with mocked network; it does not need P2 to c
 Owns: `client/src/app/repos/[repoId]/multi-agent/[id]/page.tsx`, `client/src/app/repos/[repoId]/multi-agent/_components/{MultiAgentResults,AgentColumnCard,AgentTabsView,DisagreementsBlock}/**`, `client/messages/en/multiAgent.json` (handed over from P3; adds the `results.*` and `disagreements.*` keys only), `client/README.md`.
 P4 reads but does not edit P3 files: the hooks, `ConfigureRun/helpers.ts`, `RunTraceDrawer`, `FindingCard`.
 
-- [ ] **T17** `MultiAgentResults/helpers.ts` + `constants.ts`:
+- [x] **T17** `MultiAgentResults/helpers.ts` + `constants.ts`:
   - `isTerminal`, `finishedCount`;
   - `statusKey(status)`;
   - `alsoFlaggedBy(groups)`: `Map<findingId, otherAgentNames[]>`;
   - `groupsToShow(groups, onlyConflicts)`: groups with takes, or only `is_conflict`;
   - `VIEWS = ["columns","tabs"]`, default `columns`.
   -> AC-34, AC-37, AC-41, AC-44, AC-46 -> `MultiAgentResults/helpers.test.ts > alsoFlaggedBy lists only other agents`, `> groupsToShow off = all with takes, on = conflicts only`, `> invalid ?view falls back to columns`
-- [ ] **T18** `MultiAgentResults.tsx` (header, `?view` switch with `router.replace`, skeleton / 404 / error + Retry, empty "No agent runs left in this review.", drawer host) and `[id]/page.tsx` (AppShell + RepoNotFound). -> AC-32, AC-33, AC-35, AC-41, AC-42 -> `MultiAgentResults/MultiAgentResults.test.tsx`:
+- [x] **T18** `MultiAgentResults.tsx` (header, `?view` switch with `router.replace`, skeleton / 404 / error + Retry, empty "No agent runs left in this review.", drawer host) and `[id]/page.tsx` (AppShell + RepoNotFound). -> AC-32, AC-33, AC-35, AC-41, AC-42 -> `MultiAgentResults/MultiAgentResults.test.tsx`:
   - `> header: Configure run, title, "3 agents · parallel", Columns/Tabs switch, "#482 title", total time and cost`
   - `> Configure run href carries pr and all column agent ids`
   - `> ?view=tabs renders Tabs mode`
   - `> loading -> skeleton; 404 -> "Multi-agent run not found" + link; 500 -> error with Retry`
-- [ ] **T19** `AgentColumnCard`:
+- [x] **T19** `AgentColumnCard`:
   - name, text status label;
   - duration and cost (or "—" until terminal), score when done;
   - error text for failed or cancelled;
@@ -292,18 +292,18 @@ P4 reads but does not edit P3 files: the hooks, `ConfigureRun/helpers.ts`, `RunT
   - "No findings";
   - footer "View trace" + "<n> findings".
   -> AC-34, AC-36, AC-37, AC-38 -> `AgentColumnCard/AgentColumnCard.test.tsx > one column per status: labels, dash until terminal, score when done, footer`, `> failed column shows its error; done columns still show findings`, `> "Also flagged by Security" on both items of a two-agent group`, `> View trace calls onOpenTrace(runId, running = status === "running")`
-- [ ] **T20** `AgentTabsView`:
+- [x] **T20** `AgentTabsView`:
   - one tab per column: name + score, or status while not done;
   - detail: summary, score, View trace, duration, cost;
   - `FindingCard` list from `usePrReviews(pr_id)` matched by `run_id`, with `useFindingAction({ findingId, action, prId })`.
   -> AC-38, AC-39, AC-40 -> `AgentTabsView/AgentTabsView.test.tsx > tabs and header; FindingCard with confidence, suggested fix, Accept, Dismiss, Turn into eval case`, `> Accept calls the finding action with prId and the card shows Accepted`, `> View trace opens the drawer for the selected run`
-- [ ] **T21** `DisagreementsBlock`:
+- [x] **T21** `DisagreementsBlock`:
   - title "Where agents disagree";
   - labelled `role="switch"` "Show only conflicts" (off by default);
   - rows `file:line` + group title + one cell per take (agent name, severity upper-case or muted "did not flag", note);
   - AC-45 and AC-46 messages.
   -> AC-43, AC-44, AC-45, AC-46 -> `DisagreementsBlock/DisagreementsBlock.test.tsx > one cell per finished agent with "did not flag" and original titles`, `> switch toggles all-with-takes vs conflicts only`, `> all agree + switch on -> "No disagreements: all finished agents agree."`, `> one done + two running -> "Disagreements appear when at least two agents have finished."`
-- [ ] **T22** i18n, in `multiAgent.json`:
+- [x] **T22** i18n, in `multiAgent.json`:
   - `results.*`: `title` "Multi-Agent Review", `agentsParallel` "{count} agents · parallel", `configureRun` "Configure run", `viewColumns` "Columns", `viewTabs` "Tabs", `status.running|done|failed|cancelled` "Running|Done|Failed|Cancelled", `viewTrace` "View trace", `findingsCount` "{count, plural, one {# finding} other {# findings}}", `noFindings` "No findings", `alsoFlaggedBy` "Also flagged by {names}", `deletedAgent` "Deleted agent", `notFound` "Multi-agent run not found", `loadError` "Couldn't load this multi-agent run", `retry` "Retry", `noColumns` "No agent runs left in this review.", `score` "Score {score}", `summary` "Summary".
   - `disagreements.*`: `title` "Where agents disagree", `onlyConflicts` "Show only conflicts", `didNotFlag` "did not flag", `noConflicts` "No disagreements: all finished agents agree.", `needTwo` "Disagreements appear when at least two agents have finished.".
   - Plus the `client/README.md` route rows for `/repos/[repoId]/multi-agent` and `/repos/[repoId]/multi-agent/[id]`.

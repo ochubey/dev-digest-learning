@@ -57,6 +57,8 @@ and pure helpers such as `latestFinished` / `previousFinished` / `passedParts`).
 | `/evals/[agentId]` | One agent: metric cards, run history, run detail drawer, compare dialog (`AgentEvalPage`). |
 | `/agents/[id]?tab=evals` | Agent Evals tab (`EvalsTab`): case list, metric strip, Run all evals, last 10 runs; a run row opens the same run detail drawer. |
 | Finding cards (PR detail) | "Turn into eval case" opens `EvalCaseDialog`, prefilled from `GET /findings/:id/eval-case-draft`. |
+| `/repos/[repoId]/multi-agent` | Configure run: pick a PR and 1 to 5 agents, see the estimate, launch (`ConfigureRun`). |
+| `/repos/[repoId]/multi-agent/[id]?view=columns\|tabs` | Multi-agent results: per-agent columns or tabs, plus "Where agents disagree" (`MultiAgentResults`). |
 
 "Cases passed" is always `cases_passed / counts.cases_scored`; the metric cards derive
 latest/previous from the runs list (finished runs only), so a failed run never
