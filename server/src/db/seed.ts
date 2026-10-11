@@ -561,43 +561,57 @@ async function seedEvalCases(
   a: { workspaceId: string; agentId: string; prId: string | null },
   cases: SeedEvalCase[],
 ): Promise<void> {
-  const present = await db
-    .select({ id: t.evalCases.id })
-    .from(t.evalCases)
-    .where(
-      and(
-        eq(t.evalCases.workspaceId, a.workspaceId),
-        eq(t.evalCases.ownerKind, 'agent'),
-        eq(t.evalCases.ownerId, a.agentId),
-        sql`(${t.evalCases.inputMeta}->>'origin' = 'seeded' or ${t.evalCases.inputMeta}->>'seed_key' is not null)`,
-      ),
-    )
-    .limit(1);
-  if (present.length > 0) return;
-
+  // Resolved before the transaction (read-only lookups of the seeded sample findings).
+  const sourceFindingIds = new Map<string, string | undefined>();
   for (const c of cases) {
-    const sourceFindingId = c.derived_from ? await findSeedFinding(db, c.derived_from.file, c.derived_from.title) : undefined;
-    await db
-      .insert(t.evalCases)
-      .values({
-        workspaceId: a.workspaceId,
-        ownerKind: 'agent',
-        ownerId: a.agentId,
-        name: c.name,
-        inputDiff: c.input_diff,
-        inputMeta: {
-          origin: c.origin,
-          seed_key: c.seed_key,
-          ...(sourceFindingId
-            ? { source_finding_id: sourceFindingId, source_pr_id: a.prId, source_decision: c.derived_from!.decision }
-            : {}),
-        },
-        expectedOutput: c.expectation,
-        notes: null,
-      })
-      // A user-made case for the same finding wins (unique per owner and source finding).
-      .onConflictDoNothing();
+    sourceFindingIds.set(
+      c.seed_key,
+      c.derived_from ? await findSeedFinding(db, c.derived_from.file, c.derived_from.title) : undefined,
+    );
   }
+
+  // The check and the inserts run under one advisory lock per agent: a dev server restart seeds on
+  // boot, and a manual `db:seed` at the same moment must not add the set twice.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`seed_eval_cases:${a.agentId}`}))`);
+    const present = await tx
+      .select({ id: t.evalCases.id })
+      .from(t.evalCases)
+      .where(
+        and(
+          eq(t.evalCases.workspaceId, a.workspaceId),
+          eq(t.evalCases.ownerKind, 'agent'),
+          eq(t.evalCases.ownerId, a.agentId),
+          sql`(${t.evalCases.inputMeta}->>'origin' = 'seeded' or ${t.evalCases.inputMeta}->>'seed_key' is not null)`,
+        ),
+      )
+      .limit(1);
+    if (present.length > 0) return;
+
+    for (const c of cases) {
+      const sourceFindingId = sourceFindingIds.get(c.seed_key);
+      await tx
+        .insert(t.evalCases)
+        .values({
+          workspaceId: a.workspaceId,
+          ownerKind: 'agent',
+          ownerId: a.agentId,
+          name: c.name,
+          inputDiff: c.input_diff,
+          inputMeta: {
+            origin: c.origin,
+            seed_key: c.seed_key,
+            ...(sourceFindingId
+              ? { source_finding_id: sourceFindingId, source_pr_id: a.prId, source_decision: c.derived_from!.decision }
+              : {}),
+          },
+          expectedOutput: c.expectation,
+          notes: null,
+        })
+        // A user-made case for the same finding wins (unique per owner and source finding).
+        .onConflictDoNothing();
+    }
+  });
 }
 
 /**
