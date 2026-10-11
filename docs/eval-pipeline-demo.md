@@ -39,4 +39,9 @@ Reading the numbers:
 - Citation accuracy stays 100% in all runs: every returned finding cited lines that exist in the diff fragment (grounding pass rate, not correctness of the claim).
 - The Security Reviewer in the dev DB now has versions v4 (noisy prompt) and v5 (original text restored; verified byte-identical to v3's prompt). `enabled` was not changed.
 
-A fixture-based screenshot of the compare dialog (seeded v1 vs v2 runs, no model call) is in `docs/eval-pipeline-compare.png`.
+Screenshots of the compare dialog:
+
+- `docs/eval-pipeline-compare-real.png`: the real runs A (v3) vs B (v4): recall 60% -> 100% (up 40pt), precision 60% -> 50% (down 10pt), two cases regressed, three fixed, one timed out.
+- `docs/eval-pipeline-compare.png`: seeded fixture runs v1 vs v2 (no model call), as used by the e2e flow.
+
+UI note: in the compare dialog the system prompt diff sits inside a scrollable box, so an appended sentence is not visible in a static screenshot; scroll the box to the end on camera.

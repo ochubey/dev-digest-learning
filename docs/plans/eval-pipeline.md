@@ -393,7 +393,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> <img onerror> in name/fragment not in DOM`
 
 ### P7: Client Evals tab (after P6)
-- [ ] **T21** Shared `MetricStrip`, `ScoringNote`, `RunEvalControl`. -> AC-28 (tooltip), AC-31, AC-49, AC-50, AC-51, AC-52, AC-53, AC-54, AC-56, AC-57 -> `client/src/components/evals/MetricStrip/MetricStrip.test.tsx`:
+- [x] **T21** Shared `MetricStrip`, `ScoringNote`, `RunEvalControl`. -> AC-28 (tooltip), AC-31, AC-49, AC-50, AC-51, AC-52, AC-53, AC-54, AC-56, AC-57 -> `client/src/components/evals/MetricStrip/MetricStrip.test.tsx`:
   - `> "88%" "▲ 13pt"; "▼"`
   - `> null -> "—" with reason tooltip, no delta`
   - `> no finished run -> "No eval runs yet"`
@@ -406,7 +406,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> confirm text "Run 9 cases with <model>? …", Cancel sends nothing, Run sends one POST`
   - `> running: "Running 3 / 9 cases", disabled, role=status`
   - `> 400/missing key/network -> message + re-enabled; 409 -> shows running progress`
-- [ ] **T22** `EvalsTab`, the `TABS` entry, and `agents.json`/`evals.json` keys. -> AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-50, AC-53, AC-55, AC-83 -> `AgentEditor.test.tsx > renders Evals tab`; `client/src/app/agents/[id]/page` deep-link test `> ?tab=evals opens Evals`; `EvalsTab/EvalsTab.test.tsx`:
+- [x] **T22** `EvalsTab`, the `TABS` entry, and `agents.json`/`evals.json` keys. -> AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-50, AC-53, AC-55, AC-83 -> `AgentEditor.test.tsx > renders Evals tab`; `client/src/app/agents/[id]/page` deep-link test `> ?tab=evals opens Evals`; `EvalsTab/EvalsTab.test.tsx`:
   - `> mixed fixture rows: result icon + label, name, kind badge text, origin, file:start–end, detail`
   - `> order`
   - `> "6 / 8 passing" and "9 cases"`
@@ -418,13 +418,13 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> hostile case name plain text`
 
 ### P8: Client dashboard, compare, nav (after P7)
-- [ ] **T23** `nav.ts` entry and shortcut. -> AC-58 -> `client/src/test/nav-evals.test.tsx > SKILLS LAB has "Eval Dashboard" after Conventions, href /evals, icon Gauge; activeKeyFor("/evals/x") === "eval"`
-- [ ] **T24** `EvalOverview` landing (`/evals`). -> AC-59, AC-60, AC-64, AC-31 -> `EvalOverview.test.tsx`:
+- [x] **T23** `nav.ts` entry and shortcut. -> AC-58 -> `client/src/test/nav-evals.test.tsx > SKILLS LAB has "Eval Dashboard" after Conventions, href /evals, icon Gauge; activeKeyFor("/evals/x") === "eval"`
+- [x] **T24** `EvalOverview` landing (`/evals`). -> AC-59, AC-60, AC-64, AC-31 -> `EvalOverview.test.tsx`:
   - `> agent with runs (version, time, "X/Y pass", three %) and without ("No eval runs yet")`
   - `> 6 recent rows newest first; row/agent click -> /evals/<id>`
   - `> no agents -> "No agents yet" + link; loading; error + Retry`
   - `> scoring note present`
-- [ ] **T25** `AgentEvalPage` (`/evals/[agentId]`) with `RunsTable` and `RunDetailDrawer`. -> AC-61, AC-62, AC-63, AC-65, AC-66 -> `AgentEvalPage.test.tsx`:
+- [x] **T25** `AgentEvalPage` (`/evals/[agentId]`) with `RunsTable` and `RunDetailDrawer`. -> AC-61, AC-62, AC-63, AC-65, AC-66 -> `AgentEvalPage.test.tsx`:
   - `> name/model, metric cards with deltas, Run eval control, table columns`
   - `> 25 runs -> 20 + Load more`
   - `> switcher + "All agents"; agent id from URL`
@@ -432,7 +432,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> select 1/2/3 -> Compare enabled only at 2; third replaces earliest; hint text`
 
   `RunDetailDrawer.test.tsx > per-case name, kind, pass/fail/error, matched + unlabeled file:lines, dropped with reason, error message`
-- [ ] **T26** `CompareRunsDialog`. -> AC-67, AC-68, AC-69, AC-70, AC-71, AC-72 -> `CompareRunsDialog.test.tsx`:
+- [x] **T26** `CompareRunsDialog`. -> AC-67, AC-68, AC-69, AC-70, AC-71, AC-72 -> `CompareRunsDialog.test.tsx`:
   - `> newer selected first -> "Compare runs · v1 → v2", A older left`
   - `> recall/precision/citation/cost cells A, B, delta with ▲/▼, "—" for null`
   - `> prompt diff: removed with strikethrough, added with underline, "System prompt unchanged" when equal; model line`
@@ -441,10 +441,10 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> labeled dialog, Escape closes, focus returns to Compare`
 
 ### P9: e2e (after P5 + P8; fixture mode, read-only, no LLM)
-- [ ] **T27** `e2e/specs/12-agent-evals-tab.flow.json`. Open Security Reviewer `?tab=evals`; assert at least 8 `[data-testid="eval-case-row"]`, both "must find" and "must not flag" badges, and the strip values of the seeded v2 run. -> AC-84
-- [ ] **T28** `e2e/specs/13-eval-dashboard-compare.flow.json`. Sidebar "Eval Dashboard" → Security Reviewer → tick both seeded runs → Compare; assert the title, a "▲" delta, and an `ins` or `del` prompt mark. Never click Run. -> AC-85, AC-58
-- [ ] **T29** `e2e/specs/14-turn-into-eval-case.flow.json`. PR #482 → Agent runs → expand the Stripe finding → "Turn into eval case"; assert "Must find" selected, `src/config.ts`, lines 12; Cancel. -> AC-86
-- [ ] **T30** Update `e2e/README.md` and `e2e/specs/flows.md` (flows 12-14 need `PROJECT_DOCS_SOURCE=fixture`; A-4). -> AC-84, AC-85, AC-86 -> review only.
+- [x] **T27** `e2e/specs/12-agent-evals-tab.flow.json`. Open Security Reviewer `?tab=evals`; assert at least 8 `[data-testid="eval-case-row"]`, both "must find" and "must not flag" badges, and the strip values of the seeded v2 run. -> AC-84
+- [x] **T28** `e2e/specs/13-eval-dashboard-compare.flow.json`. Sidebar "Eval Dashboard" → Security Reviewer → tick both seeded runs → Compare; assert the title, a "▲" delta, and an `ins` or `del` prompt mark. Never click Run. -> AC-85, AC-58
+- [x] **T29** `e2e/specs/14-turn-into-eval-case.flow.json`. PR #482 → Agent runs → expand the Stripe finding → "Turn into eval case"; assert "Must find" selected, `src/config.ts`, lines 12; Cancel. -> AC-86
+- [x] **T30** Update `e2e/README.md` and `e2e/specs/flows.md` (flows 12-14 need `PROJECT_DOCS_SOURCE=fixture`; A-4). -> AC-84, AC-85, AC-86 -> review only.
 
 ### P10: `pnpm verify:l06` (after P5; can run alongside P6-P9)
 - [x] **T31** Root `package.json`: `{"name": "devdigest-root", "private": true, "scripts": {"verify:l06": "bash scripts/verify-l06.sh"}}`. No dependencies, no `pnpm-workspace.yaml`, no lockfile.
@@ -468,7 +468,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   -> AC-76, AC-77 -> manual: green run; temporarily break an assertion in `eval-scoring.test.ts` and confirm a non-zero exit naming "server unit"; run with Wi-Fi off and no keys.
 
 ### P11: Docs and INSIGHTS (last)
-- [ ] **T32** `server/README.md` (eval routes, scoring formulas, limits), `client/README.md` (Evals tab and dashboard routes), `reviewer-core/specs/review-contract.md` (a note that evals call `reviewPullRequest` with fragment-only inputs), `docs/` scoring note "citation_accuracy = grounding pass rate". Run the `engineering-insights` pass on `server/`, `client/` and `e2e/` INSIGHTS. -> AC-31, AC-82 (documentation) -> review only.
+- [x] **T32** `server/README.md` (eval routes, scoring formulas, limits), `client/README.md` (Evals tab and dashboard routes), `reviewer-core/specs/review-contract.md` (a note that evals call `reviewPullRequest` with fragment-only inputs), `docs/` scoring note "citation_accuracy = grounding pass rate". Run the `engineering-insights` pass on `server/`, `client/` and `e2e/` INSIGHTS. -> AC-31, AC-82 (documentation) -> review only.
 
 ## 5. Traceability matrix (AC -> task -> test)
 
