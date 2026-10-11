@@ -95,6 +95,11 @@ export const s = {
     marginTop: 14,
     flexWrap: "wrap",
   } satisfies CSSProperties,
+  evalHint: {
+    alignSelf: "center",
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
   composer: {
     marginTop: 12,
     display: "flex",

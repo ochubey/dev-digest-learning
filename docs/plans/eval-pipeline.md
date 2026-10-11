@@ -371,8 +371,8 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   Then add `server/test/eval-experiment.test.ts`. -> AC-75 -> `> precision(BROKEN) < precision(GOOD) on seeded cases; recall(SILENT) != recall(GOOD); zero DB/network`
 
 ### P6: Client foundation and capture (after P1; connect after P4)
-- [ ] **T18** Hooks `client/src/lib/hooks/evals.ts`. -> AC-50, AC-62 -> `client/src/lib/hooks/evals.test.tsx > polls every 2 s while a run is running, stops after; invalidates cases + overview on finish; runs pages of 20`
-- [ ] **T19** `client/src/lib/text-diff.ts` (extracted) and `client/src/components/evals/helpers.ts` + `constants.ts`. -> AC-17, AC-51, AC-52, AC-54, AC-67, AC-69, AC-70, AC-71 -> `client/src/components/evals/helpers.test.ts`:
+- [x] **T18** Hooks `client/src/lib/hooks/evals.ts`. -> AC-50, AC-62 -> `client/src/lib/hooks/evals.test.tsx > polls every 2 s while a run is running, stops after; invalidates cases + overview on finish; runs pages of 20`
+- [x] **T19** `client/src/lib/text-diff.ts` (extracted) and `client/src/components/evals/helpers.ts` + `constants.ts`. -> AC-17, AC-51, AC-52, AC-54, AC-67, AC-69, AC-70, AC-71 -> `client/src/components/evals/helpers.test.ts`:
   - `> formatPct/deltaPt 0.75 -> 0.88 = "▲ 13pt", decrease "▼"`
   - `> nullReason texts`
   - `> sortCases kind then name`
@@ -382,7 +382,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> diffWords marks one changed sentence`
 
   The existing `VersionsTab` tests stay green.
-- [ ] **T20** FindingCard action and `EvalCaseDialog`; `prReview.json` keys. -> AC-1, AC-2, AC-3, AC-6, AC-7, AC-8, AC-9, AC-10, AC-13, AC-83 -> `FindingCard.test.tsx > accepted and dismissed: "Turn into eval case" enabled; undecided: disabled + "Accept or dismiss the finding first"`; `EvalCaseDialog/EvalCaseDialog.test.tsx`:
+- [x] **T20** FindingCard action and `EvalCaseDialog`; `prReview.json` keys. -> AC-1, AC-2, AC-3, AC-6, AC-7, AC-8, AC-9, AC-10, AC-13, AC-83 -> `FindingCard.test.tsx > accepted and dismissed: "Turn into eval case" enabled; undecided: disabled + "Accept or dismiss the finding first"`; `EvalCaseDialog/EvalCaseDialog.test.tsx`:
   - `> opens with draft, no create request`
   - `> fields: editable name, kind radio switchable, read-only file/range, monospaced fragment, owner agent, notes`
   - `> dismissed hint text`

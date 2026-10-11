@@ -9,7 +9,9 @@
     "replyToAuthor": "Reply to author",
     "replyPlaceholder": "Reply to the author about this finding…",
     "sendReply": "Send reply",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "turnIntoEvalCase": "Turn into eval case",
+    "turnIntoEvalCaseHint": "Accept or dismiss the finding first"
   },
   "trifecta": {
     "lethal": "LETHAL TRIFECTA — ALL 3 PRESENT",
@@ -153,5 +155,32 @@
     "goToReview": "Jump to this run’s findings below",
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run"
+  },
+  "evalCaseDialog": {
+    "title": "Turn into eval case",
+    "loading": "Preparing the draft…",
+    "loadError": "Could not prepare the eval case.",
+    "retry": "Retry",
+    "name": "Name",
+    "kind": "Expectation",
+    "kindMustFind": "Must find",
+    "kindMustNotFlag": "Must not flag",
+    "dismissedHint": "Dismissed is not always 'no problem'. Save as Must not flag only if the agent should stay silent here.",
+    "file": "File",
+    "lines": "Lines",
+    "fragment": "Diff fragment",
+    "agent": "Owner agent",
+    "agentPick": "Choose the agent that should be evaluated on this case.",
+    "agentPlaceholder": "Choose an agent…",
+    "notes": "Notes (optional)",
+    "save": "Save eval case",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "saveError": "Could not save the eval case. Your edits are kept.",
+    "saved": "Eval case saved",
+    "viewEvals": "Open the Evals tab",
+    "alreadyExists": "Already an eval case",
+    "viewExisting": "Open the Evals tab"
   }
 }

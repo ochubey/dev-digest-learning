@@ -1,0 +1,9 @@
+{
+  "metric": {
+    "nullReason": {
+      "noMustFind": "no must-find cases",
+      "noFindingsReturned": "no findings returned",
+      "noFindingsProduced": "no findings produced"
+    }
+  }
+}

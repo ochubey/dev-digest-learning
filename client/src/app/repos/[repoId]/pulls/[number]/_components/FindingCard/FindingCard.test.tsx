@@ -91,3 +91,22 @@ describe("FindingCard scope", () => {
     expect(screen.queryByText(/Out of scope/)).not.toBeInTheDocument();
   });
 });
+
+describe("FindingCard eval case action", () => {
+  it("accepted and dismissed: enabled, no hint", () => {
+    for (const decided of [{ accepted_at: "2026-10-11T10:00:00Z" }, { dismissed_at: "2026-10-11T10:00:00Z" }]) {
+      const { unmount } = renderWithIntl(<FindingCard f={{ ...FINDING, ...decided }} defaultExpanded />);
+      expect(screen.getByRole("button", { name: "Turn into eval case" })).toBeEnabled();
+      expect(screen.queryByText("Accept or dismiss the finding first")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("undecided: disabled with the hint", () => {
+    renderWithIntl(<FindingCard f={FINDING} defaultExpanded />);
+    const btn = screen.getByRole("button", { name: "Turn into eval case" });
+    expect(btn).toBeDisabled();
+    const hint = screen.getByText("Accept or dismiss the finding first");
+    expect(btn).toHaveAttribute("aria-describedby", hint.id);
+  });
+});
