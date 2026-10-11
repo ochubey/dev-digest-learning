@@ -6,116 +6,142 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ErrorState, Skeleton } from "@devdigest/ui";
 import type { EvalOverview as Overview, EvalSuiteRun } from "@devdigest/shared";
-import { ScoringNote, formatPct } from "@/components/evals";
-import { useEvalOverview } from "@/lib/hooks/evals";
+import { MetricBar, ScoringNote, Sparkline, formatPct } from "@/components/evals";
+import { useAgentEvalRuns, useEvalOverview } from "@/lib/hooks/evals";
 import { EVAL_TEST_IDS } from "../../constants";
 import { formatRanAt, passedParts } from "../../helpers";
-import { recentRuns } from "./helpers";
+import { recallTrend, recentRuns } from "./helpers";
 import { s } from "./styles";
 
 type TFn = ReturnType<typeof useTranslations>;
+type AgentSummary = Overview["agents"][number];
+
+const COLORS = { recall: "var(--accent)", precision: "var(--ok)", citation: "var(--warn)" } as const;
 
 function passText(t: TFn, run: EvalSuiteRun): string {
   const { passed, total } = passedParts(run);
-  return t("common.passValue", { passed: passed ?? t("common.noValue"), total });
+  return t("passValue", { passed: passed ?? t("noValue"), total });
 }
 
 /** /evals landing (AC-59, AC-60, AC-64): every agent's latest eval numbers and the latest runs. */
 export function EvalOverview() {
-  const t = useTranslations("evalsDashboard");
+  const t = useTranslations("evalsOverview");
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useEvalOverview();
 
   if (isLoading) {
     return (
-      <div style={s.page} role="status" aria-label={t("overview.loading")}>
+      <div style={s.page} role="status" aria-label={t("loading")}>
         <div style={s.skeletons}>
           <Skeleton height={26} width={240} />
-          <Skeleton height={44} />
-          <Skeleton height={44} />
-          <Skeleton height={44} />
+          <Skeleton height={64} />
+          <Skeleton height={64} />
+          <Skeleton height={64} />
         </div>
       </div>
     );
   }
   if (isError || !data) {
-    return (
-      <ErrorState fullScreen title={t("overview.errorTitle")} body={t("overview.errorBody")} onRetry={() => void refetch()} />
-    );
+    return <ErrorState fullScreen title={t("errorTitle")} body={t("errorBody")} onRetry={() => void refetch()} />;
   }
 
+  const open = (id: string) => router.push(`/evals/${id}`);
   return (
     <div style={s.page}>
       <div>
-        <h1 style={s.h1}>{t("overview.title")}</h1>
-        <p style={s.subtitle}>{t("overview.subtitle")}</p>
+        <h1 style={s.h1}>{t("title")}</h1>
+        <p style={s.subtitle}>{t("subtitle")}</p>
       </div>
       <ScoringNote />
       {data.agents.length === 0 ? (
         <div style={s.empty}>
-          <strong>{t("overview.emptyTitle")}</strong>
-          <span style={s.muted}>{t("overview.emptyBody")}</span>
+          <strong>{t("emptyTitle")}</strong>
+          <span style={s.muted}>{t("emptyBody")}</span>
           <Link href="/agents" style={s.emptyLink}>
-            {t("overview.emptyCta")}
+            {t("emptyCta")}
           </Link>
         </div>
       ) : (
         <>
-          <AgentsTable t={t} agents={data.agents} onOpen={(id) => router.push(`/evals/${id}`)} />
-          <RecentRuns t={t} data={data} onOpen={(id) => router.push(`/evals/${id}`)} />
+          <AgentCards t={t} agents={data.agents} onOpen={open} />
+          <RecentRuns t={t} data={data} onOpen={open} />
         </>
       )}
     </div>
   );
 }
 
-function AgentsTable({ t, agents, onOpen }: { t: TFn; agents: Overview["agents"]; onOpen: (agentId: string) => void }) {
+function AgentCards({ t, agents, onOpen }: { t: TFn; agents: Overview["agents"]; onOpen: (agentId: string) => void }) {
   return (
     <section style={s.section} aria-labelledby="eval-agents-heading">
       <h2 id="eval-agents-heading" style={s.h2}>
-        {t("overview.agentsHeading")}
+        {t("agentsHeading")}
       </h2>
-      <table style={s.table}>
-        <thead>
-          <tr>
-            {(["colAgent", "colModel", "colLatest", "colRecall", "colPrecision", "colCitation"] as const).map((k) => (
-              <th key={k} style={s.th} scope="col">
-                {t(`overview.${k}`)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {agents.map((a) => (
-            <tr key={a.agent_id} data-testid={EVAL_TEST_IDS.agentRow} style={s.row} onClick={() => onOpen(a.agent_id)}>
-              <td style={s.td}>
-                <button type="button" style={s.nameBtn} aria-label={t("overview.openAgent", { name: a.name })}>
-                  {a.name}
-                </button>
-              </td>
-              <td style={s.td}>{a.model}</td>
-              {a.latest ? (
-                <>
-                  <td style={s.td}>
-                    <div>{t("common.version", { version: a.latest.agent_version })}</div>
-                    <div style={s.muted}>{formatRanAt(a.latest.started_at)}</div>
-                    <div>{passText(t, a.latest)}</div>
-                  </td>
-                  <td style={s.td}>{formatPct(a.latest.metrics.recall)}</td>
-                  <td style={s.td}>{formatPct(a.latest.metrics.precision)}</td>
-                  <td style={s.td}>{formatPct(a.latest.metrics.citation_accuracy)}</td>
-                </>
-              ) : (
-                <td style={{ ...s.td, ...s.muted }} colSpan={4}>
-                  {t("overview.noRuns")}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={s.cards}>
+        {agents.map((a) => (
+          <AgentCard key={a.agent_id} t={t} agent={a} onOpen={onOpen} />
+        ))}
+      </div>
     </section>
   );
+}
+
+function AgentCard({ t, agent: a, onOpen }: { t: TFn; agent: AgentSummary; onOpen: (agentId: string) => void }) {
+  const latest = a.latest;
+  const m = latest?.metrics;
+  return (
+    <div data-testid={EVAL_TEST_IDS.agentRow} style={s.card} onClick={() => onOpen(a.agent_id)}>
+      <div style={s.cardMain}>
+        <div style={s.nameLine}>
+          <button type="button" style={s.nameBtn} aria-label={t("openAgent", { name: a.name })}>
+            {a.name}
+          </button>
+          <span style={s.chip}>{a.model}</span>
+        </div>
+        <div style={s.muted}>
+          {latest
+            ? t("lastRun", {
+                version: t("version", { version: latest.agent_version }),
+                date: formatRanAt(latest.started_at),
+                pass: passText(t, latest),
+              })
+            : t("noRuns")}
+        </div>
+      </div>
+      {latest && m ? (
+        <>
+          <RecallSparkline t={t} agentId={a.agent_id} />
+          <div style={s.metrics}>
+            <Big label={t("shortRecall")} value={m.recall} color={COLORS.recall} />
+            <Big label={t("shortPrecision")} value={m.precision} color={COLORS.precision} />
+            <Big label={t("shortCitation")} value={m.citation_accuracy} color={COLORS.citation} />
+          </div>
+        </>
+      ) : null}
+      <span style={s.chevron} aria-hidden="true">
+        ›
+      </span>
+    </div>
+  );
+}
+
+function Big({ label, value, color }: { label: string; value: number | null; color: string }) {
+  return (
+    <div style={s.metric}>
+      <span className="tnum" style={{ ...s.big, color }}>
+        {formatPct(value)}
+      </span>
+      <span style={s.metricLabel}>{label}</span>
+    </div>
+  );
+}
+
+/** Own component so each agent loads its runs independently; a failed or short history renders nothing. */
+function RecallSparkline({ t, agentId }: { t: TFn; agentId: string }) {
+  const { data } = useAgentEvalRuns(agentId);
+  const values = React.useMemo(() => recallTrend(data?.pages.flatMap((p) => p.items) ?? []), [data]);
+  if (values.length < 2) return null;
+  return <Sparkline values={values} label={t("recallTrend", { count: values.length })} />;
 }
 
 function RecentRuns({ t, data, onOpen }: { t: TFn; data: Overview; onOpen: (agentId: string) => void }) {
@@ -124,42 +150,46 @@ function RecentRuns({ t, data, onOpen }: { t: TFn; data: Overview; onOpen: (agen
   return (
     <section style={s.section} aria-labelledby="eval-recent-heading">
       <h2 id="eval-recent-heading" style={s.h2}>
-        {t("overview.recentHeading")}
+        {t("recentHeading")}
       </h2>
       {runs.length === 0 ? (
-        <p style={s.muted}>{t("overview.noRecent")}</p>
+        <p style={s.muted}>{t("noRecent")}</p>
       ) : (
         <table style={s.table}>
           <thead>
             <tr>
-              {(["colAgent", "colRanAt", "colVersion", "colRecall", "colPrecision", "colCitation", "colPassed", "colStatus"] as const).map(
-                (k) => (
-                  <th key={k} style={s.th} scope="col">
-                    {t(`overview.${k}`)}
-                  </th>
-                ),
-              )}
+              {(["colAgent", "colRanAt", "colVersion", "colMetrics", "colPassed"] as const).map((k) => (
+                <th key={k} style={s.th} scope="col">
+                  {t(k)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {runs.map((r) => {
-              const name = r.agent_name ?? names.get(r.agent_id) ?? t("overview.unknownAgent");
+              const name = r.agent_name ?? names.get(r.agent_id) ?? t("unknownAgent");
               const when = formatRanAt(r.started_at);
               const { passed, total } = passedParts(r);
               return (
                 <tr key={r.id} data-testid="eval-recent-run-row" style={s.row} onClick={() => onOpen(r.agent_id)}>
                   <td style={s.td}>
-                    <button type="button" style={s.nameBtn} aria-label={t("overview.openRun", { name, time: when })}>
+                    <button type="button" style={s.nameBtn} aria-label={t("openRun", { name, time: when })}>
                       {name}
                     </button>
                   </td>
                   <td style={s.td}>{when}</td>
-                  <td style={s.td}>{t("common.version", { version: r.agent_version })}</td>
-                  <td style={s.td}>{formatPct(r.metrics.recall)}</td>
-                  <td style={s.td}>{formatPct(r.metrics.precision)}</td>
-                  <td style={s.td}>{formatPct(r.metrics.citation_accuracy)}</td>
-                  <td style={s.td}>{passed == null ? t("common.noValue") : t("common.casesValue", { passed, total })}</td>
-                  <td style={s.td}>{t(`status.${r.status}`)}</td>
+                  <td style={s.td}>{t("version", { version: r.agent_version })}</td>
+                  <td style={s.td}>
+                    <div style={s.bars}>
+                      <MetricBar value={r.metrics.recall} color={COLORS.recall} label={t("metricRecall")} />
+                      <MetricBar value={r.metrics.precision} color={COLORS.precision} label={t("metricPrecision")} />
+                      <MetricBar value={r.metrics.citation_accuracy} color={COLORS.citation} label={t("metricCitation")} />
+                    </div>
+                  </td>
+                  <td style={s.td}>
+                    <div>{passed == null ? t("noValue") : t("casesValue", { passed, total })}</div>
+                    {r.status !== "completed" ? <div style={s.muted}>{t(`status.${r.status}`)}</div> : null}
+                  </td>
                 </tr>
               );
             })}
