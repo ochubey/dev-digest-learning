@@ -41,6 +41,7 @@ Reading the numbers:
 
 Screenshots of the compare dialog:
 
+- `docs/eval-dashboard-landing.png` and `docs/eval-agent-page.png`: the Eval Dashboard landing and the per-agent page (metric cards with sparklines, trend chart, regression banner, runs table) on the real runs.
 - `docs/eval-pipeline-compare-real.png`: the real runs A (v3) vs B (v4): recall 60% -> 100% (up 40pt), precision 60% -> 50% (down 10pt), two cases regressed, three fixed, one timed out.
 - `docs/eval-pipeline-compare.png`: seeded fixture runs v1 vs v2 (no model call), as used by the e2e flow.
 
