@@ -6,6 +6,7 @@
   "colAgent": "Agent",
   "colRanAt": "Ran at",
   "colVersion": "Version",
+  "colModel": "Model",
   "colMetrics": "Recall, precision, citation",
   "colPassed": "Cases passed",
   "metricRecall": "Recall",

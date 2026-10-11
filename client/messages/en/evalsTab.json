@@ -55,6 +55,7 @@
     "col": {
       "ranAt": "Ran at",
       "version": "Version",
+      "model": "Model",
       "status": "Status",
       "recall": "Recall",
       "precision": "Precision",

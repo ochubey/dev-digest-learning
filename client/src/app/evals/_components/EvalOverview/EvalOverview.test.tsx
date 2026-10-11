@@ -107,6 +107,19 @@ describe("EvalOverview", () => {
     expect(push).toHaveBeenLastCalledWith("/evals/a1");
   });
 
+  it("recent runs show the run model (short, full id in title) or a dash", async () => {
+    const recent = [
+      mkRun({ id: "x1", model: "deepseek/deepseek-v4-flash" }),
+      mkRun({ id: "x2", model: null, started_at: "2026-10-10T10:00:00Z" }),
+    ];
+    overview = { agents: [agent("a1", "Security reviewer", mkRun())], recent };
+    mount();
+    await screen.findAllByTestId("eval-agent-row");
+    const rows = screen.getAllByTestId("eval-recent-run-row");
+    expect(within(rows[0]!).getByText("deepseek-v4-flash")).toHaveAttribute("title", "deepseek/deepseek-v4-flash");
+    expect(within(rows[1]!).getByText("—")).toBeInTheDocument();
+  });
+
   it('no agents -> "No agents yet" + link; loading; error + Retry', async () => {
     overview = { agents: [], recent: [] };
     mount();

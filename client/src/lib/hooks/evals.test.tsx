@@ -221,6 +221,15 @@ describe("run hooks", () => {
     expect(keys).toContain(JSON.stringify(evalKeys.runs("a1")));
   });
 
+  it("start with a model posts it as the JSON body", async () => {
+    post.mockResolvedValue({ run_id: "r9" });
+    const { result } = renderHook(() => useStartEvalRun("a1"), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ model: "m-x" });
+    });
+    expect(post).toHaveBeenCalledWith("/agents/a1/eval-runs", { model: "m-x" });
+  });
+
   it("run detail, overview and compare hit their endpoints", async () => {
     get.mockResolvedValue({});
     renderHook(() => useEvalRun("r1"), { wrapper });

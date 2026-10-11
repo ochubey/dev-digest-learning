@@ -32,6 +32,10 @@
   "run": {
     "button": "Run all evals",
     "confirm": "Run {count, plural, one {# case} other {# cases}} with {model}? Each case makes one review call to the model.",
+    "modelLabel": "Model for this run",
+    "modelDefault": "Agent default ({model})",
+    "modelHint": "This changes the model for this run only; the agent keeps its configuration.",
+    "modelsEmptyHint": "No models loaded — set the {provider} API key in Settings → API Keys. The run uses the agent's model.",
     "confirmRun": "Run",
     "confirmCancel": "Cancel",
     "progress": "Running {done} / {total} cases",

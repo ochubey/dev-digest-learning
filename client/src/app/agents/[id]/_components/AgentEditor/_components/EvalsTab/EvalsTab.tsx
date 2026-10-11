@@ -15,6 +15,7 @@ import {
   formatPct,
   latestFinished,
   previousFinished,
+  shortModel,
   sortCases,
   type CaseResultLabel,
 } from "@/components/evals";
@@ -138,7 +139,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
         <>
           {hasCases && <MetricStrip latest={latest} previous={previous} agentVersion={agent.version} />}
           <ScoringNote />
-          <RunEvalControl agentId={agent.id} caseCount={sorted.length} model={agent.model} />
+          <RunEvalControl agentId={agent.id} caseCount={sorted.length} model={agent.model} provider={agent.provider} />
 
           {hasCases ? (
             <section style={s.section} aria-label={t("cases.title")}>
@@ -180,7 +181,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
               <table style={s.table}>
                 <thead>
                   <tr>
-                    {(["ranAt", "version", "status", "recall", "precision", "citation", "passed", "cost"] as const).map((k) => (
+                    {(["ranAt", "version", "model", "status", "recall", "precision", "citation", "passed", "cost"] as const).map((k) => (
                       <th key={k} style={s.th} scope="col">
                         {t(`runs.col.${k}`)}
                       </th>
@@ -201,6 +202,9 @@ export function EvalsTab({ agent }: { agent: Agent }) {
                         </button>
                       </td>
                       <td style={s.td}>{t("runs.version", { version: r.agent_version })}</td>
+                      <td style={s.td} title={r.model ?? undefined}>
+                        {shortModel(r.model) ?? t("runs.noValue")}
+                      </td>
                       <td style={s.td}>{t(`runs.status.${r.status}`)}</td>
                       <td style={s.td}>{formatPct(r.metrics.recall)}</td>
                       <td style={s.td}>{formatPct(r.metrics.precision)}</td>

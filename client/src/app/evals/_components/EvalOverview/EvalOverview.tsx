@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ErrorState, Skeleton } from "@devdigest/ui";
 import type { EvalOverview as Overview, EvalSuiteRun } from "@devdigest/shared";
-import { MetricBar, ScoringNote, Sparkline, formatPct } from "@/components/evals";
+import { MetricBar, ScoringNote, Sparkline, formatPct, shortModel } from "@/components/evals";
 import { useAgentEvalRuns, useEvalOverview } from "@/lib/hooks/evals";
 import { EVAL_TEST_IDS } from "../../constants";
 import { formatRanAt, passedParts } from "../../helpers";
@@ -158,7 +158,7 @@ function RecentRuns({ t, data, onOpen }: { t: TFn; data: Overview; onOpen: (agen
         <table style={s.table}>
           <thead>
             <tr>
-              {(["colAgent", "colRanAt", "colVersion", "colMetrics", "colPassed"] as const).map((k) => (
+              {(["colAgent", "colRanAt", "colVersion", "colModel", "colMetrics", "colPassed"] as const).map((k) => (
                 <th key={k} style={s.th} scope="col">
                   {t(k)}
                 </th>
@@ -179,6 +179,9 @@ function RecentRuns({ t, data, onOpen }: { t: TFn; data: Overview; onOpen: (agen
                   </td>
                   <td style={s.td}>{when}</td>
                   <td style={s.td}>{t("version", { version: r.agent_version })}</td>
+                  <td style={s.td} title={r.model ?? undefined}>
+                    {shortModel(r.model) ?? t("noValue")}
+                  </td>
                   <td style={s.td}>
                     <div style={s.bars}>
                       <MetricBar value={r.metrics.recall} color={COLORS.recall} label={t("metricRecall")} />

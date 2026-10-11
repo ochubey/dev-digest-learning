@@ -38,21 +38,41 @@ function mkRun(status: EvalSuiteRun["status"], done = 0, total = 9): EvalSuiteRu
 }
 const page = (items: EvalSuiteRun[]) => ({ items, next_cursor: null });
 
+const MODELS = [
+  { id: "gpt-test", pricing: null, contextLength: null },
+  { id: "gpt-other", pricing: null, contextLength: null },
+];
+let models: unknown = MODELS;
+let modelsFail = false;
+
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <NextIntlClientProvider locale="en" messages={{ evalsShared }}>
-        <RunEvalControl agentId="a1" caseCount={9} model="gpt-test" />
+        <RunEvalControl agentId="a1" caseCount={9} model="gpt-test" provider="openai" />
       </NextIntlClientProvider>
     </QueryClientProvider>,
   );
 }
 
+/** Route the mocked GET: provider models vs the agent's eval runs. */
+function setRuns(items: EvalSuiteRun[]) {
+  get.mockImplementation(async (url: string) => {
+    if (url.startsWith("/providers/")) {
+      if (modelsFail) throw new Error("no key");
+      return models;
+    }
+    return page(items);
+  });
+}
+
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
-  get.mockResolvedValue(page([]));
+  models = MODELS;
+  modelsFail = false;
+  setRuns([]);
 });
 afterEach(cleanup);
 
@@ -74,8 +94,48 @@ describe("RunEvalControl", () => {
     expect(post.mock.calls[0]?.[0]).toBe("/agents/a1/eval-runs");
   });
 
+  it("default option sends no model; picking another sends {model} and updates the text", async () => {
+    post.mockResolvedValue({ run_id: "r1" });
+    mount();
+    fireEvent.click(screen.getByTestId("eval-run-button"));
+    const select = screen.getByLabelText("Model for this run") as HTMLSelectElement;
+    expect(select.value).toBe("");
+    expect(screen.getByRole("option", { name: "Agent default (gpt-test)" })).toBeInTheDocument();
+    expect(screen.getByText("This changes the model for this run only; the agent keeps its configuration.")).toBeInTheDocument();
+    await screen.findByRole("option", { name: "gpt-other" });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post.mock.calls[0]).toEqual(["/agents/a1/eval-runs"]);
+
+    fireEvent.click(screen.getByTestId("eval-run-button"));
+    fireEvent.change(screen.getByLabelText("Model for this run"), { target: { value: "gpt-other" } });
+    expect(
+      screen.getByText("Run 9 cases with gpt-other? Each case makes one review call to the model."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(post.mock.calls[1]).toEqual(["/agents/a1/eval-runs", { model: "gpt-other" }]);
+  });
+
+  it("models list failure keeps only the agent model and shows a hint", async () => {
+    modelsFail = true;
+    models = [];
+    mount();
+    fireEvent.click(screen.getByTestId("eval-run-button"));
+    const select = screen.getByLabelText("Model for this run") as HTMLSelectElement;
+    expect(select.options).toHaveLength(1);
+    expect(select.options[0]).toHaveTextContent("Agent default (gpt-test)");
+  });
+
+  it("empty models list shows the hint", async () => {
+    models = [];
+    mount();
+    fireEvent.click(screen.getByTestId("eval-run-button"));
+    expect(await screen.findByText(/No models loaded/)).toBeInTheDocument();
+  });
+
   it('running: "Running 3 / 9 cases", disabled, role=status', async () => {
-    get.mockResolvedValue(page([mkRun("running", 3)]));
+    setRuns([mkRun("running", 3)]);
     mount();
     const status = await screen.findByRole("status");
     await waitFor(() => expect(status).toHaveTextContent("Running 3 / 9 cases"));
@@ -112,7 +172,7 @@ describe("RunEvalControl", () => {
     post.mockRejectedValue(new ApiError("already running", 409, "eval_run_running"));
     mount();
     fireEvent.click(screen.getByTestId("eval-run-button"));
-    get.mockResolvedValue(page([mkRun("running", 2)]));
+    setRuns([mkRun("running", 2)]);
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Running 2 / 9 cases"));
     expect(screen.queryByRole("alert")).toBeNull();

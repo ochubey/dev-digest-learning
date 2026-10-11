@@ -83,12 +83,21 @@ describe("AgentEvalPage", () => {
     expect(screen.getByRole("button", { name: "Run all evals" })).toBeInTheDocument();
     await screen.findAllByTestId("eval-run-row");
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(["Select", "Ran at", "Version", "Status", "Recall", "Precision", "Citation", "Cases passed", "Cost"]);
+    expect(headers).toEqual(["Select", "Ran at", "Version", "Model", "Status", "Recall", "Precision", "Citation", "Cases passed", "Cost"]);
     const row = screen.getAllByTestId("eval-run-row")[0]!;
     expect(within(row).getByText("v2")).toBeInTheDocument();
+    expect(within(row).getByText("—")).toBeInTheDocument();
     expect(within(row).getByText("Completed")).toBeInTheDocument();
     expect(within(row).getByText("6/8")).toBeInTheDocument();
     expect(within(row).getByText("$0.0123")).toBeInTheDocument();
+  });
+
+  it("Model column shows the short run model with the full id in the title", async () => {
+    pages = [{ items: [{ ...latest, model: "deepseek/deepseek-v4-flash" }, previous], next_cursor: null }];
+    mount();
+    const rows = await screen.findAllByTestId("eval-run-row");
+    const cell = within(rows[0]!).getByText("deepseek-v4-flash");
+    expect(cell).toHaveAttribute("title", "deepseek/deepseek-v4-flash");
   });
 
   it("runs table shows MetricBars with the percent next to each metric", async () => {

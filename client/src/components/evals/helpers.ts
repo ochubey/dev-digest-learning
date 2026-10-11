@@ -196,3 +196,10 @@ export function caseResultDetail(c: Pick<EvalCaseView, "last_result" | "expectat
     : r.matched > 0 ? "mustNotFlagHit" : "mustNotFlagClean";
   return { key, count: r.matched, error: null };
 }
+
+/** Short form of a model id for tables: the part after the last "/" ("—"-style null stays null). */
+export function shortModel(model: string | null | undefined): string | null {
+  if (!model) return null;
+  const i = model.lastIndexOf("/");
+  return i >= 0 && i < model.length - 1 ? model.slice(i + 1) : model;
+}

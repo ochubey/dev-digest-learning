@@ -273,6 +273,18 @@ describe("EvalsTab", () => {
     expect(first).toHaveTextContent("$0.0123");
   });
 
+  it("Model column: short run model with full id in title, dash when null", async () => {
+    runsData = [
+      { ...mkRun("r1", "2026-10-20T10:00:00Z"), model: "deepseek/deepseek-v4-flash" },
+      { ...mkRun("r2", "2026-10-19T10:00:00Z"), model: null },
+    ];
+    mount();
+    const rows = await screen.findAllByTestId("eval-tab-run-row");
+    expect(screen.getByRole("columnheader", { name: "Model" })).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("deepseek-v4-flash")).toHaveAttribute("title", "deepseek/deepseek-v4-flash");
+    expect(within(rows[1]!).getByText("—")).toBeInTheDocument();
+  });
+
   it("run row opens the run detail drawer (AC-65)", async () => {
     mount();
     const row = (await screen.findAllByTestId("eval-tab-run-row"))[0]!;

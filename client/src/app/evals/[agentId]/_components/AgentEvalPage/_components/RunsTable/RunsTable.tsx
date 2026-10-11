@@ -4,7 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
 import type { EvalSuiteRun } from "@devdigest/shared";
-import { MetricBar } from "@/components/evals";
+import { MetricBar, shortModel } from "@/components/evals";
 import { EVAL_TEST_IDS } from "../../../../../constants";
 import { formatCost, formatRanAt, passedParts } from "../../../../../helpers";
 import { s } from "./styles";
@@ -25,11 +25,12 @@ const BARS = [
   { key: "citation_accuracy", label: "colCitation", color: "var(--warn)" },
 ] as const;
 
-const COLUMNS = ["colSelect", "colRanAt", "colVersion", "colStatus", "colRecall", "colPrecision", "colCitation", "colPassed", "colCost"] as const;
+const COLUMNS = ["colSelect", "colRanAt", "colVersion", "colModel", "colStatus", "colRecall", "colPrecision", "colCitation", "colPassed", "colCost"] as const;
 
 /** AC-61/AC-62: the agent's runs, newest first, with a real checkbox per row and Load more. */
 export function RunsTable({ runs, selected, onToggle, onOpen, hasMore, loadingMore, onLoadMore }: RunsTableProps) {
   const t = useTranslations("evalsDashboard");
+  const ta = useTranslations("evalsAgentPage");
   return (
     <div style={s.wrap}>
       <table style={s.table}>
@@ -37,7 +38,7 @@ export function RunsTable({ runs, selected, onToggle, onOpen, hasMore, loadingMo
           <tr>
             {COLUMNS.map((k) => (
               <th key={k} style={s.th} scope="col">
-                {t(`agent.${k}`)}
+                {k === "colModel" ? ta("table.colModel") : t(`agent.${k}`)}
               </th>
             ))}
           </tr>
@@ -63,6 +64,9 @@ export function RunsTable({ runs, selected, onToggle, onOpen, hasMore, loadingMo
                   </button>
                 </td>
                 <td style={s.td}>{t("common.version", { version: r.agent_version })}</td>
+                <td style={s.td} title={r.model ?? undefined}>
+                  {shortModel(r.model) ?? ta("table.noValue")}
+                </td>
                 <td style={s.td}>{t(`status.${r.status}`)}</td>
                 {BARS.map((b) => (
                   <td key={b.key} style={s.td}>

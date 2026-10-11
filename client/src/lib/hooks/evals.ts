@@ -82,11 +82,15 @@ export function useDeleteEvalCase() {
   });
 }
 
-/** Start a run for the agent (`mutate()` takes no argument). 202 returns the run id. */
+/** Start a run for the agent. Optional `{ model }` runs it on another model of the agent's
+    provider (this run only); without it no body is sent. 202 returns the run id. */
 export function useStartEvalRun(agentId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<EvalRunStartResponse>(`/agents/${agentId}/eval-runs`),
+    mutationFn: (input: { model?: string } | void) =>
+      input && input.model
+        ? api.post<EvalRunStartResponse>(`/agents/${agentId}/eval-runs`, { model: input.model })
+        : api.post<EvalRunStartResponse>(`/agents/${agentId}/eval-runs`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: evalKeys.runs(agentId) });
     },

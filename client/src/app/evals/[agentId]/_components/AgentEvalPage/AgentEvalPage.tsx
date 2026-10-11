@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button, ErrorState, Skeleton } from "@devdigest/ui";
 import type { EvalSuiteRun } from "@devdigest/shared";
 import { RunDetailDrawer, RunEvalControl, ScoringNote, TrendChart, latestFinished, previousFinished } from "@/components/evals";
+import { useAgent } from "@/lib/hooks/agents";
 import { useAgentEvalCases, useAgentEvalRuns, useEvalOverview } from "@/lib/hooks/evals";
 import { COMPARE_SELECTION_SIZE, EVAL_TEST_IDS } from "../../../constants";
 import { toggleSelection } from "../../../helpers";
@@ -28,6 +29,7 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
   const overview = useEvalOverview();
   const runs = useAgentEvalRuns(agentId);
   const cases = useAgentEvalCases(agentId);
+  const agent = useAgent(agentId);
   const [selected, setSelected] = React.useState<string[]>([]);
   const [opened, setOpened] = React.useState<EvalSuiteRun | null>(null);
   const [comparing, setComparing] = React.useState(false);
@@ -128,6 +130,7 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
           agentId={agentId}
           caseCount={cases.data?.length ?? 0}
           model={entry.model}
+          provider={agent.data?.provider}
           disabled={cases.isLoading}
         />
       </header>

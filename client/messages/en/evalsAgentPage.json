@@ -1,7 +1,7 @@
 {
   "header": {
     "subtitle": "Regression harness · {runs, plural, one {# run} other {# runs}} on the {cases} case set",
-    "modelLabel": "Model",
+    "modelLabel": "Agent model",
     "rangeLabel": "Time range"
   },
   "range": {
@@ -40,6 +40,8 @@
     "point": "{metric}, v{version}, {date}: {value}"
   },
   "table": {
+    "colModel": "Model",
+    "noValue": "—",
     "noneInRange": "No runs in this time range."
   }
 }
