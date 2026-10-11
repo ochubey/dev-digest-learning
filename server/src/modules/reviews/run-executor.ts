@@ -168,7 +168,7 @@ export class ReviewRunExecutor {
 
   /**
    * Background execution of the queued agent runs (NOT awaited by the route).
-   * Loads the diff + intent once, then map-reduces each agent, streaming events
+   * Loads the diff + intent once, then runs all agents in parallel (map-reduce each), streaming events
    * over the runBus and persisting each review. Per-agent failures are isolated.
    */
   async executeRuns(
@@ -240,45 +240,49 @@ export class ReviewRunExecutor {
       fallback: firstAgent ? { provider: firstAgent.provider, model: firstAgent.model } : undefined,
     });
 
-    for (const { agent, runId } of jobs) {
-      const agentStart = Date.now();
-      logger?.info(
-        { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
-        `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
-      );
-      try {
-        const outcome = await this.runOneAgent({
-          workspaceId,
-          pull,
-          repo,
-          diff,
-          agent,
-          runId,
-          parentLog: runLog,
-          intent,
-          correlationId,
-          logger,
-        });
+    // Agents run in parallel (no cap); runOneAgent isolates its own failures,
+    // so one agent failing never affects the others.
+    await Promise.allSettled(
+      jobs.map(async ({ agent, runId }) => {
+        const agentStart = Date.now();
         logger?.info(
-          {
+          { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
+          `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
+        );
+        try {
+          const outcome = await this.runOneAgent({
+            workspaceId,
+            pull,
+            repo,
+            diff,
+            agent,
             runId,
-            agent: agent.name,
-            findings: outcome.raw.findings.length,
-            grounding: outcome.grounding,
-            durationMs: Date.now() - agentStart,
-          },
-          `review: agent "${agent.name}" done — ${outcome.raw.findings.length} finding(s)`,
-        );
-      } catch (err) {
-        // runOneAgent already persisted the failure/cancel (status + error +
-        // trace) and completed the bus; here we only log at the run level.
-        const cancelled = err instanceof RunCancelledError;
-        logger?.[cancelled ? 'info' : 'error'](
-          { runId, agent: agent.name, err: (err as Error).message, durationMs: Date.now() - agentStart },
-          `review: agent "${agent.name}" ${cancelled ? 'cancelled' : 'failed'}`,
-        );
-      }
-    }
+            parentLog: runLog,
+            intent,
+            correlationId,
+            logger,
+          });
+          logger?.info(
+            {
+              runId,
+              agent: agent.name,
+              findings: outcome.raw.findings.length,
+              grounding: outcome.grounding,
+              durationMs: Date.now() - agentStart,
+            },
+            `review: agent "${agent.name}" done — ${outcome.raw.findings.length} finding(s)`,
+          );
+        } catch (err) {
+          // runOneAgent already persisted the failure/cancel (status + error +
+          // trace) and completed the bus; here we only log at the run level.
+          const cancelled = err instanceof RunCancelledError;
+          logger?.[cancelled ? 'info' : 'error'](
+            { runId, agent: agent.name, err: (err as Error).message, durationMs: Date.now() - agentStart },
+            `review: agent "${agent.name}" ${cancelled ? 'cancelled' : 'failed'}`,
+          );
+        }
+      }),
+    );
   }
 
   /**

@@ -122,6 +122,18 @@ export async function reapStaleRunningRuns(db: Db): Promise<number> {
 
 // ---- observability: agent_runs + run_traces -------------------------------
 
+/** Create the parent row of a multi-agent launch; returns its id. */
+export async function createMultiAgentRun(
+  db: Db,
+  values: { workspaceId: string; prId: string },
+): Promise<string> {
+  const [row] = await db
+    .insert(t.multiAgentRuns)
+    .values({ workspaceId: values.workspaceId, prId: values.prId })
+    .returning({ id: t.multiAgentRuns.id });
+  return row!.id;
+}
+
 /** Create an agent_runs row in `running` state; returns its id (= the runId). */
 export async function createAgentRun(
   db: Db,
@@ -131,6 +143,8 @@ export async function createAgentRun(
     prId: string;
     provider: string | null;
     model: string | null;
+    /** Parent multi-agent run, when launched as part of one. */
+    multiAgentRunId?: string | null;
   },
 ): Promise<string> {
   const [row] = await db
@@ -143,6 +157,7 @@ export async function createAgentRun(
       model: values.model,
       status: 'running',
       source: 'local',
+      multiAgentRunId: values.multiAgentRunId ?? null,
     })
     .returning({ id: t.agentRuns.id });
   return row!.id;

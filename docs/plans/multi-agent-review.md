@@ -182,20 +182,20 @@ Owns: `server/src/vendor/shared/contracts/{observability,platform,review-api}.ts
 ### P2: Server (implementer; wave 1, after P1; parallel with P3)
 Owns: `server/src/modules/reviews/{routes,service,run-executor,repository}.ts`, `server/src/modules/reviews/repository/run.repo.ts`, `server/src/modules/multi-agent/**` (new), `server/src/modules/index.ts`, `server/README.md`.
 
-- [ ] **T4** `run.repo.ts`:
+- [x] **T4** `run.repo.ts`:
   - `createMultiAgentRun(db, {workspaceId, prId}): Promise<string>`;
   - `createAgentRun` accepts optional `multiAgentRunId`;
   - wrappers in `ReviewRepository`.
   -> AC-16, AC-17 -> `server/test/reviews-multi-agent-launch.test.ts > valid agentIds: one parent row, three linked running children`
-- [ ] **T5** `resolveTargets` handles `agentIds` (400 on combination, 404 on any foreign or unknown id before writes, order kept). The route forwards `agentIds` and returns `multi_agent_run_id` only when set; update the route doc comment. -> AC-14, AC-15, AC-17 -> `reviews-multi-agent-launch.test.ts > 422 validation_error for [], 6 ids, duplicates; no rows`, `> 400 invalid_run_request for agentIds+agentId and agentIds+all; no rows`, `> 404 for one foreign id; zero parent and child rows`, `> {agentId} and {all:true}: no parent row, null link, no multi_agent_run_id in response`
-- [ ] **T6** `runReview(..., { multiAgent })`: create the parent then the linked children, log the launch line, return `multiAgentRunId`. -> AC-16, AC-17 -> `reviews-multi-agent-launch.test.ts > answers with {pr_id, runs(3), reviews: [], multi_agent_run_id} while the LLM never resolves`
-- [ ] **T7** `executeRuns`:
+- [x] **T5** `resolveTargets` handles `agentIds` (400 on combination, 404 on any foreign or unknown id before writes, order kept). The route forwards `agentIds` and returns `multi_agent_run_id` only when set; update the route doc comment. -> AC-14, AC-15, AC-17 -> `reviews-multi-agent-launch.test.ts > 422 validation_error for [], 6 ids, duplicates; no rows`, `> 400 invalid_run_request for agentIds+agentId and agentIds+all; no rows`, `> 404 for one foreign id; zero parent and child rows`, `> {agentId} and {all:true}: no parent row, null link, no multi_agent_run_id in response`
+- [x] **T6** `runReview(..., { multiAgent })`: create the parent then the linked children, log the launch line, return `multiAgentRunId`. -> AC-16, AC-17 -> `reviews-multi-agent-launch.test.ts > answers with {pr_id, runs(3), reviews: [], multi_agent_run_id} while the LLM never resolves`
+- [x] **T7** `executeRuns`:
   - replace the sequential loop with `Promise.allSettled(jobs.map(...))`;
   - keep the diff and intent once;
   - keep `failAll`;
   - refresh the doc comments.
   -> AC-18, AC-19, AC-20, AC-21 -> `server/src/modules/reviews/run-executor.parallel.test.ts` (pattern of `run-executor.scope.test.ts`): `> 3 agents: loadDiff once, intent derivation at most once`; `> deferred LLM: all 3 reviewPullRequest calls started before any resolves`; `> agent 2 of 3 throws: agents 1 and 3 done with persisted reviews, agent 2 failed with its error`; `> diff loader fails: every child failed with the same error`
-- [ ] **T8** Pure layer `multi-agent/{constants,grouping,read-model,estimates}.ts` as in 3b. -> AC-10, AC-21, AC-23, AC-24, AC-25, AC-27, AC-28, AC-29, AC-30, AC-31 ->
+- [x] **T8** Pure layer `multi-agent/{constants,grouping,read-model,estimates}.ts` as in 3b. -> AC-10, AC-21, AC-23, AC-24, AC-25, AC-27, AC-28, AC-29, AC-30, AC-31 ->
   - `server/test/multi-agent-grouping.test.ts`:
     - `> same file + overlapping lines + equal category -> one group`
     - `> same lines, different file -> separate`
@@ -217,13 +217,13 @@ Owns: `server/src/modules/reviews/{routes,service,run-executor,repository}.ts`, 
     - `> deleted agent -> agent_id null, agent_name "Deleted agent"`
     - `> out-of-scope findings excluded (D-1)`
   - `server/test/multi-agent-estimates.test.ts > 12 done + 2 failed + one null-cost: sample 10, averages over the latest 10 done, failed ignored, cost mean of non-null`; `> no runs: sample 0, both null`
-- [ ] **T9** `multi-agent/{repository,service,routes}.ts`; register `multiAgent` in `modules/index.ts`. The repository has only `select` queries. -> AC-10, AC-22, AC-25, AC-26 -> `server/test/multi-agent-routes.test.ts` (in-memory repository spies, pattern of `evals-routes.test.ts`):
+- [x] **T9** `multi-agent/{repository,service,routes}.ts`; register `multiAgent` in `modules/index.ts`. The repository has only `select` queries. -> AC-10, AC-22, AC-25, AC-26 -> `server/test/multi-agent-routes.test.ts` (in-memory repository spies, pattern of `evals-routes.test.ts`):
   - `> GET /multi-agent-runs/:id own workspace parses with MultiAgentRun`
   - `> foreign-workspace and unknown id -> 404`
   - `> GET /multi-agent/estimates returns only the caller's workspace agents`
   - `> GET /pulls/:id/reviews identical before and after GET /multi-agent-runs/:id; no insert/update/delete called`
   - `> returned findings' attribution equals their reviews rows`
-- [ ] **T10** Docs in `server/README.md`: the `agentIds` body and `multi_agent_run_id` response of `POST /pulls/:id/review`, `GET /multi-agent-runs/:id`, `GET /multi-agent/estimates`, the multi-agent module paragraph (read-only grouping, thresholds, parallel agents). -> AC-47 (documentation) -> review only
+- [x] **T10** Docs in `server/README.md`: the `agentIds` body and `multi_agent_run_id` response of `POST /pulls/:id/review`, `GET /multi-agent-runs/:id`, `GET /multi-agent/estimates`, the multi-agent module paragraph (read-only grouping, thresholds, parallel agents). -> AC-47 (documentation) -> review only
 - Gate: `server: pnpm typecheck && pnpm exec vitest run --exclude '**/*.it.test.ts'` (existing tests stay green, AC-17).
 
 ### P3: Client launch and Configure run (implementer; wave 1, after P1; parallel with P2)

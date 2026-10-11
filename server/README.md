@@ -70,6 +70,7 @@ flowchart TB
   end
   subgraph Review["Review & runs"]
     brief["brief<br/>GET/POST /pulls/:id/brief"]
+    multiAgent["multi-agent<br/>GET /multi-agent-runs/:id · GET /multi-agent/estimates"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
   subgraph Agents["Agents"]
@@ -134,6 +135,33 @@ What the reviewer actually sends to the model is assembled in
 - **Grounding is mandatory.** Every finding must cite a line that exists in the
   diff or it is dropped (`groundFindings`), and the score is recomputed from the
   surviving findings — the model's self-reported score is ignored.
+
+## Multi-agent review
+
+`POST /pulls/:id/review` accepts `{agentId}`, `{all:true}` or `{agentIds:[1..5 distinct ids]}`.
+Invalid `agentIds` (empty, more than 5, duplicates) is a `422 validation_error`; `agentIds`
+combined with `agentId`/`all` is a `400 invalid_run_request`; an unknown or foreign id is a
+`404` before anything is written. With `agentIds` the server creates one `multi_agent_runs`
+parent row and links each `agent_runs` child to it (`agent_runs.multi_agent_run_id`); the
+response is `{pr_id, runs, reviews: [], multi_agent_run_id}` (the id is absent for the other
+body shapes). The response returns immediately; agents run **in parallel** (no cap, also for
+`all:true`) after the diff and PR intent are loaded once, and one agent failing never affects the others.
+
+`modules/multi-agent` is read-only (it never writes):
+
+- `GET /multi-agent-runs/:id` returns a `MultiAgentRun`: one column per child run (ordered by
+  agent name, then run id; a deleted agent shows as "Deleted agent" with `agent_id: null`),
+  totals, `groups` and `conflicts`. `404` for an unknown or foreign-workspace id.
+- `GET /multi-agent/estimates` returns an `AgentRunEstimate[]` (one per agent of the workspace):
+  mean duration/cost over the agent's latest 10 `done` runs.
+
+Findings use the visible scope only (`out` findings are excluded). Groups are built from `done`
+columns: findings are linked when they share a file, are at most 3 lines apart and have the same
+category or a title word-Jaccard of at least 0.5 (transitively). Each group gets one take per
+finished agent (its most severe finding, or `ignored`) once at least two columns are done; it is
+a conflict when the takes do not all carry the same verdict. Layout: `grouping.ts`,
+`read-model.ts`, `estimates.ts` are pure; `repository.ts` holds the selects; `service.ts` and
+`routes.ts` wire them.
 
 ## PR Brief
 
