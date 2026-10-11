@@ -8,6 +8,7 @@ import { parseUnifiedDiff, stripIgnoredFiles } from './diff.js';
 import { fetchPrDiff, postGithubReview, postPrComment, type FetchLike } from './github.js';
 import { buildResultArtifact } from './artifact.js';
 import { RunnerError } from './errors.js';
+import { redactSecrets } from './redact.js';
 
 /**
  * `runCi` — the runner's single orchestration entry point (T8). Mirrors the
@@ -44,6 +45,8 @@ export interface RunCiDeps {
   postAs: PostAs;
   /** Absolute path to write the `CiResultArtifact` JSON to. */
   resultPath: string;
+  /** Secret values masked (`***`) in the error, posted bodies and comments. */
+  secrets?: string[];
   fetchImpl?: FetchLike;
   readFile?: typeof readFileSync;
   readDir?: typeof readdirSync;
@@ -86,6 +89,8 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
   const writeFile = deps.writeFile ?? writeFileSync;
   const now = deps.now ?? Date.now;
   const fetchImpl = deps.fetchImpl ?? fetch;
+  const secrets = deps.secrets ?? [];
+  const redact = (text: string) => redactSecrets(text, secrets);
   const fetchDiffImpl = deps.fetchDiff ?? fetchPrDiff;
 
   try {
@@ -129,11 +134,16 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
 
     // 5. Deterministic verdict/gate from GROUNDED findings + `ci_fail_on`
     //    (AC-23) — never `outcome.review.verdict`.
-    const payload = toReviewPayload(outcome.review, {
+    const rawPayload = toReviewPayload(outcome.review, {
       failOn: manifest.ci_fail_on,
       diff,
       title: manifest.name,
     });
+    const payload: GitHubReviewPayload = {
+      ...rawPayload,
+      body: redact(rawPayload.body),
+      comments: rawPayload.comments?.map((c) => ({ ...c, body: redact(c.body) })),
+    };
     const blockers = countBlockers(outcome.review.findings, manifest.ci_fail_on);
     const triggered = gateTriggered(outcome.review.findings, manifest.ci_fail_on);
 
@@ -145,6 +155,12 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
       durationMs,
       agent: manifest.name,
       prNumber: ctx.prNumber,
+      commitSha: ctx.headSha,
+      repositoryId: ctx.repositoryId,
+      model: manifest.model,
+      agentVersion: manifest.version ?? null,
+      verdict: payload.event,
+      blockers,
     });
     writeFile(deps.resultPath, `${JSON.stringify(artifact, null, 2)}\n`);
 
@@ -168,6 +184,6 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
     // Hard-fail (Q5): non-zero exit, nothing posted, no artifact, no synthetic
     // review skeleton — regardless of which stage above threw.
     const message = err instanceof Error ? err.message : String(err);
-    return { exitCode: 1, artifact: null, posted: null, error: message };
+    return { exitCode: 1, artifact: null, posted: null, error: redact(message) };
   }
 }

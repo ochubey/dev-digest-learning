@@ -298,11 +298,11 @@ Owner of: both `contracts/eval-ci.ts` copies, `server/src/db/schema/ci.ts`, the 
 
 ### P2: agent-runner (wave 1, parallel with P3 and P4)
 Owner of: `agent-runner/src/{context,artifact,run,index,redact}.ts`, `agent-runner/README.md`, `agent-runner/insights/INSIGHTS.md`. Test files are not touched (P5 owns them).
-- [ ] **T3** `context.ts`: `headSha` and `repositoryId` per 3f. -> AC-54 -> `agent-runner/src/run.test.ts > AC-54: artifact carries pull_request.head.sha and GITHUB_REPOSITORY_ID`
-- [ ] **T4** `artifact.ts`: new fields; `RUNNER_VERSION = CI_RUNNER_VERSION`. -> AC-54 -> `run.test.ts > AC-54: artifact with model, agent_version, verdict, blockers passes CiResultArtifact.safeParse`
-- [ ] **T5** `run.ts` wiring (`verdict = payload.event`); hard-fail path unchanged. -> AC-51, AC-52, AC-53, AC-54 -> existing `run.test.ts` cases stay green (`AC-36 parity`, `AC-24 + AC-25 ... exits non-zero`, `Q5 hard-fail`); new `> AC-54: verdict equals the deterministic gate event, not the model verdict`
-- [ ] **T6** `redact.ts` and its use in `run.ts` (error, posted body and comments) and `index.ts` (every log line, fatal path). -> AC-55 -> `run.test.ts > AC-55: fake OPENROUTER_API_KEY and GITHUB_TOKEN absent from artifact, captured stdout/stderr and posted payloads (success path)`, `> AC-55: ... (failure path where the fetch error body echoes the token)`
-- [ ] **T7** Docs. In `README.md`: env table gains `GITHUB_REPOSITORY_ID` (auto), artifact fields and redaction. In `insights/INSIGHTS.md`: close the `post_as` open question (the workflow sets `DEVDIGEST_POST_AS`). -> AC-54 (doc) -> review only.
+- [x] **T3** `context.ts`: `headSha` and `repositoryId` per 3f. -> AC-54 -> `agent-runner/src/run.test.ts > AC-54: artifact carries pull_request.head.sha and GITHUB_REPOSITORY_ID`
+- [x] **T4** `artifact.ts`: new fields; `RUNNER_VERSION = CI_RUNNER_VERSION`. -> AC-54 -> `run.test.ts > AC-54: artifact with model, agent_version, verdict, blockers passes CiResultArtifact.safeParse`
+- [x] **T5** `run.ts` wiring (`verdict = payload.event`); hard-fail path unchanged. -> AC-51, AC-52, AC-53, AC-54 -> existing `run.test.ts` cases stay green (`AC-36 parity`, `AC-24 + AC-25 ... exits non-zero`, `Q5 hard-fail`); new `> AC-54: verdict equals the deterministic gate event, not the model verdict`
+- [x] **T6** `redact.ts` and its use in `run.ts` (error, posted body and comments) and `index.ts` (every log line, fatal path). -> AC-55 -> `run.test.ts > AC-55: fake OPENROUTER_API_KEY and GITHUB_TOKEN absent from artifact, captured stdout/stderr and posted payloads (success path)`, `> AC-55: ... (failure path where the fetch error body echoes the token)`
+- [x] **T7** Docs. In `README.md`: env table gains `GITHUB_REPOSITORY_ID` (auto), artifact fields and redaction. In `insights/INSIGHTS.md`: close the `post_as` open question (the workflow sets `DEVDIGEST_POST_AS`). -> AC-54 (doc) -> review only.
 - Gate: `agent-runner: pnpm typecheck`, `pnpm test` (existing tests green), `pnpm build` (bundle still builds).
 
 ### P3: Server `ci` module (wave 1, parallel with P2 and P4)

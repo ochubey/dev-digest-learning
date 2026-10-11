@@ -92,6 +92,7 @@ there is no `SecretsProvider` / DI graph to inject from (see `CLAUDE.md`).
 | `GITHUB_TOKEN` | when `post_as` ≠ `none` | fetch the diff + post the review/comment |
 | `GITHUB_REPOSITORY` | yes | `owner/name` of the target repo |
 | `PR_NUMBER` | yes¹ | PR to review |
+| `GITHUB_REPOSITORY_ID` | auto (GHA) | numeric repo id, written to the artifact (`repository_id`) so the studio can verify it |
 | `GITHUB_EVENT_PATH` | auto (GHA) | `pull_request` event payload (title/body/fork) |
 | `DEVDIGEST_DIR` | no | override the `.devdigest` dir (default: `cwd/.devdigest`) |
 | `DEVDIGEST_RESULT_PATH` | no | override artifact path (default: `cwd/devdigest-result.json`) |
@@ -100,7 +101,17 @@ there is no `SecretsProvider` / DI graph to inject from (see `CLAUDE.md`).
 ¹ Falls back to `pull_request.number` from the event payload if `PR_NUMBER` is unset.
 
 Secrets are never logged and never written to `devdigest-result.json` or any
-posted comment.
+posted comment. `redact.ts` masks the values of `OPENROUTER_API_KEY` and
+`GITHUB_TOKEN` (4+ characters) as `***` in the error, every console line and
+the posted review body/comments.
+
+## Result artifact
+
+`devdigest-result.json` (`CiResultArtifact`) carries the counts and cost plus
+the fields the studio checks on ingest: `commit_sha` (`pull_request.head.sha`),
+`repository_id` (`GITHUB_REPOSITORY_ID`), `model`, `agent_version`, `verdict`
+(the deterministic gate event, not the model's verdict), `blockers`, and
+`version` (`CI_RUNNER_VERSION` from the shared contract).
 
 ## Exit codes
 
