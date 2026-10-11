@@ -375,6 +375,8 @@ export const EvalSuiteRun = z.object({
   agent_id: z.string(),
   agent_name: z.string().nullish(),
   agent_version: z.number().int(),
+  /** Model the run used (from the run manifest); can differ from the agent's current model. */
+  model: z.string().nullish(),
   status: EvalSuiteRunStatus,
   error: z.string().nullable(),
   cases_total: z.number().int(),
@@ -434,6 +436,10 @@ export type EvalSuiteRunDetail = z.infer<typeof EvalSuiteRunDetail>;
 
 export const EvalRunStartResponse = z.object({ run_id: z.string() });
 export type EvalRunStartResponse = z.infer<typeof EvalRunStartResponse>;
+
+/** Optional body of the run start: use another model of the agent's provider for this run only. */
+export const EvalRunStartInput = z.object({ model: z.string().min(1).max(200).optional() });
+export type EvalRunStartInput = z.infer<typeof EvalRunStartInput>;
 
 export const EvalRunPage = z.object({
   items: z.array(EvalSuiteRun),

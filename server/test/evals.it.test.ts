@@ -125,8 +125,8 @@ d('eval pipeline (Testcontainers pg)', () => {
     return row!;
   }
 
-  async function startRun(app: App, agentId: string) {
-    const res = await app.inject({ method: 'POST', url: `/agents/${agentId}/eval-runs` });
+  async function startRun(app: App, agentId: string, payload?: { model?: string }) {
+    const res = await app.inject({ method: 'POST', url: `/agents/${agentId}/eval-runs`, payload });
     expect(res.statusCode).toBe(202);
     return res.json().run_id as string;
   }
@@ -346,6 +346,24 @@ d('eval pipeline (Testcontainers pg)', () => {
     expect(new Set(llm.calls.map((c) => c.model))).toEqual(new Set(['test/model-a']));
     expect(run.agent_version).toBe(1);
     expect(run.manifest).toMatchObject({ system_prompt: PROMPT, model: 'test/model-a' });
+  });
+
+  it('a model override is stored in the manifest, used for every case, listed as model, and leaves the agent alone', async () => {
+    const { app, llm } = await makeApp();
+    const agentId = await makeAgent(app, 'Override Agent');
+    await insertCase(agentId, 'o1', 'must_find', 'ov_1');
+    await insertCase(agentId, 'o2', 'must_find', 'ov_2');
+    const run = await waitDone(app, await startRun(app, agentId, { model: 'test/model-z' }));
+    expect(run.model).toBe('test/model-z');
+    expect(run.manifest).toMatchObject({ model: 'test/model-z', system_prompt: PROMPT });
+    expect(new Set(llm.calls.map((c) => c.model))).toEqual(new Set(['test/model-z']));
+    const [stored] = await db.select().from(t.evalSuiteRuns).where(eq(t.evalSuiteRuns.id, run.id));
+    expect((stored!.manifest as { model: string }).model).toBe('test/model-z');
+    const agent = (await app.inject({ method: 'GET', url: `/agents/${agentId}` })).json();
+    expect(agent.model).toBe('test/model-a');
+    expect(agent.version).toBe(1);
+    const page = EvalRunPage.parse((await app.inject({ method: 'GET', url: `/agents/${agentId}/eval-runs` })).json());
+    expect(page.items[0]!.model).toBe('test/model-z');
   });
 
   it('a run writes no agent_runs, run_traces, reviews or findings rows', async () => {

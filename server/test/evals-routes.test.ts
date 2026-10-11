@@ -288,6 +288,55 @@ describe('POST /agents/:id/eval-runs', () => {
     expect(llm.calls).toHaveLength(3);
   });
 
+  it('a model override is recorded in the manifest, used for every case and returned as model; the agent is untouched', async () => {
+    const llm = new RecordingLLM();
+    const { app } = await setup({ llm });
+    for (const n of ['c1', 'c2']) store.addCase({ name: n, input_diff: fragmentWith(n) });
+    const agentBefore = { ...store.agents.get(AGENT_ID)! };
+    const res = await app.inject({ method: 'POST', url: `/agents/${AGENT_ID}/eval-runs`, payload: { model: 'test/model-z' } });
+    expect(res.statusCode).toBe(202);
+    const runId = res.json().run_id as string;
+    await waitFor(settled(runId));
+    const detail = EvalSuiteRunDetail.parse((await app.inject({ method: 'GET', url: `/eval-runs/${runId}` })).json());
+    expect(detail.model).toBe('test/model-z');
+    expect(detail.manifest).toMatchObject({
+      model: 'test/model-z',
+      provider: 'openrouter',
+      system_prompt: 'You are the original reviewer.',
+    });
+    expect(detail.agent_version).toBe(3);
+    expect(llm.calls.map((c) => c.model)).toEqual(['test/model-z', 'test/model-z']);
+    const page = EvalRunPage.parse((await app.inject({ method: 'GET', url: `/agents/${AGENT_ID}/eval-runs` })).json());
+    expect(page.items[0]!.model).toBe('test/model-z');
+    expect(store.agents.get(AGENT_ID)).toEqual(agentBefore);
+  });
+
+  it('no body, an empty object or the agent\'s own model all run the agent model', async () => {
+    const llm = new RecordingLLM();
+    const { app } = await setup({ llm });
+    store.addCase({ name: 'c1', input_diff: fragmentWith('c1') });
+    const payloads: Array<{ model?: string } | undefined> = [undefined, {}, { model: 'test/model-a' }];
+    for (const payload of payloads) {
+      const res = await app.inject({ method: 'POST', url: `/agents/${AGENT_ID}/eval-runs`, payload });
+      expect(res.statusCode).toBe(202);
+      const runId = res.json().run_id as string;
+      await waitFor(settled(runId));
+      const detail = EvalSuiteRunDetail.parse((await app.inject({ method: 'GET', url: `/eval-runs/${runId}` })).json());
+      expect(detail.model).toBe('test/model-a');
+    }
+    expect(new Set(llm.calls.map((c) => c.model))).toEqual(new Set(['test/model-a']));
+  });
+
+  it('rejects a bad start body with 422 and creates nothing', async () => {
+    const { app } = await setup();
+    store.addCase({ name: 'c1', input_diff: fragmentWith('c1') });
+    for (const payload of [{ model: '' }, { model: 'x'.repeat(201) }, { model: 5 }]) {
+      const res = await app.inject({ method: 'POST', url: `/agents/${AGENT_ID}/eval-runs`, payload });
+      expect(res.statusCode).toBe(422);
+    }
+    expect(store.runs.size).toBe(0);
+  });
+
   it('answers 409 with the running run id and creates nothing when one is running', async () => {
     const llm = new RecordingLLM({ gate: new Promise(() => {}) });
     const { app } = await setup({ llm });

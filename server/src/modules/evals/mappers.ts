@@ -138,12 +138,19 @@ export function toLastResult(runId: string, row: ResultRowLike): EvalCaseLastRes
   };
 }
 
+/** The model a run used, from its stored manifest; null for old runs without one. */
+function manifestModel(manifest: unknown): string | null {
+  const m = (manifest as { model?: unknown } | null)?.model;
+  return typeof m === 'string' && m ? m : null;
+}
+
 export function toSuiteRun(row: SuiteRunRowLike, casesDone: number, agentName?: string | null): EvalSuiteRun {
   return {
     id: row.id,
     agent_id: row.agentId,
     ...(agentName !== undefined ? { agent_name: agentName } : {}),
     agent_version: row.agentVersion ?? 0,
+    model: manifestModel(row.manifest),
     status: row.status,
     error: row.error,
     cases_total: row.casesTotal ?? casesDone,

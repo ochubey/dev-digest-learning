@@ -7,6 +7,7 @@ import {
   EvalCompare,
   EvalOverview,
   EvalRunPage,
+  EvalRunStartInput,
   EvalRunStartResponse,
   EvalSuiteRunDetail,
 } from '@devdigest/shared';
@@ -27,7 +28,7 @@ const CompareQuery = z.object({ a: z.string().uuid(), b: z.string().uuid() });
  *   POST   /eval-cases                     create a case (service validation answers 400/409)
  *   GET    /agents/:id/eval-cases          the agent's cases with their last result
  *   DELETE /eval-cases/:id
- *   POST   /agents/:id/eval-runs           202; runs in the background; rate limited
+ *   POST   /agents/:id/eval-runs           202; optional body {model}; runs in the background; rate limited
  *   GET    /agents/:id/eval-runs           paged, newest first
  *   GET    /eval-runs/compare?a=&b=
  *   GET    /eval-runs/:id
@@ -77,12 +78,14 @@ export default async function evalsRoutes(appBase: FastifyInstance) {
   app.post(
     '/agents/:id/eval-runs',
     {
+      // Body is optional and parsed in the handler (a ZodError is the app-wide 422): no body, or {}, runs the agent's own model; {model} overrides it for this run only.
       schema: { params: IdParams, response: { 202: EvalRunStartResponse } },
       config: { rateLimit: EVAL_RUN_RATE_LIMIT },
     },
     async (req, reply) => {
       const { workspaceId } = await getContext(container, req);
-      const started = await service.startRun(workspaceId, req.params.id, req.log);
+      const input = EvalRunStartInput.parse(req.body ?? {});
+      const started = await service.startRun(workspaceId, req.params.id, req.log, input.model);
       return reply.status(202).send(started);
     },
   );

@@ -183,8 +183,14 @@ export class EvalsService {
    * missing provider key (the container's ConfigError, unchanged: A-2). Then the manifest
    * and the skill bodies are captured, the rows are created, and the cases run in the
    * background after the 202.
+   * An optional `modelOverride` replaces the model in the recorded manifest for this run only.
    */
-  async startRun(workspaceId: string, agentId: string, log: EvalLogger): Promise<EvalRunStartResponse> {
+  async startRun(
+    workspaceId: string,
+    agentId: string,
+    log: EvalLogger,
+    modelOverride?: string,
+  ): Promise<EvalRunStartResponse> {
     const agent = await this.store.getAgent(workspaceId, agentId);
     if (!agent) throw notFound();
 
@@ -207,7 +213,9 @@ export class EvalsService {
     assertCaseCount(cases.length);
     const linked = await this.store.linkedSkills(agent.id);
     const enabled = linked.filter((s) => s.enabled);
+    // The override replaces only the manifest's model (same provider); the agent row and its version stay as they are.
     const manifest = buildManifest(agent, linked.map((s) => s.id), enabled);
+    if (modelOverride && modelOverride !== agent.model) manifest.model = modelOverride;
 
     let created;
     try {

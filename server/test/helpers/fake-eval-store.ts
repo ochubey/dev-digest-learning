@@ -242,6 +242,7 @@ export class FakeEvalStore implements EvalsStore {
       agent_id: r.agentId,
       agent_name: this.agents.get(r.agentId)?.name ?? null,
       agent_version: r.agentVersion,
+      model: r.manifest.model ?? null,
       status: r.status,
       error: r.error,
       cases_total: r.results.length,
