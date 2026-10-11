@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { EvalCaseResult, EvalRunManifest } from '@devdigest/shared';
 import { runEvalCases, sanitizeError, type RunnableCase } from '../src/modules/evals/runner.js';
-import { buildManifest } from '../src/modules/evals/manifest.js';
+import { buildManifest } from '../src/platform/agent-config.js';
 import { EVAL_TASK_LINE } from '../src/modules/evals/constants.js';
 import { RecordingLLM } from './helpers/recording-llm.js';
 import { agentRow, fragmentWith } from './helpers/fake-eval-store.js';
@@ -200,6 +200,21 @@ describe('sanitizeError', () => {
     expect(sanitizeError(new Error('Bearer abcdefghijklmnop failed'))).toBe('[redacted] failed');
     expect(sanitizeError('plain string')).toBe('plain string');
     expect(sanitizeError(new Error(''))).toBe('review failed');
+  });
+
+  it('redacts Google keys, key headers and key query params', () => {
+    const g = 'AIza' + 'a'.repeat(35);
+    expect(sanitizeError(new Error(`bad ${g} here`))).toBe('bad [redacted] here');
+    expect(sanitizeError(new Error('x-api-key: abc123 rejected'))).toBe('[redacted] rejected');
+    expect(sanitizeError(new Error('Authorization=tok rejected'))).toBe('[redacted] rejected');
+    expect(sanitizeError(new Error('GET https://h/v1?alt=1&key=SECRET&b=2 failed'))).toBe(
+      'GET https://h/v1?alt=1&[redacted]&b=2 failed',
+    );
+  });
+
+  it('bounds the raw line before redaction', () => {
+    const out = sanitizeError(new Error('y'.repeat(100_000)));
+    expect(out).toHaveLength(300);
   });
 });
 

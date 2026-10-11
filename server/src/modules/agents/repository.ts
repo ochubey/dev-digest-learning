@@ -1,10 +1,11 @@
 import { sameOrderedList } from '../_shared/lists.js';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import type { Db } from '../../db/client.js';
+import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
-import { isConfigChange, versionConfigOf } from './helpers.js';
+import { isConfigChange } from './helpers.js';
+import { versionConfigOf } from '../../platform/agent-config.js';
 
 /**
  * A2 — agents data-access. Owns `agents`, `agent_versions`, and the
@@ -79,14 +80,14 @@ export class AgentsRepository {
   async deleteById(
     workspaceId: string,
     id: string,
-    alsoDelete?: (tx: Db) => Promise<void>,
+    alsoDelete?: (tx: DbOrTx) => Promise<void>,
   ): Promise<boolean> {
     return this.db.transaction(async (tx) => {
       const rows = await tx
         .delete(t.agents)
         .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
         .returning({ id: t.agents.id });
-      if (rows.length > 0) await alsoDelete?.(tx as unknown as Db);
+      if (rows.length > 0) await alsoDelete?.(tx);
       return rows.length > 0;
     });
   }

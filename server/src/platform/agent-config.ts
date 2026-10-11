@@ -1,6 +1,29 @@
 import type { EvalRunManifest } from '@devdigest/shared';
-import type { AgentRow } from '../../db/rows.js';
-import { versionConfigOf } from '../agents/helpers.js';
+import type { AgentRow } from '../db/rows.js';
+
+/**
+ * Pure builders shared by the agents module (version snapshots), the evals module
+ * (run manifests) and the demo seed. No I/O; lives outside `modules/` so `db/` can use it.
+ */
+
+/**
+ * The immutable `agent_versions.config_json` snapshot for an agent row plus its
+ * linked skill ids. Shared by `snapshotVersion` and the eval manifest so both
+ * always agree on the shape.
+ */
+export function versionConfigOf(row: AgentRow, skillIds: string[]) {
+  return {
+    provider: row.provider,
+    model: row.model,
+    system_prompt: row.systemPrompt,
+    output_schema: row.outputSchema,
+    strategy: row.strategy,
+    ci_fail_on: row.ciFailOn,
+    repo_intel: row.repoIntel,
+    skills: skillIds,
+    context_paths: row.contextPaths,
+  };
+}
 
 export interface ManifestSkill {
   id: string;

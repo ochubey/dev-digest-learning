@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AgentVersionConfig } from '@devdigest/shared';
-import { versionConfigOf } from '../src/modules/agents/helpers.js';
+import { versionConfigOf } from '../src/platform/agent-config.js';
 import type { AgentRow } from '../src/db/rows.js';
 
 const row = {

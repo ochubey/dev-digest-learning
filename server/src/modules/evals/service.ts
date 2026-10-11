@@ -12,11 +12,17 @@ import type {
 import type { Container } from '../../platform/container.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import { loadDiff } from '../reviews/diff-loader.js';
-import { EVAL_CASE_TIMEOUT_MS, EVAL_MAX_CASES_PER_RUN, EVAL_RUN_CONCURRENCY } from './constants.js';
+import {
+  EVAL_CASE_TIMEOUT_MS,
+  EVAL_MAX_CASES_PER_AGENT,
+  EVAL_MAX_CASES_PER_RUN,
+  EVAL_MAX_RUNNING_PER_WORKSPACE,
+  EVAL_RUN_CONCURRENCY,
+} from './constants.js';
 import { draftFromFinding } from './draft.js';
 import { finalizeRun } from './finalize.js';
 import { runEndLine, runStartLine } from './log-lines.js';
-import { buildManifest } from './manifest.js';
+import { buildManifest } from '../../platform/agent-config.js';
 import { EvalsRepository, isUniqueViolation, type EvalsStore } from './repository.js';
 import { runEvalCases, sanitizeError, type RunnableCase } from './runner.js';
 import { validateCaseInput } from './validate.js';
@@ -97,6 +103,17 @@ export class EvalsService {
     const input = b as Parameters<typeof validateCaseInput>[0];
     const reasons = validateCaseInput(input);
     if (ctx.agentId !== agent.id) reasons.push('agent_id must be the agent that produced the finding');
+    // The client-sent fragment is kept as is (the PR may have moved on since the draft), but the
+    // expectation must still point at the finding it claims to come from.
+    const claimed = input.expectation;
+    if (
+      claimed &&
+      (claimed.file !== ctx.finding.file ||
+        claimed.start_line !== ctx.finding.startLine ||
+        claimed.end_line !== ctx.finding.endLine)
+    ) {
+      reasons.push("expectation file and lines must match the source finding's");
+    }
     if (reasons.length > 0) throw invalidCase(reasons);
 
     const decision = decisionOf(ctx.finding);
@@ -107,6 +124,13 @@ export class EvalsService {
       (c) => c.agent_id === agent.id,
     );
     if (existing) throw alreadyExists(existing.case_id);
+    if ((await this.store.countCases(workspaceId, agent.id)) >= EVAL_MAX_CASES_PER_AGENT) {
+      throw new AppError(
+        'eval_case_limit',
+        `This agent already has the maximum of ${EVAL_MAX_CASES_PER_AGENT} eval cases`,
+        409,
+      );
+    }
 
     const meta: EvalCaseMeta = {
       origin: decision === 'accepted' ? 'accepted_finding' : 'dismissed_finding',
@@ -155,7 +179,7 @@ export class EvalsService {
 
   /**
    * AC-32, AC-41..AC-44. Checks run in this order and none writes anything:
-   * unknown agent (404), no cases (400), too many cases (400), run already running (409),
+   * unknown agent (404), no cases (400), too many cases (400), run already running (409), workspace run limit (409),
    * missing provider key (the container's ConfigError, unchanged: A-2). Then the manifest
    * and the skill bodies are captured, the rows are created, and the cases run in the
    * background after the 202.
@@ -168,6 +192,14 @@ export class EvalsService {
     assertCaseCount(total);
     const running = await this.store.findRunningRun(workspaceId, agentId);
     if (running) throw alreadyRunning(running);
+
+    if ((await this.store.countRunningRuns(workspaceId)) >= EVAL_MAX_RUNNING_PER_WORKSPACE) {
+      throw new AppError(
+        'eval_run_limit',
+        `At most ${EVAL_MAX_RUNNING_PER_WORKSPACE} eval runs can run at once; wait for one to finish`,
+        409,
+      );
+    }
 
     const llm = await this.container.llm(agent.provider);
 

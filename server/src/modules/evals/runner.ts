@@ -2,8 +2,8 @@ import type { EvalCaseOrigin, EvalCaseResult, EvalExpectation, EvalRunManifest, 
 import { reviewPullRequest } from '@devdigest/reviewer-core';
 import { parseUnifiedDiff } from '../../adapters/git/diff-parser.js';
 import { TimeoutError, withTimeout } from '../../platform/resilience.js';
-import { mapLimit } from '../project-context/map-limit.js';
-import { EVAL_TASK_LINE } from './constants.js';
+import { mapLimit } from '../../platform/map-limit.js';
+import { EVAL_TASK_LINE, REASON_MAX } from './constants.js';
 import { caseErrorLine } from './log-lines.js';
 import { scoreCase } from './scoring.js';
 
@@ -31,7 +31,7 @@ export interface RunEvalCasesArgs {
   log?: (line: string) => void;
 }
 
-const REASON_MAX = 300;
+const RAW_LINE_MAX = 1024;
 
 /** Provider keys / bearer tokens / `*_API_KEY=` assignments are replaced before a message is stored. */
 const SECRET_PATTERNS: RegExp[] = [
@@ -39,13 +39,17 @@ const SECRET_PATTERNS: RegExp[] = [
   /\b[A-Z0-9_]*API_KEY\b\s*[=:]\s*\S+/gi,
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
   /\bgh[pousr]_[A-Za-z0-9]{8,}/g,
+  /\bAIza[0-9A-Za-z_-]{35}/g,
+  /\b(x-api-key|authorization)\s*[:=]\s*\S+/gi,
+  /(?<=[?&])(key|api_key|token)=[^&\s]+/gi,
 ];
 
 /** AC-39: first line only, secrets redacted, at most 300 characters; a timeout reads "timeout". */
 export function sanitizeError(err: unknown): string {
   if (err instanceof TimeoutError) return 'timeout';
   const raw = err instanceof Error ? err.message : String(err);
-  let first = (raw.split('\n')[0] ?? '').trim();
+  // Bound the input before the regexes run (a provider error can be huge).
+  let first = (raw.split('\n')[0] ?? '').slice(0, RAW_LINE_MAX).trim();
   for (const re of SECRET_PATTERNS) first = first.replace(re, '[redacted]');
   return first.slice(0, REASON_MAX) || 'review failed';
 }

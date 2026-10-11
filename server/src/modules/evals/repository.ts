@@ -10,7 +10,7 @@ import type {
   EvalSuiteRun,
   EvalSuiteRunDetail,
 } from '@devdigest/shared';
-import type { Db } from '../../db/client.js';
+import type { DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { AgentRow, PullRow } from '../../db/rows.js';
 import { AgentsRepository } from '../agents/repository.js';
@@ -89,6 +89,8 @@ export interface EvalsStore {
   deleteCase(workspaceId: string, caseId: string): Promise<boolean>;
   // ---- runs ----
   findRunningRun(workspaceId: string, agentId: string): Promise<string | undefined>;
+  /** Runs currently `running` in the workspace (any agent). */
+  countRunningRuns(workspaceId: string): Promise<number>;
   /** Creates the running suite row plus one pending result per case, atomically. */
   createSuiteRun(values: NewSuiteRun): Promise<{ runId: string; resultIds: string[] }>;
   saveCaseResult(result: EvalCaseResult): Promise<void>;
@@ -113,19 +115,28 @@ export function isUniqueViolation(err: unknown): boolean {
   return e?.code === '23505' || e?.cause?.code === '23505';
 }
 
+const MAX_CURSOR_LENGTH = 200;
+
 const encodeCursor = (startedAt: Date, id: string) =>
   Buffer.from(`${startedAt.toISOString()}|${id}`).toString('base64url');
 
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 function decodeCursor(cursor: string): { at: string; id: string } | null {
-  const [at, id] = Buffer.from(cursor, 'base64url').toString().split('|');
-  if (!at || !id || Number.isNaN(Date.parse(at)) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+  if (cursor.length > MAX_CURSOR_LENGTH) return null;
+  const parts = Buffer.from(cursor, 'base64url').toString().split('|');
+  if (parts.length !== 2) return null;
+  const [at, id] = parts as [string, string];
+  // Strict: only what `encodeCursor` emits (canonical ISO-8601 UTC), so nothing odd reaches SQL.
+  if (!ISO_UTC.test(at) || new Date(at).toISOString() !== at) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
   return { at, id };
 }
 
 export class EvalsRepository implements EvalsStore {
   private agents: AgentsRepository;
 
-  constructor(private db: Db) {
+  constructor(private db: DbOrTx) {
     this.agents = new AgentsRepository(db);
   }
 
@@ -276,6 +287,14 @@ export class EvalsRepository implements EvalsStore {
         ),
       );
     return row?.id;
+  }
+
+  async countRunningRuns(workspaceId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(t.evalSuiteRuns)
+      .where(and(eq(t.evalSuiteRuns.workspaceId, workspaceId), eq(t.evalSuiteRuns.status, 'running')));
+    return row?.n ?? 0;
   }
 
   async createSuiteRun(values: NewSuiteRun): Promise<{ runId: string; resultIds: string[] }> {

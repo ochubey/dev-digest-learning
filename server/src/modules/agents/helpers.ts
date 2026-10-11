@@ -87,22 +87,3 @@ export function isConfigChange(
     patch.outputSchema !== undefined
   );
 }
-
-/**
- * The immutable `agent_versions.config_json` snapshot for an agent row plus its
- * linked skill ids. Shared by `snapshotVersion` and the eval manifest so both
- * always agree on the shape.
- */
-export function versionConfigOf(row: AgentRow, skillIds: string[]) {
-  return {
-    provider: row.provider,
-    model: row.model,
-    system_prompt: row.systemPrompt,
-    output_schema: row.outputSchema,
-    strategy: row.strategy,
-    ci_fail_on: row.ciFailOn,
-    repo_intel: row.repoIntel,
-    skills: skillIds,
-    context_paths: row.contextPaths,
-  };
-}

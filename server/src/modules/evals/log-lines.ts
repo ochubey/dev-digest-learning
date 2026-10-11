@@ -1,11 +1,10 @@
 import type { EvalRunMetrics, EvalSuiteRunStatus } from '@devdigest/shared';
+import { REASON_MAX } from './constants.js';
 
 /**
  * Run-log text for eval runs (AC-48). Ids, counts, statuses and numbers only: these
  * builders take no diff fragment and no model output.
  */
-
-const REASON_MAX = 300;
 
 const num = (n: number | null): string => (n == null ? 'null' : String(n));
 

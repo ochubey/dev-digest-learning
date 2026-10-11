@@ -1,11 +1,12 @@
 import { EvalExpectationKind } from '@devdigest/shared';
-import { EVAL_CASE_NAME_MAX, EVAL_FRAGMENT_MAX_BYTES } from './constants.js';
+import { EVAL_CASE_NAME_MAX, EVAL_FILE_MAX, EVAL_FRAGMENT_MAX_BYTES, EVAL_NOTES_MAX } from './constants.js';
 import { inspectFragment } from './fragment.js';
 
 export interface CaseInputLike {
   name?: unknown;
   expectation?: { kind?: unknown; file?: unknown; start_line?: unknown; end_line?: unknown } | null;
   input_diff?: unknown;
+  notes?: unknown;
 }
 
 /** AC-14: returns human-readable reasons; an empty list means valid. */
@@ -25,12 +26,16 @@ export function validateCaseInput(input: CaseInputLike): string[] {
   else if (!endOk || (end as number) < (start as number)) reasons.push('end_line must be an integer >= start_line');
   const file = typeof e.file === 'string' ? e.file : '';
   if (!file) reasons.push('file must not be empty');
+  else if (file.length > EVAL_FILE_MAX) reasons.push(`file must be at most ${EVAL_FILE_MAX} characters`);
+  if (typeof input.notes === 'string' && input.notes.length > EVAL_NOTES_MAX) {
+    reasons.push(`notes must be at most ${EVAL_NOTES_MAX} characters`);
+  }
 
   const diff = typeof input.input_diff === 'string' ? input.input_diff : '';
   if (!diff.trim()) reasons.push('diff fragment must not be empty');
   else if (Buffer.byteLength(diff, 'utf8') > EVAL_FRAGMENT_MAX_BYTES) {
     reasons.push(`diff fragment must be at most ${EVAL_FRAGMENT_MAX_BYTES} bytes`);
-  } else if (file && startOk && endOk) {
+  } else if (file && file.length <= EVAL_FILE_MAX && startOk && endOk) {
     const coverage = inspectFragment(diff, file, start as number, end as number);
     if (coverage === 'unparsable') reasons.push('diff fragment is not a parsable unified diff');
     else if (coverage === 'file_absent') reasons.push('diff fragment does not contain the case file');

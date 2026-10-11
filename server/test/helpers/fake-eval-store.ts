@@ -176,6 +176,9 @@ export class FakeEvalStore implements EvalsStore {
   async findRunningRun(ws: string, agentId: string) {
     return [...this.runs.values()].find((r) => r.workspaceId === ws && r.agentId === agentId && r.status === 'running')?.id;
   }
+  async countRunningRuns(ws: string) {
+    return [...this.runs.values()].filter((r) => r.workspaceId === ws && r.status === 'running').length;
+  }
   async createSuiteRun(v: NewSuiteRun) {
     this.writes.push('createSuiteRun');
     if (this.createError) throw this.createError;
@@ -350,6 +353,7 @@ export const STORE_METHODS = [
   'insertCase',
   'deleteCase',
   'findRunningRun',
+  'countRunningRuns',
   'createSuiteRun',
   'saveCaseResult',
   'finishSuiteRun',

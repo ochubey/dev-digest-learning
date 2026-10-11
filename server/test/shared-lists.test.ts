@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sameOrderedList } from '../src/modules/_shared/lists.js';
-import { mapLimit } from '../src/modules/project-context/map-limit.js';
+import { mapLimit } from '../src/platform/map-limit.js';
 
 describe('sameOrderedList', () => {
   it('is order- and length-sensitive', () => {

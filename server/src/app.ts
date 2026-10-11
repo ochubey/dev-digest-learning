@@ -168,8 +168,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
     app.log.error(err);
     const e = err as { statusCode?: number; message?: string };
-    reply.status(e.statusCode ?? 500).send({
-      error: { code: 'internal_error', message: e.message ?? 'Internal error' },
+    const status = e.statusCode ?? 500;
+    // 5xx messages can carry driver/SQL/provider detail: log it, answer generically.
+    reply.status(status).send({
+      error: {
+        code: 'internal_error',
+        message: status >= 500 ? 'Internal error' : (e.message ?? 'Internal error'),
+      },
     });
   });
 

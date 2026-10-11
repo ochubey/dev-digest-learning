@@ -2,7 +2,7 @@ import type { RepoRef, SpecReadEntry, SpecSkipReason } from '@devdigest/shared';
 import type { Tokenizer } from '../../adapters/tokenizer/index.js';
 import type { ProjectDocsSource } from './ports.js';
 import type { EffectiveDoc } from './effective.js';
-import { mapLimit } from './map-limit.js';
+import { mapLimit } from '../../platform/map-limit.js';
 import { decodeUtf8Strict, isBlank } from './docs.js';
 import { isContextDocPath, normalizeContextPath } from './paths.js';
 import {

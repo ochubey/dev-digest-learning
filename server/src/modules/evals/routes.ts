@@ -16,7 +16,7 @@ import { EVAL_RUN_RATE_LIMIT } from './constants.js';
 import { EvalsService } from './service.js';
 
 const RunsQuery = z.object({
-  cursor: z.string().min(1).optional(),
+  cursor: z.string().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 const CompareQuery = z.object({ a: z.string().uuid(), b: z.string().uuid() });

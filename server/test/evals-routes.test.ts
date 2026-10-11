@@ -164,10 +164,55 @@ describe('POST /eval-cases', () => {
       payload: validBody({ expectation: { kind: 'must_find', file: 'src/config.ts', start_line: 50, end_line: 51 } }),
     });
     expect(outside.statusCode).toBe(400);
-    expect(outside.json().error.details.reasons).toEqual(['line range does not intersect a hunk of the file']);
+    expect(outside.json().error.details.reasons).toEqual([
+      'line range does not intersect a hunk of the file',
+      "expectation file and lines must match the source finding's",
+    ]);
     const wrongAgent = await app.inject({ method: 'POST', url: '/eval-cases', payload: validBody({ agent_id: AGENT2_ID }) });
     expect(wrongAgent.statusCode).toBe(400);
     expect(store.writes).toEqual([]);
+  });
+
+  it('rejects an expectation that differs from the source finding, but keeps the client fragment', async () => {
+    const { app } = await setup();
+    const moved = await app.inject({
+      method: 'POST',
+      url: '/eval-cases',
+      payload: validBody({ expectation: { kind: 'must_find', file: 'src/config.ts', start_line: 10, end_line: 11 } }),
+    });
+    expect(moved.statusCode).toBe(400);
+    expect(moved.json().error.details.reasons).toEqual(["expectation file and lines must match the source finding's"]);
+    expect(store.writes).toEqual([]);
+    const ok = await app.inject({ method: 'POST', url: '/eval-cases', payload: validBody() });
+    expect(ok.statusCode).toBe(201);
+    expect([...store.cases.values()][0]!.input_diff).toBe(FRAGMENT);
+  });
+
+  it('caps notes and file length with 400', async () => {
+    const { app } = await setup();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/eval-cases',
+      payload: validBody({
+        notes: 'n'.repeat(2001),
+        expectation: { kind: 'must_find', file: 'f'.repeat(501), start_line: 11, end_line: 11 },
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details.reasons).toEqual(
+      expect.arrayContaining(['file must be at most 500 characters', 'notes must be at most 2000 characters']),
+    );
+    expect(store.writes).toEqual([]);
+  });
+
+  it('answers 409 eval_case_limit when the agent already has 50 cases', async () => {
+    const { app } = await setup();
+    for (let i = 0; i < 50; i++) store.addCase({ name: `c${i}` });
+    const res = await app.inject({ method: 'POST', url: '/eval-cases', payload: validBody() });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatchObject({ code: 'eval_case_limit' });
+    expect(res.json().error.message).toContain('50');
+    expect(store.writes.filter((w) => w === 'insertCase')).toHaveLength(0);
   });
 
   it('answers 409 for a duplicate (same agent and finding) and leaves rows unchanged', async () => {
@@ -255,6 +300,19 @@ describe('POST /agents/:id/eval-runs', () => {
     expect(second.json().error).toMatchObject({ code: 'eval_run_running', details: { running_run_id: first.json().run_id } });
     expect(store.writes).toHaveLength(writesBefore);
     expect(store.runs.size).toBe(1);
+  });
+
+  it('answers 409 eval_run_limit at 3 running runs in the workspace and writes nothing', async () => {
+    const llm = new RecordingLLM({ gate: new Promise(() => {}) });
+    const { app } = await setup({ llm });
+    store.addCase({ name: 'c1' });
+    for (let i = 0; i < 3; i++) store.addRun({ agentId: AGENT2_ID, status: 'running' });
+    const writesBefore = store.writes.length;
+    const res = await app.inject({ method: 'POST', url: `/agents/${AGENT_ID}/eval-runs` });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('eval_run_limit');
+    expect(store.writes).toHaveLength(writesBefore);
+    expect(store.runs.size).toBe(3);
   });
 
   it('answers 409 when the DB partial unique index rejects a concurrent start', async () => {
@@ -399,6 +457,14 @@ describe('runs: list, detail, overview, compare', () => {
 
     expect((await app.inject({ method: 'GET', url: `/agents/${AGENT_ID}/eval-runs?limit=51` })).statusCode).toBe(422);
     expect((await app.inject({ method: 'GET', url: `/agents/${AGENT_ID}/eval-runs?cursor=zzz` })).statusCode).toBe(400);
+    const enc = (s: string) => Buffer.from(s).toString('base64url');
+    const id = '11111111-1111-1111-1111-111111111111';
+    for (const bad of [`2026-03-01|${id}`, `2026-03-01T00:00:00Z|${id}`, `2026-02-31T00:00:00.000Z|${id}`, `2026-03-01T00:00:00.000Z|${id}|x`]) {
+      const r = await app.inject({ method: 'GET', url: `/agents/${AGENT_ID}/eval-runs?cursor=${enc(bad)}` });
+      expect(r.statusCode).toBe(400);
+      expect(r.json().error.code).toBe('invalid_cursor');
+    }
+    expect((await app.inject({ method: 'GET', url: `/agents/${AGENT_ID}/eval-runs?cursor=${'a'.repeat(201)}` })).statusCode).toBe(422);
 
     EvalSuiteRunDetail.parse((await app.inject({ method: 'GET', url: `/eval-runs/${a.id}` })).json());
     EvalOverview.parse((await app.inject({ method: 'GET', url: '/evals/overview' })).json());

@@ -20,8 +20,7 @@ import {
   SEED_EVAL_RUN_V1_ID,
   SEED_EVAL_RUN_V2_ID,
 } from './fixtures/eval-cases.js';
-import { buildManifest } from '../modules/evals/manifest.js';
-import { versionConfigOf } from '../modules/agents/helpers.js';
+import { buildManifest, versionConfigOf } from '../platform/agent-config.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
