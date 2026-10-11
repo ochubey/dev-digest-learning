@@ -4,7 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
 import type { EvalSuiteRun } from "@devdigest/shared";
-import { formatPct } from "@/components/evals";
+import { MetricBar } from "@/components/evals";
 import { EVAL_TEST_IDS } from "../../../../../constants";
 import { formatCost, formatRanAt, passedParts } from "../../../../../helpers";
 import { s } from "./styles";
@@ -18,6 +18,12 @@ export interface RunsTableProps {
   loadingMore: boolean;
   onLoadMore: () => void;
 }
+
+const BARS = [
+  { key: "recall", label: "colRecall", color: "var(--accent)" },
+  { key: "precision", label: "colPrecision", color: "var(--ok)" },
+  { key: "citation_accuracy", label: "colCitation", color: "var(--warn)" },
+] as const;
 
 const COLUMNS = ["colSelect", "colRanAt", "colVersion", "colStatus", "colRecall", "colPrecision", "colCitation", "colPassed", "colCost"] as const;
 
@@ -58,9 +64,11 @@ export function RunsTable({ runs, selected, onToggle, onOpen, hasMore, loadingMo
                 </td>
                 <td style={s.td}>{t("common.version", { version: r.agent_version })}</td>
                 <td style={s.td}>{t(`status.${r.status}`)}</td>
-                <td style={s.td}>{formatPct(r.metrics.recall)}</td>
-                <td style={s.td}>{formatPct(r.metrics.precision)}</td>
-                <td style={s.td}>{formatPct(r.metrics.citation_accuracy)}</td>
+                {BARS.map((b) => (
+                  <td key={b.key} style={s.td}>
+                    <MetricBar value={r.metrics[b.key]} color={b.color} label={t(`agent.${b.label}`)} />
+                  </td>
+                ))}
                 <td style={s.td}>{passed == null ? t("common.noValue") : t("common.casesValue", { passed, total })}</td>
                 <td style={s.td}>{formatCost(r.cost_usd)}</td>
               </tr>

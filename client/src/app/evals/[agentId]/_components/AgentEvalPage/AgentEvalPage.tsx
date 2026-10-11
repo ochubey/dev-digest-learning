@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, ErrorState, Skeleton } from "@devdigest/ui";
 import type { EvalSuiteRun } from "@devdigest/shared";
-import { MetricStrip, RunDetailDrawer, RunEvalControl, ScoringNote, latestFinished, previousFinished } from "@/components/evals";
+import { RunDetailDrawer, RunEvalControl, ScoringNote, TrendChart, latestFinished, previousFinished } from "@/components/evals";
 import { useAgentEvalCases, useAgentEvalRuns, useEvalOverview } from "@/lib/hooks/evals";
 import { COMPARE_SELECTION_SIZE, EVAL_TEST_IDS } from "../../../constants";
 import { toggleSelection } from "../../../helpers";
 import { CompareRunsDialog } from "./_components/CompareRunsDialog";
+import { MetricCards } from "./_components/MetricCards";
+import { RunsAlertBanner } from "./_components/RunsAlertBanner";
 import { RunsTable } from "./_components/RunsTable";
+import { DEFAULT_RANGE, RANGES, filterByRange, type RangeKey } from "./helpers";
 import { s } from "./styles";
 
 export interface AgentEvalPageProps {
@@ -20,6 +23,7 @@ export interface AgentEvalPageProps {
 /** /evals/[agentId] (AC-61..AC-66): one agent's metrics, runs, run detail and compare. */
 export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
   const t = useTranslations("evalsDashboard");
+  const ta = useTranslations("evalsAgentPage");
   const router = useRouter();
   const overview = useEvalOverview();
   const runs = useAgentEvalRuns(agentId);
@@ -27,11 +31,15 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
   const [selected, setSelected] = React.useState<string[]>([]);
   const [opened, setOpened] = React.useState<EvalSuiteRun | null>(null);
   const [comparing, setComparing] = React.useState(false);
+  const [range, setRange] = React.useState<RangeKey>(DEFAULT_RANGE);
   // The page is keyed by agent id, so a different agent starts with a clean selection.
   // Remember the clicked button: some browsers (Safari) do not focus a button on click.
   const compareRef = React.useRef<HTMLElement | null>(null);
 
   const loaded = React.useMemo(() => runs.data?.pages.flatMap((pg) => pg.items) ?? [], [runs.data]);
+
+  // "Now" is fixed per loaded data / range choice so the filter is stable between renders.
+  const visible = React.useMemo(() => filterByRange(loaded, range, Date.now()), [loaded, range]);
 
   if (overview.isLoading) {
     return (
@@ -70,12 +78,18 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
 
   return (
     <div style={s.page}>
-      <div style={s.top}>
+      <header style={s.top}>
         <div style={s.grow}>
-          <h1 style={s.title}>{entry.name}</h1>
-          <p style={s.meta}>
-            {t("agent.model", { model: entry.model })} · {t("agent.version", { version: entry.version })}
-          </p>
+          <Button size="sm" icon="ChevronLeft" onClick={() => router.push("/evals")}>
+            {t("agent.allAgents")}
+          </Button>
+          <div style={s.titleRow}>
+            <h1 style={s.title}>{entry.name}</h1>
+            <code className="mono" style={s.chip} title={ta("header.modelLabel")}>
+              {entry.model}
+            </code>
+          </div>
+          <p style={s.meta}>{ta("header.subtitle", { runs: items.length, cases: cases.data?.length ?? 0 })}</p>
         </div>
         <label style={s.hint}>
           <span style={{ marginRight: 6 }}>{t("agent.switcherLabel")}</span>
@@ -92,19 +106,44 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
             ))}
           </select>
         </label>
-        <Button size="sm" icon="ChevronLeft" onClick={() => router.push("/evals")}>
-          {t("agent.allAgents")}
-        </Button>
-      </div>
+        <label style={s.hint}>
+          <span style={{ marginRight: 6 }}>{ta("header.rangeLabel")}</span>
+          <select
+            style={s.select}
+            value={range}
+            aria-label={ta("header.rangeLabel")}
+            onChange={(e) => {
+              setRange(e.target.value as RangeKey);
+              setSelected([]);
+            }}
+          >
+            {RANGES.map((r) => (
+              <option key={r} value={r}>
+                {ta(`range.${r}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <RunEvalControl
+          agentId={agentId}
+          caseCount={cases.data?.length ?? 0}
+          model={entry.model}
+          disabled={cases.isLoading}
+        />
+      </header>
 
-      <MetricStrip latest={latest} previous={previous} agentVersion={entry.version} />
+      <RunsAlertBanner runs={items} />
+      <MetricCards latest={latest} previous={previous} agentVersion={entry.version} runs={items} />
+
+      <section style={s.section} aria-labelledby="eval-trend-heading">
+        <h2 id="eval-trend-heading" style={s.h2}>
+          {ta("trend.heading")}
+        </h2>
+        <div style={s.card}>
+          <TrendChart runs={visible} />
+        </div>
+      </section>
       <ScoringNote />
-      <RunEvalControl
-        agentId={agentId}
-        caseCount={cases.data?.length ?? 0}
-        model={entry.model}
-        disabled={cases.isLoading}
-      />
 
       <section style={s.section} aria-labelledby="eval-runs-heading">
         <h2 id="eval-runs-heading" style={s.h2}>
@@ -140,9 +179,11 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
           </p>
         ) : items.length === 0 ? (
           <p style={s.muted}>{t("agent.noRuns")}</p>
+        ) : visible.length === 0 && !runs.hasNextPage ? (
+          <p style={s.muted}>{ta("table.noneInRange")}</p>
         ) : (
           <RunsTable
-            runs={items}
+            runs={visible}
             selected={selected}
             onToggle={(id) => setSelected((cur) => toggleSelection(cur, id, COMPARE_SELECTION_SIZE))}
             onOpen={setOpened}

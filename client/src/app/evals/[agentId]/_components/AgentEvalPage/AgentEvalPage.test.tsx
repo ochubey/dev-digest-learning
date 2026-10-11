@@ -6,6 +6,7 @@ import { NextIntlClientProvider } from "next-intl";
 import type { EvalSuiteRun } from "@devdigest/shared";
 import evalsDashboard from "../../../../../../messages/en/evalsDashboard.json";
 import evalsShared from "../../../../../../messages/en/evalsShared.json";
+import evalsAgentPage from "../../../../../../messages/en/evalsAgentPage.json";
 import { mkDetail, mkRun } from "@/app/evals/fixtures";
 
 const push = vi.fn();
@@ -49,7 +50,7 @@ function mount(agentId = "a1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" messages={{ evalsDashboard, evalsShared }}>
+      <NextIntlClientProvider locale="en" messages={{ evalsDashboard, evalsShared, evalsAgentPage }}>
         <AgentEvalPage agentId={agentId} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
@@ -74,7 +75,8 @@ describe("AgentEvalPage", () => {
   it("name/model, metric cards with deltas, Run eval control, table columns", async () => {
     mount();
     expect(await screen.findByRole("heading", { level: 1, name: "Security reviewer" })).toBeInTheDocument();
-    expect(screen.getByText(/Model: gpt-test/)).toBeInTheDocument();
+    expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    expect(screen.getByText("Regression harness · 2 runs on the 2 case set")).toBeInTheDocument();
     const recall = screen.getByTestId("eval-metric-recall");
     expect(within(recall).getByText("75%")).toBeInTheDocument();
     expect(within(recall).getByText("▲ 25pt")).toBeInTheDocument();
@@ -87,6 +89,62 @@ describe("AgentEvalPage", () => {
     expect(within(row).getByText("Completed")).toBeInTheDocument();
     expect(within(row).getByText("6/8")).toBeInTheDocument();
     expect(within(row).getByText("$0.0123")).toBeInTheDocument();
+  });
+
+  it("runs table shows MetricBars with the percent next to each metric", async () => {
+    mount();
+    const rows = await screen.findAllByTestId("eval-run-row");
+    const row = rows[0]!;
+    expect(within(row).getAllByTestId("eval-metric-bar")).toHaveLength(3);
+    expect(within(row).getByRole("img", { name: "Recall: 75%" })).toBeInTheDocument();
+    expect(within(row).getByRole("img", { name: "Precision: 50%" })).toBeInTheDocument();
+    expect(within(row).getByRole("img", { name: "Citation: 100%" })).toBeInTheDocument();
+    expect(within(row).getByText("100%")).toBeInTheDocument();
+  });
+
+  it("metric cards gain sparklines and a Metric trend chart is drawn from finished runs", async () => {
+    mount();
+    await screen.findAllByTestId("eval-run-row");
+    const recall = screen.getByTestId("eval-metric-recall");
+    expect(within(recall).getByRole("img", { name: "Recall trend over 2 runs" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("eval-metric-passed")).getByRole("img", { name: "Cases passed trend over 2 runs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Metric trend" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Metric trend over 2 runs\. Recall from 50% to 75%\./ })).toBeInTheDocument();
+    expect(screen.getAllByTestId("eval-trend-point")).toHaveLength(6);
+  });
+
+  it("no regression banner when nothing dropped; banner when the newest run is worse", async () => {
+    mount();
+    await screen.findAllByTestId("eval-run-row");
+    expect(screen.queryByTestId("eval-regression-banner")).toBeNull();
+    cleanup();
+    const worse = mkRun({ id: "r3", agent_version: 3, started_at: "2026-10-08T10:00:00Z", metrics: { recall: 0.75, precision: 0.4, citation_accuracy: 1 } });
+    pages = [{ items: [worse, latest, previous], next_cursor: null }];
+    mount();
+    const banner = await screen.findByTestId("eval-regression-banner");
+    expect(banner).toHaveAttribute("role", "status");
+    expect(banner).toHaveTextContent("Precision dipped 10pt on v3 — recall flat, citation flat.");
+  });
+
+  it("time range defaults to All time, filters the table and the chart by started_at, and clears the selection", async () => {
+    const day = 86_400_000;
+    const recent = mkRun({ id: "n1", agent_version: 3, started_at: new Date(Date.now() - 2 * day).toISOString() });
+    const old = mkRun({ id: "n2", agent_version: 2, started_at: new Date(Date.now() - 40 * day).toISOString() });
+    const older = mkRun({ id: "n3", agent_version: 1, started_at: new Date(Date.now() - 400 * day).toISOString() });
+    pages = [{ items: [recent, old, older], next_cursor: null }];
+    mount();
+    const range = await screen.findByRole("combobox", { name: "Time range" });
+    expect(range).toHaveValue("all");
+    expect(within(range).getAllByRole("option").map((o) => o.textContent)).toEqual(["7 days", "30 days", "90 days", "All time"]);
+    await waitFor(() => expect(screen.getAllByTestId("eval-run-row")).toHaveLength(3));
+    fireEvent.click(screen.getAllByTestId("eval-run-select")[0]!);
+    fireEvent.change(range, { target: { value: "90d" } });
+    expect(screen.getAllByTestId("eval-run-row")).toHaveLength(2);
+    expect(screen.getByRole("img", { name: /Metric trend over 2 runs/ })).toBeInTheDocument();
+    expect((screen.getAllByTestId("eval-run-select")[0] as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(range, { target: { value: "7d" } });
+    expect(screen.getAllByTestId("eval-run-row")).toHaveLength(1);
+    expect(screen.getByText(/Only one finished run/)).toBeInTheDocument();
   });
 
   it("a failed newest run never becomes latest/previous in the metric cards (AC-59/61)", async () => {
