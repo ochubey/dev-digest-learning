@@ -81,6 +81,11 @@ jobs:
 
       - name: Start API (:3001)
         working-directory: server
+        env:
+          # Deterministic project documents for flows 09-13 (no GitHub access in CI).
+          PROJECT_DOCS_SOURCE: ${{ vars.PROJECT_DOCS_SOURCE || 'fixture' }}
+          # One browser runs all flows from one IP; the default 120 requests per minute would 429.
+          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX || '5000' }}
         run: |
           # tsx directly (not `pnpm start`): the committed package.json's start
           # is `node dist/server.js`, which would need a build first. tsx runs
