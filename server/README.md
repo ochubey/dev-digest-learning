@@ -321,7 +321,13 @@ webhook URL, missing Retry-After, service-role key in client, SQL string concat)
 `must_not_flag` (unused import, raw body parser on a verified webhook, clean rename, N+1
 user list). Two are derived from the seeded PR #482 findings. They are inserted only while
 the agent has no seeded case, so a case the user deleted is not re-created and a second
-seed adds nothing.
+seed adds nothing. Every expectation range covers the whole changed region of its fragment
+(first to last changed line plus one context line each side), because models often cite a
+neighbouring line and the match is strict file + line overlap (see
+[`../docs/eval-scoring.md`](../docs/eval-scoring.md#choosing-expectation-ranges)). The seed
+self-heals existing databases: under the same advisory lock it rewrites `expected_output` and
+`input_diff` of every case whose `seed_key` matches a fixture case when they differ; cases
+without a `seed_key` are never touched and a deleted seeded case is never re-created.
 
 With `PROJECT_DOCS_SOURCE=fixture` (the e2e stack) the seed also marks the seeded Stripe
 finding accepted (re-applied after the demo reset, so "Turn into eval case" is available),

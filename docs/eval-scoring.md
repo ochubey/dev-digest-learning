@@ -27,6 +27,17 @@ that case's expectation.
 "Grounded" means the finding survived the grounding gate, which drops findings that
 cite lines not present in the diff. Dropped findings are counted separately.
 
+## Choosing expectation ranges
+
+The match is strict: same file and overlapping line ranges, nothing fuzzy. Models often
+cite a neighbouring line (the context line above, the closing brace below) even when they
+found the right defect. A one-line expectation then turns a correct finding into
+`unlabeled`, which lowers precision and makes the baseline look flaky. So label the whole
+changed region, not one line: from the first added or removed line to the last one of the
+hunk, plus one context line on each side, never outside the fragment. For a `must_not_flag`
+case use the whole benign change as the zone, so a noisy agent is still penalised by
+`fp_zone`. The seeded cases follow this rule (checked by `eval-seed-fixture.test.ts`).
+
 ## Per-finding labels and per-case result
 
 | Case kind | Finding matches | Label |

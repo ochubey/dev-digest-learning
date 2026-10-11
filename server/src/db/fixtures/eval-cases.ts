@@ -45,7 +45,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'hardcoded-stripe-key',
     name: 'Hardcoded Stripe secret key',
     origin: 'accepted_finding',
-    expectation: { kind: 'must_find', file: 'src/config.ts', start_line: 12, end_line: 12 },
+    expectation: { kind: 'must_find', file: 'src/config.ts', start_line: 11, end_line: 17 },
     derived_from: { file: 'src/config.ts', title: 'Hardcoded Stripe secret key in commit', decision: 'accepted' },
     input_diff: section(
       'src/config.ts',
@@ -69,7 +69,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'ssrf-webhook-url',
     name: 'Server fetches a caller-supplied webhook URL',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/api/public/webhooks.ts', start_line: 22, end_line: 23 },
+    expectation: { kind: 'must_find', file: 'src/api/public/webhooks.ts', start_line: 21, end_line: 26 },
     input_diff: section('src/api/public/webhooks.ts', 20, 20, [
       ' export async function registerWebhook(app: FastifyInstance) {',
       '   app.post("/webhooks/register", async (req, reply) => {',
@@ -87,7 +87,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'missing-retry-after',
     name: 'Rate-limit rejection without a Retry-After header',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/middleware/ratelimit.ts', start_line: 17, end_line: 17 },
+    expectation: { kind: 'must_find', file: 'src/middleware/ratelimit.ts', start_line: 14, end_line: 19 },
     input_diff: section('src/middleware/ratelimit.ts', 14, 14, [
       '   bucket.updatedAt = now;',
       '-  if (bucket.tokens < 1) return reply.code(429).send({ error: "rate_limited" });',
@@ -103,7 +103,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'service-role-key-in-client',
     name: 'Service-role key read in a browser module',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/app/lib/supabase.ts', start_line: 5, end_line: 7 },
+    expectation: { kind: 'must_find', file: 'src/app/lib/supabase.ts', start_line: 3, end_line: 7 },
     input_diff: section('src/app/lib/supabase.ts', 1, 1, [
       ' "use client";',
       ' import { createClient } from "@supabase/supabase-js";',
@@ -119,7 +119,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'sql-string-concat',
     name: 'User search builds SQL by string concatenation',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/api/users.ts', start_line: 61, end_line: 62 },
+    expectation: { kind: 'must_find', file: 'src/api/users.ts', start_line: 60, end_line: 64 },
     input_diff: section('src/api/users.ts', 60, 60, [
       ' export async function searchUsers(term: string) {',
       '-  return pool.query("SELECT id, email, name FROM users WHERE name LIKE $1", [`%${term}%`]);',
@@ -133,7 +133,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'unused-import',
     name: 'Unused import added to the webhooks module',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/api/public/webhooks.ts', start_line: 2, end_line: 2 },
+    expectation: { kind: 'must_not_flag', file: 'src/api/public/webhooks.ts', start_line: 1, end_line: 3 },
     input_diff: section('src/api/public/webhooks.ts', 1, 1, [
       ' import type { FastifyInstance } from "fastify";',
       '+import crypto from "node:crypto";',
@@ -148,7 +148,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'raw-body-parser-verified-webhook',
     name: 'Raw body parser for a signature-verified webhook',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/api/public/stripe-webhook.ts', start_line: 11, end_line: 11 },
+    expectation: { kind: 'must_not_flag', file: 'src/api/public/stripe-webhook.ts', start_line: 10, end_line: 21 },
     input_diff: section('src/api/public/stripe-webhook.ts', 10, 10, [
       ' export async function stripeWebhook(app: FastifyInstance) {',
       '-  app.post("/webhooks/stripe", async (req) => handleEvent(req.body));',
@@ -169,7 +169,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'clean-refactor-rename',
     name: 'Rename of an invoice total helper',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/services/invoices.ts', start_line: 15, end_line: 20 },
+    expectation: { kind: 'must_not_flag', file: 'src/services/invoices.ts', start_line: 15, end_line: 21 },
     input_diff: section('src/services/invoices.ts', 15, 15, [
       '-export function calcTotal(items: LineItem[]): number {',
       '+export function computeInvoiceTotal(items: LineItem[]): number {',
@@ -187,7 +187,7 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
     seed_key: 'n-plus-one-user-list',
     name: 'Per-user orders query in the user list',
     origin: 'dismissed_finding',
-    expectation: { kind: 'must_not_flag', file: 'src/api/users.ts', start_line: 45, end_line: 52 },
+    expectation: { kind: 'must_not_flag', file: 'src/api/users.ts', start_line: 44, end_line: 52 },
     derived_from: { file: 'src/api/users.ts', title: 'N+1 query in user list endpoint', decision: 'dismissed' },
     input_diff: section(
       'src/api/users.ts',
@@ -217,7 +217,7 @@ const GENERAL_CASES: SeedEvalCase[] = [
     seed_key: 'general-missing-await-cancel',
     name: 'Order cancellation update is not awaited',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/services/orders.ts', start_line: 43, end_line: 43 },
+    expectation: { kind: 'must_find', file: 'src/services/orders.ts', start_line: 41, end_line: 45 },
     input_diff: section('src/services/orders.ts', 40, 40, [
       ' export async function cancelOrder(id: string) {',
       '   const order = await orders.get(id);',
@@ -233,7 +233,7 @@ const GENERAL_CASES: SeedEvalCase[] = [
     seed_key: 'general-average-empty-guard-removed',
     name: 'Average latency loses its empty-input guard',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/utils/stats.ts', start_line: 9, end_line: 10 },
+    expectation: { kind: 'must_find', file: 'src/utils/stats.ts', start_line: 8, end_line: 11 },
     input_diff: section('src/utils/stats.ts', 8, 8, [
       ' export function averageLatency(samples: number[]): number {',
       '-  if (samples.length === 0) return 0;',
@@ -247,7 +247,7 @@ const GENERAL_CASES: SeedEvalCase[] = [
     seed_key: 'general-rename-date-helper',
     name: 'Rename of a date formatting helper',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/services/notifications.ts', start_line: 5, end_line: 10 },
+    expectation: { kind: 'must_not_flag', file: 'src/services/notifications.ts', start_line: 5, end_line: 11 },
     input_diff: section('src/services/notifications.ts', 5, 5, [
       '-export function fmtDate(d: Date): string {',
       '+export function formatDate(d: Date): string {',
@@ -264,7 +264,7 @@ const GENERAL_CASES: SeedEvalCase[] = [
     seed_key: 'general-new-test-for-shipped-order',
     name: 'Test added for the shipped-order path',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'test/services/orders.test.ts', start_line: 25, end_line: 28 },
+    expectation: { kind: 'must_not_flag', file: 'test/services/orders.test.ts', start_line: 24, end_line: 29 },
     input_diff: section('test/services/orders.test.ts', 20, 20, [
       ' describe("cancelOrder", () => {',
       '   it("cancels a pending order", async () => {',
@@ -285,7 +285,7 @@ const PERFORMANCE_CASES: SeedEvalCase[] = [
     seed_key: 'perf-n-plus-one-team-report',
     name: 'Team report queries tasks once per member',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/services/reports.ts', start_line: 33, end_line: 35 },
+    expectation: { kind: 'must_find', file: 'src/services/reports.ts', start_line: 31, end_line: 38 },
     input_diff: section('src/services/reports.ts', 30, 30, [
       ' export async function buildTeamReport(teamId: string) {',
       '   const members = await db.select().from(membersTable).where(eq(membersTable.teamId, teamId));',
@@ -304,7 +304,7 @@ const PERFORMANCE_CASES: SeedEvalCase[] = [
     seed_key: 'perf-sync-read-in-handler',
     name: 'Export route reads the file synchronously per request',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/api/export.ts', start_line: 16, end_line: 16 },
+    expectation: { kind: 'must_find', file: 'src/api/export.ts', start_line: 15, end_line: 19 },
     input_diff: section('src/api/export.ts', 14, 14, [
       ' export async function exportRoute(app: FastifyInstance) {',
       '   app.get("/export/:id", async (req, reply) => {',
@@ -321,7 +321,7 @@ const PERFORMANCE_CASES: SeedEvalCase[] = [
     seed_key: 'perf-index-on-owner-column',
     name: 'Index added for the task owner lookup',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/db/schema/tasks.ts', start_line: 16, end_line: 16 },
+    expectation: { kind: 'must_not_flag', file: 'src/db/schema/tasks.ts', start_line: 15, end_line: 17 },
     input_diff: section('src/db/schema/tasks.ts', 12, 12, [
       '   ownerId: uuid("owner_id").notNull(),',
       ' },',
@@ -336,7 +336,7 @@ const PERFORMANCE_CASES: SeedEvalCase[] = [
     seed_key: 'perf-boot-time-template-read',
     name: 'Templates read once when the module loads',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/config/templates.ts', start_line: 4, end_line: 6 },
+    expectation: { kind: 'must_not_flag', file: 'src/config/templates.ts', start_line: 1, end_line: 6 },
     input_diff: section('src/config/templates.ts', 1, 1, [
       ' import { readFileSync } from "node:fs";',
       '+import path from "node:path";',
@@ -353,7 +353,7 @@ const API_CONTRACT_CASES: SeedEvalCase[] = [
     seed_key: 'api-renamed-response-field',
     name: 'Account response renames name to fullName',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/api/accounts.ts', start_line: 32, end_line: 32 },
+    expectation: { kind: 'must_find', file: 'src/api/accounts.ts', start_line: 31, end_line: 33 },
     input_diff: section('src/api/accounts.ts', 30, 30, [
       ' app.get("/accounts/:id", async (req, reply) => {',
       '   const account = await accounts.get(req.params.id);',
@@ -366,7 +366,7 @@ const API_CONTRACT_CASES: SeedEvalCase[] = [
     seed_key: 'api-error-format-and-status-changed',
     name: 'Not-found error becomes a plain string with status 400',
     origin: 'seeded',
-    expectation: { kind: 'must_find', file: 'src/api/projects.ts', start_line: 24, end_line: 24 },
+    expectation: { kind: 'must_find', file: 'src/api/projects.ts', start_line: 23, end_line: 25 },
     input_diff: section('src/api/projects.ts', 21, 21, [
       ' app.get("/projects/:id", async (req, reply) => {',
       '   const project = await projects.find(req.params.id);',
@@ -382,7 +382,7 @@ const API_CONTRACT_CASES: SeedEvalCase[] = [
     seed_key: 'api-additive-response-field',
     name: 'Account response gains an optional createdAt field',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'src/api/accounts.ts', start_line: 32, end_line: 32 },
+    expectation: { kind: 'must_not_flag', file: 'src/api/accounts.ts', start_line: 31, end_line: 33 },
     input_diff: section('src/api/accounts.ts', 30, 30, [
       ' app.get("/accounts/:id", async (req, reply) => {',
       '   const account = await accounts.get(req.params.id);',
@@ -395,7 +395,7 @@ const API_CONTRACT_CASES: SeedEvalCase[] = [
     seed_key: 'api-test-asserts-error-code',
     name: 'Test asserts the existing not-found error code',
     origin: 'seeded',
-    expectation: { kind: 'must_not_flag', file: 'test/api/projects.test.ts', start_line: 10, end_line: 10 },
+    expectation: { kind: 'must_not_flag', file: 'test/api/projects.test.ts', start_line: 9, end_line: 11 },
     input_diff: section('test/api/projects.test.ts', 8, 8, [
       ' it("returns 404 for an unknown project", async () => {',
       '   const res = await app.inject({ method: "GET", url: "/projects/missing" });',
@@ -550,7 +550,7 @@ export const SEED_EVAL_RUNS: SeedEvalRun[] = [
       result(1, 3, 'service-role-key-in-client', [], [
         { file: SUPABASE, start_line: 40, end_line: 40, title: 'Public environment variable exposes a key', reason: 'line outside the diff' },
       ]),
-      result(1, 4, 'sql-string-concat', [finding(USERS, 63, 63, 'Result rows returned unfiltered', 'unlabeled', 'SUGGESTION', 'bug')]),
+      result(1, 4, 'sql-string-concat', [finding(USERS, 65, 65, 'Result rows returned unfiltered', 'unlabeled', 'SUGGESTION', 'bug')]),
       result(1, 5, 'unused-import', [finding(WEBHOOKS, 2, 2, 'Unused import of node:crypto', 'fp_zone', 'SUGGESTION', 'style')]),
       result(1, 6, 'raw-body-parser-verified-webhook', []),
       result(1, 7, 'clean-refactor-rename', [renameNoise]),

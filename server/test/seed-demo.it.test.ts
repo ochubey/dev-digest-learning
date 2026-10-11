@@ -244,6 +244,44 @@ d('demo seed (Testcontainers pg)', () => {
     expect(orphaned.filter((r) => r.caseId === null).length).toBe(1);
   });
 
+  it('seeding restores a tampered seeded expectation and diff, and does not re-create a deleted seeded case', async () => {
+    const agent = await securityAgent();
+    const before = await casesOf(agent.id);
+    const keyOf = (c: (typeof before)[number]) => (c.inputMeta as { seed_key?: string }).seed_key;
+    const tampered = before.find((c) => keyOf(c) === 'sql-string-concat')!;
+    const fixture = SEED_EVAL_CASES.find((c) => c.seed_key === 'sql-string-concat')!;
+    await pg.handle.db
+      .update(t.evalCases)
+      .set({ expectedOutput: { ...fixture.expectation, start_line: 61, end_line: 61 }, inputDiff: 'stale' })
+      .where(eq(t.evalCases.id, tampered.id));
+    const plain = await pg.handle.db
+      .insert(t.evalCases)
+      .values({
+        workspaceId: agent.workspaceId,
+        ownerKind: 'agent',
+        ownerId: agent.id,
+        name: 'user made case',
+        inputDiff: 'keep me',
+        inputMeta: { origin: 'seeded' },
+        expectedOutput: { kind: 'must_find', file: 'a.ts', start_line: 1, end_line: 1 },
+      })
+      .returning();
+    const deleted = before.find((c) => keyOf(c) === 'ssrf-webhook-url')!;
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, deleted.id));
+
+    await seed(pg.handle.db, { demoContext: true });
+
+    const after = await casesOf(agent.id);
+    const healed = after.find((c) => c.id === tampered.id)!;
+    expect(healed.expectedOutput).toEqual(fixture.expectation);
+    expect(healed.inputDiff).toBe(fixture.input_diff);
+    expect(after.some((c) => keyOf(c) === 'ssrf-webhook-url')).toBe(false);
+    const untouched = after.find((c) => c.id === plain[0]!.id)!;
+    expect(untouched.inputDiff).toBe('keep me');
+    expect(after.length).toBe(before.length); // -1 deleted, +1 user case
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, plain[0]!.id));
+  });
+
   it('every built-in agent gets its own seeded cases, and no fixture runs for the new agents', async () => {
     for (const [name, expected] of Object.entries(SEED_EVAL_CASES_BY_AGENT)) {
       if (name === 'Security Reviewer') continue;

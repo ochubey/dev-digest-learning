@@ -73,9 +73,15 @@ describe('seeded eval cases', () => {
     expect(derived.map((c) => c.seed_key).sort()).toEqual(['hardcoded-stripe-key', 'n-plus-one-user-list']);
     expect(byKey('hardcoded-stripe-key').origin).toBe('accepted_finding');
     expect(byKey('n-plus-one-user-list').origin).toBe('dismissed_finding');
-    // Same file and lines as the seeded demo findings (seed.ts): config.ts:12 and users.ts:45-52.
-    expect(byKey('hardcoded-stripe-key').expectation).toMatchObject({ file: 'src/config.ts', start_line: 12, end_line: 12 });
-    expect(byKey('n-plus-one-user-list').expectation).toMatchObject({ file: 'src/api/users.ts', start_line: 45, end_line: 52 });
+    // Same file as the seeded demo findings (seed.ts) and a range at least as wide: config.ts:12 and users.ts:45-52.
+    const stripe = byKey('hardcoded-stripe-key').expectation;
+    const n1 = byKey('n-plus-one-user-list').expectation;
+    expect(stripe.file).toBe('src/config.ts');
+    expect(stripe.start_line).toBeLessThanOrEqual(12);
+    expect(stripe.end_line).toBeGreaterThanOrEqual(12);
+    expect(n1.file).toBe('src/api/users.ts');
+    expect(n1.start_line).toBeLessThanOrEqual(45);
+    expect(n1.end_line).toBeGreaterThanOrEqual(52);
     for (const c of SEED_EVAL_CASES) if (!c.derived_from) expect(c.origin, c.seed_key).toBe('seeded');
   });
 
@@ -104,6 +110,31 @@ describe('seeded eval cases per agent', () => {
   it('seed keys and names are unique across all agents', () => {
     expect(new Set(all.map((c) => c.seed_key)).size).toBe(all.length);
     for (const [agent, cases] of entries) expect(new Set(cases.map((c) => c.name)).size, agent).toBe(cases.length);
+  });
+
+  it('every expectation covers the whole changed region of its fragment, within the hunk, and is at least 3 lines wide', () => {
+    for (const c of all) {
+      const lines = c.input_diff.split('\n');
+      const head = lines.findIndex((l) => l.startsWith('@@'));
+      const m = lines[head]!.match(/^@@ -\d+,\d+ \+(\d+),(\d+) @@/)!;
+      const hunkStart = Number(m[1]);
+      const hunkEnd = hunkStart + Number(m[2]) - 1;
+      const body = lines.slice(head + 1).filter((l, i, a) => !(i === a.length - 1 && l === ''));
+      let n = hunkStart;
+      const added: number[] = [];
+      for (const l of body) {
+        if (l[0] === '-') continue;
+        if (l[0] === '+') added.push(n);
+        n++;
+      }
+      const { start_line: s, end_line: e } = c.expectation;
+      expect(s, `${c.seed_key} covers first added`).toBeLessThanOrEqual(Math.min(...added));
+      expect(e, `${c.seed_key} covers last added`).toBeGreaterThanOrEqual(Math.max(...added));
+      expect(s, `${c.seed_key} inside hunk`).toBeGreaterThanOrEqual(hunkStart);
+      // The derived N+1 case must stay as wide as the seeded finding (users.ts:45-52), which ends past the hunk.
+      if (!c.derived_from) expect(e, `${c.seed_key} inside hunk`).toBeLessThanOrEqual(hunkEnd);
+      expect(e - s + 1, `${c.seed_key} width`).toBeGreaterThanOrEqual(Math.min(3, hunkEnd - hunkStart + 1));
+    }
   });
 
   for (const [agent, cases] of entries) {

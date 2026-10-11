@@ -555,6 +555,9 @@ export async function applyFixtureDecisions(db: Db): Promise<void> {
  * Seeded eval cases of one built-in agent. Inserted only while the agent has no seeded-origin
  * case (origin "seeded" or a seed_key), so a case the user deleted is never re-created (OQ-10)
  * and a second run adds nothing. Derived cases link to the seeded sample findings when present.
+ * Existing cases that carry a fixture `seed_key` are healed in place: `expected_output` and
+ * `input_diff` are rewritten to the fixture value when they differ (cases without a seed_key are
+ * never touched, and nothing is inserted on that path).
  */
 async function seedEvalCases(
   db: Db,
@@ -586,7 +589,23 @@ async function seedEvalCases(
         ),
       )
       .limit(1);
-    if (present.length > 0) return;
+    if (present.length > 0) {
+      for (const c of cases) {
+        await tx
+          .update(t.evalCases)
+          .set({ expectedOutput: c.expectation, inputDiff: c.input_diff })
+          .where(
+            and(
+              eq(t.evalCases.workspaceId, a.workspaceId),
+              eq(t.evalCases.ownerKind, 'agent'),
+              eq(t.evalCases.ownerId, a.agentId),
+              sql`${t.evalCases.inputMeta}->>'seed_key' = ${c.seed_key}`,
+              sql`(${t.evalCases.expectedOutput} is distinct from ${JSON.stringify(c.expectation)}::jsonb or ${t.evalCases.inputDiff} is distinct from ${c.input_diff})`,
+            ),
+          );
+      }
+      return;
+    }
 
     for (const c of cases) {
       const sourceFindingId = sourceFindingIds.get(c.seed_key);
