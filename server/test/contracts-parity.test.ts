@@ -15,7 +15,7 @@ const read = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)));
 
 describe('vendored contracts parity', () => {
-  for (const name of ['brief.ts', 'trace.ts', 'platform.ts']) {
+  for (const name of ['brief.ts', 'trace.ts', 'platform.ts', 'observability.ts', 'review-api.ts']) {
     it(`${name} byte-identical`, () => {
       const { server, client } = pair(name);
       expect(
