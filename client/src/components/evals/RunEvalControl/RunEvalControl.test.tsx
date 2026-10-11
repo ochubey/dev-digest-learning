@@ -99,6 +99,15 @@ describe("RunEvalControl", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("No eval cases for this agent");
   });
 
+  it("500 config_error (missing API key) -> server message shown, action re-enabled (AC-56)", async () => {
+    post.mockRejectedValue(new ApiError("OPENAI_API_KEY is not configured", 500, "config_error"));
+    mount();
+    fireEvent.click(screen.getByTestId("eval-run-button"));
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("OPENAI_API_KEY is not configured");
+    expect(screen.getByTestId("eval-run-button")).toBeEnabled();
+  });
+
   it("409 -> shows running progress, no alert", async () => {
     post.mockRejectedValue(new ApiError("already running", 409, "eval_run_running"));
     mount();

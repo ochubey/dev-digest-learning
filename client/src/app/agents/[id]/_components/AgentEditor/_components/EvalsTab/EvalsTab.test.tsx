@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent, EvalCaseView, EvalSuiteRun } from "@devdigest/shared";
 import evalsTab from "../../../../../../../../messages/en/evalsTab.json";
+import evalsDashboard from "../../../../../../../../messages/en/evalsDashboard.json";
 import evalsShared from "../../../../../../../../messages/en/evalsShared.json";
 
 const get = vi.fn();
@@ -105,6 +106,9 @@ function route() {
     if (url.includes("/eval-cases")) {
       return casesData instanceof Error ? Promise.reject(casesData) : Promise.resolve(casesData);
     }
+    if (/\/eval-runs\/[^/?]+$/.test(url)) {
+      return Promise.resolve({ ...runsData[0], manifest: null, results: [] });
+    }
     if (url.includes("/eval-runs")) return Promise.resolve({ items: runsData, next_cursor: null });
     return Promise.reject(new Error(`unexpected ${url}`));
   });
@@ -114,7 +118,7 @@ function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" messages={{ evalsTab, evalsShared }}>
+      <NextIntlClientProvider locale="en" messages={{ evalsTab, evalsShared, evalsDashboard }}>
         <EvalsTab agent={AGENT} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
@@ -190,7 +194,7 @@ describe("EvalsTab", () => {
     expect(await screen.findByText("6 / 8 passing")).toBeInTheDocument();
     expect(screen.getByText("9 cases")).toBeInTheDocument();
     expect(screen.getByTestId("eval-metric-recall")).toHaveTextContent("88%");
-    expect(screen.getByTestId("eval-metric-passed")).toHaveTextContent("6/9");
+    expect(screen.getByTestId("eval-metric-passed")).toHaveTextContent("6/8");
   });
 
   it("empty state text + Run disabled", async () => {
@@ -265,8 +269,19 @@ describe("EvalsTab", () => {
     const first = screen.getAllByTestId("eval-tab-run-row")[0]!;
     expect(first).toHaveTextContent("v2");
     expect(first).toHaveTextContent("88%");
-    expect(first).toHaveTextContent("6/9");
+    expect(first).toHaveTextContent("6/8");
     expect(first).toHaveTextContent("$0.0123");
+  });
+
+  it("run row opens the run detail drawer (AC-65)", async () => {
+    mount();
+    const row = (await screen.findAllByTestId("eval-tab-run-row"))[0]!;
+    fireEvent.click(within(row).getByRole("button", { name: /Open run details for/ }));
+    const drawer = await screen.findByTestId("eval-run-drawer");
+    expect(drawer).toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith("/eval-runs/r1");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("eval-run-drawer")).toBeNull());
   });
 
   it("hostile case name plain text", async () => {

@@ -4,9 +4,10 @@ import React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Icon, Skeleton } from "@devdigest/ui";
-import type { Agent, EvalCaseView } from "@devdigest/shared";
+import type { Agent, EvalCaseView, EvalSuiteRun } from "@devdigest/shared";
 import {
   MetricStrip,
+  RunDetailDrawer,
   RunEvalControl,
   ScoringNote,
   caseResultDetail,
@@ -97,6 +98,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
   const del = useDeleteEvalCase();
   const [confirmId, setConfirmId] = React.useState<string | null>(null);
   const [failedId, setFailedId] = React.useState<string | null>(null);
+  const [opened, setOpened] = React.useState<EvalSuiteRun | null>(null);
 
   const runs = React.useMemo(() => recentRuns(runsQ.data?.pages), [runsQ.data]);
   const allLoaded = React.useMemo(() => (runsQ.data?.pages ?? []).flatMap((p) => p.items), [runsQ.data]);
@@ -188,7 +190,16 @@ export function EvalsTab({ agent }: { agent: Agent }) {
                 <tbody>
                   {runs.map((r) => (
                     <tr key={r.id} data-testid={ids.runRow}>
-                      <td style={s.td}>{formatRanAt(r.started_at)}</td>
+                      <td style={s.td}>
+                        <button
+                          type="button"
+                          style={s.openBtn}
+                          aria-label={t("runs.openRun", { time: formatRanAt(r.started_at) })}
+                          onClick={() => setOpened(r)}
+                        >
+                          {formatRanAt(r.started_at)}
+                        </button>
+                      </td>
                       <td style={s.td}>{t("runs.version", { version: r.agent_version })}</td>
                       <td style={s.td}>{t(`runs.status.${r.status}`)}</td>
                       <td style={s.td}>{formatPct(r.metrics.recall)}</td>
@@ -196,7 +207,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
                       <td style={s.td}>{formatPct(r.metrics.citation_accuracy)}</td>
                       <td style={s.td}>
                         {r.counts
-                          ? t("runs.passedValue", { passed: r.counts.cases_passed, total: r.cases_total })
+                          ? t("runs.passedValue", { passed: r.counts.cases_passed, total: r.counts.cases_scored })
                           : t("runs.noValue")}
                       </td>
                       <td style={s.td}>{formatCost(r.cost_usd) ?? t("runs.noValue")}</td>
@@ -208,6 +219,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
           </section>
         </>
       )}
+      {opened && <RunDetailDrawer run={opened} onClose={() => setOpened(null)} />}
     </div>
   );
 }

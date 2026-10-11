@@ -70,6 +70,7 @@
     },
     "version": "v{version}",
     "passedValue": "{passed}/{total}",
-    "noValue": "—"
+    "noValue": "—",
+    "openRun": "Open run details for {time}"
   }
 }

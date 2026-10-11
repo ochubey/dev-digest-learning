@@ -89,6 +89,24 @@ describe("AgentEvalPage", () => {
     expect(within(row).getByText("$0.0123")).toBeInTheDocument();
   });
 
+  it("a failed newest run never becomes latest/previous in the metric cards (AC-59/61)", async () => {
+    const failed = mkRun({
+      id: "r3",
+      status: "failed",
+      agent_version: 3,
+      started_at: "2026-10-09T10:00:00Z",
+      metrics: { recall: null, precision: null, citation_accuracy: null },
+      counts: null,
+    });
+    pages = [{ items: [failed, latest, previous], next_cursor: null }];
+    mount();
+    await screen.findAllByTestId("eval-run-row");
+    const recall = screen.getByTestId("eval-metric-recall");
+    expect(within(recall).getByText("75%")).toBeInTheDocument();
+    expect(within(recall).getByText("▲ 25pt")).toBeInTheDocument();
+    expect(within(screen.getByTestId("eval-metric-passed")).getByText("6/8")).toBeInTheDocument();
+  });
+
   it("25 runs -> 20 + Load more", async () => {
     pages = [
       { items: manyRuns(20), next_cursor: "cur" },

@@ -183,4 +183,38 @@ describe("CompareRunsDialog", () => {
     mount();
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the comparison.");
   });
+
+  it("renders skills added/removed/version-change and strategy lines (AC-69)", async () => {
+    get.mockResolvedValue(
+      cmp({
+        a: mkDetail({
+          ...older,
+          manifest: mkManifest({
+            strategy: "single-pass",
+            skills: ["s-keep", "s-gone"],
+            skill_versions: [
+              { id: "s-keep", name: "SQL rules", version: 1 },
+              { id: "s-gone", name: "Old skill", version: 4 },
+            ],
+          }),
+        }),
+        b: mkDetail({
+          ...newer,
+          manifest: mkManifest({
+            strategy: "map-reduce",
+            skills: ["s-keep", "s-new"],
+            skill_versions: [
+              { id: "s-keep", name: "SQL rules", version: 2 },
+              { id: "s-new", name: "New skill", version: 1 },
+            ],
+          }),
+        }),
+      }),
+    );
+    mount();
+    expect(await screen.findByText("Strategy: single-pass → map-reduce")).toBeInTheDocument();
+    expect(screen.getByText("Skill added: New skill")).toBeInTheDocument();
+    expect(screen.getByText("Skill removed: Old skill")).toBeInTheDocument();
+    expect(screen.getByText("Skill SQL rules: v1 → v2")).toBeInTheDocument();
+  });
 });

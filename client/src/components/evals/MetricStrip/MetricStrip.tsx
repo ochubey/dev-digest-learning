@@ -3,9 +3,8 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import type { EvalSuiteRun } from "@devdigest/shared";
-import { deltaPt, formatPct, nullReason, versionDrift, type EvalMetricKey } from "../helpers";
+import { deltaPt, formatPct, nullReason, passedParts, versionDrift, type EvalMetricKey } from "../helpers";
 import { METRIC_TEST_IDS } from "./constants";
-import { passedParts } from "./helpers";
 import { s } from "./styles";
 
 export interface MetricStripProps {

@@ -7,7 +7,7 @@
     "citationTooltip": "Grounding pass rate: the share of returned findings whose cited lines exist in the diff. It does not check that the citation is correct.",
     "recallTooltip": "Share of must-find cases where a matching finding was returned.",
     "precisionTooltip": "Share of returned findings that matched a must-find case.",
-    "passedTooltip": "Cases that passed out of the cases in the run.",
+    "passedTooltip": "Cases that passed out of the cases scored in the run.",
     "deltaTooltip": "Change in percentage points against the previous finished run.",
     "noValue": "—",
     "noRuns": "No eval runs yet",

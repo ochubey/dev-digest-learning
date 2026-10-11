@@ -4,10 +4,9 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Skeleton } from "@devdigest/ui";
 import type { EvalCaseResult, EvalResultFinding, EvalSuiteRun } from "@devdigest/shared";
-import { sortCases } from "@/components/evals";
 import { useEvalRun } from "@/lib/hooks/evals";
-import { EvalDialog } from "../../../../../_components/EvalDialog";
-import { caseState, formatRanAt } from "../../../../../helpers";
+import { EvalDialog } from "../EvalDialog";
+import { caseState, formatRanAt, sortCases } from "../helpers";
 import { s } from "./styles";
 
 type TFn = ReturnType<typeof useTranslations>;

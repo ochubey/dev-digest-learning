@@ -6,6 +6,28 @@ import type {
   EvalSuiteRunDetail,
 } from "@devdigest/shared";
 
+const RAN_AT = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+/** Human run time, e.g. "Oct 11, 2026, 10:00 AM". Falls back to the raw value if unparsable. */
+export function formatRanAt(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : RAN_AT.format(d);
+}
+
+/** "X/Y" for Cases passed: Y is the scored cases (AC-18/51), null passed when the run has no counts. */
+export function passedParts(run: Pick<EvalSuiteRun, "counts">): { passed: number | null; total: number } {
+  return { passed: run.counts?.cases_passed ?? null, total: run.counts?.cases_scored ?? 0 };
+}
+
+export type CaseState = "pass" | "fail" | "error" | "pending";
+
+/** Display state of one case result. */
+export function caseState(r: Pick<EvalCaseResult, "status" | "pass">): CaseState {
+  if (r.status === "error") return "error";
+  if (r.status === "pending" || r.pass == null) return "pending";
+  return r.pass ? "pass" : "fail";
+}
+
 export { diffWords, type DiffToken } from "@/lib/text-diff";
 
 export type EvalMetricKey = "recall" | "precision" | "citation_accuracy";

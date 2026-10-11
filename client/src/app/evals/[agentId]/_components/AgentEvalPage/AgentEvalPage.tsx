@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, ErrorState, Skeleton } from "@devdigest/ui";
 import type { EvalSuiteRun } from "@devdigest/shared";
-import { MetricStrip, RunEvalControl, ScoringNote } from "@/components/evals";
+import { MetricStrip, RunDetailDrawer, RunEvalControl, ScoringNote, latestFinished, previousFinished } from "@/components/evals";
 import { useAgentEvalCases, useAgentEvalRuns, useEvalOverview } from "@/lib/hooks/evals";
 import { COMPARE_SELECTION_SIZE, EVAL_TEST_IDS } from "../../../constants";
 import { toggleSelection } from "../../../helpers";
 import { CompareRunsDialog } from "./_components/CompareRunsDialog";
-import { RunDetailDrawer } from "./_components/RunDetailDrawer";
 import { RunsTable } from "./_components/RunsTable";
 import { s } from "./styles";
 
@@ -31,6 +30,8 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
   // The page is keyed by agent id, so a different agent starts with a clean selection.
   // Remember the clicked button: some browsers (Safari) do not focus a button on click.
   const compareRef = React.useRef<HTMLElement | null>(null);
+
+  const loaded = React.useMemo(() => runs.data?.pages.flatMap((pg) => pg.items) ?? [], [runs.data]);
 
   if (overview.isLoading) {
     return (
@@ -56,7 +57,12 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
     );
   }
 
-  const items = runs.data?.pages.flatMap((p) => p.items) ?? [];
+  const items = loaded;
+  // Derived from the runs list so a failed newest run never becomes "latest"; the overview
+  // entry is only the fallback while the runs query has no data yet.
+  const finishedOnly = (r: EvalSuiteRun | null | undefined) => (r && latestFinished([r]) ? r : null);
+  const latest = runs.data ? latestFinished(items) : finishedOnly(entry.latest);
+  const previous = runs.data ? previousFinished(items) : finishedOnly(entry.previous);
   const pair = selected
     .map((id) => items.find((r) => r.id === id))
     .filter((r): r is EvalSuiteRun => !!r);
@@ -91,7 +97,7 @@ export function AgentEvalPage({ agentId }: AgentEvalPageProps) {
         </Button>
       </div>
 
-      <MetricStrip latest={entry.latest} previous={entry.previous} agentVersion={entry.version} />
+      <MetricStrip latest={latest} previous={previous} agentVersion={entry.version} />
       <ScoringNote />
       <RunEvalControl
         agentId={agentId}

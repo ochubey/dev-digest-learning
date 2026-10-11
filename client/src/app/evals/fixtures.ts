@@ -12,7 +12,7 @@ export function mkRun(over: Partial<EvalSuiteRun> = {}): EvalSuiteRun {
     cases_total: 8,
     cases_done: 8,
     metrics: { recall: 0.875, precision: 0.5, citation_accuracy: 1 },
-    counts: { cases_passed: 6 } as EvalSuiteRun["counts"],
+    counts: { cases_passed: 6, cases_scored: 8 } as EvalSuiteRun["counts"],
     duration_ms: 1000,
     cost_usd: 0.0123,
     started_at: "2026-10-11T10:00:00Z",

@@ -6,7 +6,7 @@ import { Skeleton } from "@devdigest/ui";
 import type { EvalCaseResult, EvalCompare, EvalSuiteRun } from "@devdigest/shared";
 import { caseChanges, deltaPt, diffWords, formatPct, manifestDiff, orderPair, type CaseChange } from "@/components/evals";
 import { useEvalCompare } from "@/lib/hooks/evals";
-import { EvalDialog } from "../../../../../_components/EvalDialog";
+import { EvalDialog } from "@/components/evals";
 import { EVAL_TEST_IDS } from "../../../../../constants";
 import { caseState, costDelta, formatCost, formatRanAt } from "../../../../../helpers";
 import { chunkDiff } from "./helpers";

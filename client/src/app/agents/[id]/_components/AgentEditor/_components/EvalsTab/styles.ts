@@ -31,5 +31,14 @@ export const s = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: 12.5 } satisfies CSSProperties,
   th: { textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 500, borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
   td: { padding: "6px 8px", borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
+  openBtn: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    font: "inherit",
+    color: "var(--accent)",
+    cursor: "pointer",
+    textDecoration: "underline",
+  } satisfies CSSProperties,
   link: { fontSize: 13, color: "var(--accent)" } satisfies CSSProperties,
 } as const;

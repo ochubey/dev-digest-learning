@@ -3,7 +3,7 @@ import React from "react";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
-import evalsDashboard from "../../../../../../../../messages/en/evalsDashboard.json";
+import evalsDashboard from "../../../../messages/en/evalsDashboard.json";
 import { mkDetail, mkResult, mkRun } from "@/app/evals/fixtures";
 
 const get = vi.fn();
