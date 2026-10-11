@@ -48,12 +48,16 @@ JSON file: what must stay true about how they run **together**, per
    it the metric strip and the run table are empty. CI: `.github/workflows/e2e-web.yml`
    must carry `PROJECT_DOCS_SOURCE=fixture` in its `env:` for flows 09-13. They
    never click `eval-run-button` or start a run, so there is no model call.
-   AC-86 (turn a finding into an eval case from the PR review) is deliberately
-   not covered: in fixture mode the only decided finding (the accepted Stripe
-   key) already has a seeded case, so the capture dialog would show "Already an
-   eval case" instead of the creation form.
-9. **The suite needs a raised API rate limit.** The server's global limit is 120
-   requests/minute per IP; one browser running flows 01-13 exceeds it (the Evals
+9. **Flow 14 (AC-86) depends on the fixture seed too.** In fixture mode the seed
+   marks the Stripe finding (`src/config.ts:12`, PR #482) as accepted and gives
+   Security Reviewer an eval case linked to it. The seeded review has no agent, so
+   the "Turn into eval case" dialog shows the agent picker (AC-9); picking Security
+   Reviewer shows "Already an eval case" instead of Save (AC-10). The flow only
+   opens the dialog, picks the agent and closes it with Escape: it never clicks
+   Save, so nothing is stored and no model call happens. Without
+   `PROJECT_DOCS_SOURCE=fixture` the finding is undecided and the button is disabled.
+10. **The suite needs a raised API rate limit.** The server's global limit is 120
+   requests/minute per IP; one browser running flows 01-14 exceeds it (the Evals
    pages fan out several requests each), and the API answers 429 mid-suite.
    `scripts/e2e.sh` exports `RATE_LIMIT_MAX=5000`; `e2e-web.yml` must set the same
    `env:` on the API step.

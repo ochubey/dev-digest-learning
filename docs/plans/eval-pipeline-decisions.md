@@ -95,6 +95,9 @@ Branch: `l06-evals-ci`, stacked on PR #18 (`feat/pr-brief`).
 
 ## 7. Log of later steps
 
+- 2026-10-11 evening (readiness check against the homework page `TaskL06.html`): added `specs/eval-pipeline.md` (symlink to the numbered spec, the checklist names that path), made the compare dialog show the system prompt diff as lines with context and a collapsed unchanged block (the earlier screenshot did not show the changed prompt), added e2e flow 14 (capture dialog: draft, "Must find", `src/config.ts` line 12, "Already an eval case"), retook `docs/eval-pipeline-compare-real.png` (real runs v3 vs v4), added the recording checklist and submission steps to `docs/eval-pipeline-demo.md`. Full e2e: 14/14 flows; `pnpm verify:l06` OK.
+- Homework page facts: deadline 2026-10-11 23:45; submit a link plus an optional file up to 150 MB (the screencast).
+
 - Full hermetic e2e re-run after the last client commit: 13/13 flows passed.
 - Side effect found and repaired: `scripts/e2e.sh` runs `next dev -p 3100` in the same `client/.next` as a developer's dev web on :3000, which left the user's dev web pointing at the e2e API (:3101). The dev web was restarted with a clean `.next` (recorded in `e2e/INSIGHTS.md`); a separate `distDir` for the e2e web is a possible follow-up.
 - Real-run screenshot of the compare dialog saved as `docs/eval-pipeline-compare-real.png`.
