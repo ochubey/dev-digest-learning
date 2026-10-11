@@ -6,6 +6,7 @@ import { seed, SEED_PROJECT_CONTEXT_RUN_ID, SEED_CONTEXT_PATHS } from '../src/db
 import { RunTrace, EvalSuiteRunDetail } from '@devdigest/shared';
 import {
   SEED_EVAL_CASES,
+  SEED_EVAL_CASES_BY_AGENT,
   SEED_EVAL_PROMPT_V2_SUFFIX,
   SEED_EVAL_RUNS,
   SEED_EVAL_RUN_V1_ID,
@@ -242,6 +243,33 @@ d('demo seed (Testcontainers pg)', () => {
     const orphaned = await pg.handle.db.select().from(t.evalRuns).where(eq(t.evalRuns.suiteRunId, SEED_EVAL_RUN_V1_ID));
     expect(orphaned.filter((r) => r.caseId === null).length).toBe(1);
   });
+
+  it('every built-in agent gets its own seeded cases, and no fixture runs for the new agents', async () => {
+    for (const [name, expected] of Object.entries(SEED_EVAL_CASES_BY_AGENT)) {
+      if (name === 'Security Reviewer') continue;
+      const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, name));
+      const cases = await casesOf(agent!.id);
+      const keys = cases.map((c) => (c.inputMeta as { seed_key: string }).seed_key).sort();
+      expect(keys, name).toEqual(expected.map((c) => c.seed_key).sort());
+      expect(cases.every((c) => (c.inputMeta as { origin: string }).origin === 'seeded'), name).toBe(true);
+      expect(cases.filter((c) => (c.expectedOutput as { kind: string }).kind === 'must_find').length, name).toBe(2);
+      expect(cases.filter((c) => (c.expectedOutput as { kind: string }).kind === 'must_not_flag').length, name).toBe(2);
+      const runs = await pg.handle.db.select().from(t.evalSuiteRuns).where(eq(t.evalSuiteRuns.agentId, agent!.id));
+      expect(runs, name).toEqual([]);
+    }
+  });
+
+  it('a deleted seeded case of another agent is not re-created and a second seed adds none', async () => {
+    const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Performance Reviewer'));
+    const before = await casesOf(agent!.id);
+    const victim = before.find((c) => (c.inputMeta as { seed_key: string }).seed_key === 'perf-sync-read-in-handler')!;
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, victim.id));
+    await seed(pg.handle.db, { demoContext: true });
+    await seed(pg.handle.db, { demoContext: true });
+    expect((await casesOf(agent!.id)).length).toBe(before.length - 1);
+    const [general] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'General Reviewer'));
+    expect((await casesOf(general!.id)).length).toBe(SEED_EVAL_CASES_BY_AGENT['General Reviewer']!.length);
+  });
 });
 
 
@@ -266,6 +294,10 @@ d('demo seed without the fixture docs source (Testcontainers pg)', () => {
     expect(agent!.systemPrompt).toBe(SECURITY_REVIEWER_PROMPT);
     expect((await pg.handle.db.select().from(t.evalCases).where(eq(t.evalCases.ownerId, agent!.id))).length).toBe(SEED_EVAL_CASES.length);
     expect(await pg.handle.db.select().from(t.evalSuiteRuns)).toEqual([]);
+    const [perf] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Performance Reviewer'));
+    expect((await pg.handle.db.select().from(t.evalCases).where(eq(t.evalCases.ownerId, perf!.id))).length).toBe(
+      SEED_EVAL_CASES_BY_AGENT['Performance Reviewer']!.length,
+    );
     expect(await pg.handle.db.select().from(t.agentVersions)).toEqual([]);
     const findings = await pg.handle.db.select().from(t.findings);
     expect(findings.every((f) => f.acceptedAt === null && f.dismissedAt === null)).toBe(true);

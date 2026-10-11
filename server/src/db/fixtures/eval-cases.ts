@@ -210,6 +210,210 @@ export const SEED_EVAL_CASES: SeedEvalCase[] = [
   },
 ];
 
+// ============================================================ cases of the other seeded agents
+
+const GENERAL_CASES: SeedEvalCase[] = [
+  {
+    seed_key: 'general-missing-await-cancel',
+    name: 'Order cancellation update is not awaited',
+    origin: 'seeded',
+    expectation: { kind: 'must_find', file: 'src/services/orders.ts', start_line: 43, end_line: 43 },
+    input_diff: section('src/services/orders.ts', 40, 40, [
+      ' export async function cancelOrder(id: string) {',
+      '   const order = await orders.get(id);',
+      '-  await orders.update(id, { status: "cancelled" });',
+      '+  if (order.status !== "shipped") {',
+      '+    orders.update(id, { status: "cancelled" });',
+      '+  }',
+      '   return order;',
+      ' }',
+    ]),
+  },
+  {
+    seed_key: 'general-average-empty-guard-removed',
+    name: 'Average latency loses its empty-input guard',
+    origin: 'seeded',
+    expectation: { kind: 'must_find', file: 'src/utils/stats.ts', start_line: 9, end_line: 10 },
+    input_diff: section('src/utils/stats.ts', 8, 8, [
+      ' export function averageLatency(samples: number[]): number {',
+      '-  if (samples.length === 0) return 0;',
+      '-  return samples.reduce((sum, ms) => sum + ms, 0) / samples.length;',
+      '+  const total = samples.reduce((sum, ms) => sum + ms, 0);',
+      '+  return total / samples.length;',
+      ' }',
+    ]),
+  },
+  {
+    seed_key: 'general-rename-date-helper',
+    name: 'Rename of a date formatting helper',
+    origin: 'seeded',
+    expectation: { kind: 'must_not_flag', file: 'src/services/notifications.ts', start_line: 5, end_line: 10 },
+    input_diff: section('src/services/notifications.ts', 5, 5, [
+      '-export function fmtDate(d: Date): string {',
+      '+export function formatDate(d: Date): string {',
+      '   return d.toISOString().slice(0, 10);',
+      ' }',
+      ' ',
+      ' export function describe(n: Notification): string {',
+      '-  return `${n.title} (${fmtDate(n.createdAt)})`;',
+      '+  return `${n.title} (${formatDate(n.createdAt)})`;',
+      ' }',
+    ]),
+  },
+  {
+    seed_key: 'general-new-test-for-shipped-order',
+    name: 'Test added for the shipped-order path',
+    origin: 'seeded',
+    expectation: { kind: 'must_not_flag', file: 'test/services/orders.test.ts', start_line: 25, end_line: 28 },
+    input_diff: section('test/services/orders.test.ts', 20, 20, [
+      ' describe("cancelOrder", () => {',
+      '   it("cancels a pending order", async () => {',
+      '     await cancelOrder("o1");',
+      '     expect((await orders.get("o1")).status).toBe("cancelled");',
+      '   });',
+      '+  it("keeps a shipped order untouched", async () => {',
+      '+    await cancelOrder("o2");',
+      '+    expect((await orders.get("o2")).status).toBe("shipped");',
+      '+  });',
+      ' });',
+    ]),
+  },
+];
+
+const PERFORMANCE_CASES: SeedEvalCase[] = [
+  {
+    seed_key: 'perf-n-plus-one-team-report',
+    name: 'Team report queries tasks once per member',
+    origin: 'seeded',
+    expectation: { kind: 'must_find', file: 'src/services/reports.ts', start_line: 33, end_line: 35 },
+    input_diff: section('src/services/reports.ts', 30, 30, [
+      ' export async function buildTeamReport(teamId: string) {',
+      '   const members = await db.select().from(membersTable).where(eq(membersTable.teamId, teamId));',
+      '-  const tasks = await db.select().from(tasksTable).where(inArray(tasksTable.ownerId, members.map((m) => m.id)));',
+      '-  return members.map((m) => ({ ...m, tasks: tasks.filter((t) => t.ownerId === m.id) }));',
+      '+  const report = [];',
+      '+  for (const m of members) {',
+      '+    const tasks = await db.select().from(tasksTable).where(eq(tasksTable.ownerId, m.id));',
+      '+    report.push({ ...m, taskCount: tasks.length });',
+      '+  }',
+      '+  return report;',
+      ' }',
+    ]),
+  },
+  {
+    seed_key: 'perf-sync-read-in-handler',
+    name: 'Export route reads the file synchronously per request',
+    origin: 'seeded',
+    expectation: { kind: 'must_find', file: 'src/api/export.ts', start_line: 16, end_line: 16 },
+    input_diff: section('src/api/export.ts', 14, 14, [
+      ' export async function exportRoute(app: FastifyInstance) {',
+      '   app.get("/export/:id", async (req, reply) => {',
+      '-    const file = await readFile(exportPath(req.params.id), "utf8");',
+      '-    return reply.send(file);',
+      '+    const file = readFileSync(exportPath(req.params.id), "utf8");',
+      '+    const rows = JSON.parse(file) as Row[];',
+      '+    return reply.send(rows.map(toCsvLine).join(","));',
+      '   });',
+      ' }',
+    ]),
+  },
+  {
+    seed_key: 'perf-index-on-owner-column',
+    name: 'Index added for the task owner lookup',
+    origin: 'seeded',
+    expectation: { kind: 'must_not_flag', file: 'src/db/schema/tasks.ts', start_line: 16, end_line: 16 },
+    input_diff: section('src/db/schema/tasks.ts', 12, 12, [
+      '   ownerId: uuid("owner_id").notNull(),',
+      ' },',
+      ' (t) => ({',
+      '   statusIdx: index("tasks_status_idx").on(t.status),',
+      '+  ownerIdx: index("tasks_owner_idx").on(t.ownerId),',
+      ' }),',
+      ' );',
+    ]),
+  },
+  {
+    seed_key: 'perf-boot-time-template-read',
+    name: 'Templates read once when the module loads',
+    origin: 'seeded',
+    expectation: { kind: 'must_not_flag', file: 'src/config/templates.ts', start_line: 4, end_line: 6 },
+    input_diff: section('src/config/templates.ts', 1, 1, [
+      ' import { readFileSync } from "node:fs";',
+      '+import path from "node:path";',
+      ' ',
+      '+const dir = path.join(process.cwd(), "templates");',
+      '+export const welcomeTemplate = readFileSync(path.join(dir, "welcome.html"), "utf8");',
+      '+export const resetTemplate = readFileSync(path.join(dir, "reset.html"), "utf8");',
+    ]),
+  },
+];
+
+const API_CONTRACT_CASES: SeedEvalCase[] = [
+  {
+    seed_key: 'api-renamed-response-field',
+    name: 'Account response renames name to fullName',
+    origin: 'seeded',
+    expectation: { kind: 'must_find', file: 'src/api/accounts.ts', start_line: 32, end_line: 32 },
+    input_diff: section('src/api/accounts.ts', 30, 30, [
+      ' app.get("/accounts/:id", async (req, reply) => {',
+      '   const account = await accounts.get(req.params.id);',
+      '-  return reply.send({ id: account.id, name: account.name, email: account.email });',
+      '+  return reply.send({ id: account.id, fullName: account.name, email: account.email });',
+      ' });',
+    ]),
+  },
+  {
+    seed_key: 'api-error-format-and-status-changed',
+    name: 'Not-found error becomes a plain string with status 400',
+    origin: 'seeded',
+    expectation: { kind: 'must_find', file: 'src/api/projects.ts', start_line: 24, end_line: 24 },
+    input_diff: section('src/api/projects.ts', 21, 21, [
+      ' app.get("/projects/:id", async (req, reply) => {',
+      '   const project = await projects.find(req.params.id);',
+      '   if (!project) {',
+      '-    return reply.code(404).send({ error: { code: "project_not_found", message: "Project not found" } });',
+      '+    return reply.code(400).send("project not found");',
+      '   }',
+      '   return reply.send(project);',
+      ' });',
+    ]),
+  },
+  {
+    seed_key: 'api-additive-response-field',
+    name: 'Account response gains an optional createdAt field',
+    origin: 'seeded',
+    expectation: { kind: 'must_not_flag', file: 'src/api/accounts.ts', start_line: 32, end_line: 32 },
+    input_diff: section('src/api/accounts.ts', 30, 30, [
+      ' app.get("/accounts/:id", async (req, reply) => {',
+      '   const account = await accounts.get(req.params.id);',
+      '-  return reply.send({ id: account.id, name: account.name, email: account.email });',
+      '+  return reply.send({ id: account.id, name: account.name, email: account.email, createdAt: account.createdAt });',
+      ' });',
+    ]),
+  },
+  {
+    seed_key: 'api-test-asserts-error-code',
+    name: 'Test asserts the existing not-found error code',
+    origin: 'seeded',
+    expectation: { kind: 'must_not_flag', file: 'test/api/projects.test.ts', start_line: 10, end_line: 10 },
+    input_diff: section('test/api/projects.test.ts', 8, 8, [
+      ' it("returns 404 for an unknown project", async () => {',
+      '   const res = await app.inject({ method: "GET", url: "/projects/missing" });',
+      '+  expect(res.json().error.code).toBe("project_not_found");',
+      '   expect(res.statusCode).toBe(404);',
+      ' });',
+    ]),
+  },
+];
+
+/** Seeded cases per built-in agent name. Only Security Reviewer also has seeded suite runs. */
+export const SEED_EVAL_CASES_BY_AGENT: Record<string, SeedEvalCase[]> = {
+  'General Reviewer': GENERAL_CASES,
+  'Security Reviewer': SEED_EVAL_CASES,
+  'Performance Reviewer': PERFORMANCE_CASES,
+  'API Contract Reviewer': API_CONTRACT_CASES,
+};
+
 // ============================================================ seeded suite runs (fixture mode)
 
 /** Appended to the Security Reviewer prompt when the fixture bumps it from v1 to v2 (A-3). */

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { EvalExpectation, EvalSuiteRunDetail, EvalCaseMeta } from '@devdigest/shared';
 import {
   SEED_EVAL_CASES,
+  SEED_EVAL_CASES_BY_AGENT,
   SEED_EVAL_PROMPT_V2_SUFFIX,
   SEED_EVAL_RUNS,
   SEED_EVAL_RUN_V1_ID,
@@ -83,6 +84,49 @@ describe('seeded eval cases', () => {
       expect(EvalCaseMeta.safeParse({ origin: c.origin, seed_key: c.seed_key }).success).toBe(true);
     }
   });
+});
+
+describe('seeded eval cases per agent', () => {
+  const entries = Object.entries(SEED_EVAL_CASES_BY_AGENT);
+  const all = entries.flatMap(([, cases]) => cases);
+
+  it('covers the four built-in agents and keeps SEED_EVAL_CASES as the Security Reviewer set', () => {
+    expect(Object.keys(SEED_EVAL_CASES_BY_AGENT).sort()).toEqual([
+      'API Contract Reviewer',
+      'General Reviewer',
+      'Performance Reviewer',
+      'Security Reviewer',
+    ]);
+    expect(SEED_EVAL_CASES_BY_AGENT['Security Reviewer']).toBe(SEED_EVAL_CASES);
+    expect(SEED_EVAL_CASES.length).toBe(9);
+  });
+
+  it('seed keys and names are unique across all agents', () => {
+    expect(new Set(all.map((c) => c.seed_key)).size).toBe(all.length);
+    for (const [agent, cases] of entries) expect(new Set(cases.map((c) => c.name)).size, agent).toBe(cases.length);
+  });
+
+  for (const [agent, cases] of entries) {
+    it(`${agent}: at least 4 cases, 2 of each kind, valid fragments, no explanatory comments`, () => {
+      expect(cases.length).toBeGreaterThanOrEqual(4);
+      expect(cases.filter((c) => c.expectation.kind === 'must_find').length).toBeGreaterThanOrEqual(2);
+      expect(cases.filter((c) => c.expectation.kind === 'must_not_flag').length).toBeGreaterThanOrEqual(2);
+      for (const c of cases) {
+        const e = EvalExpectation.parse(c.expectation);
+        expect(c.seed_key, c.seed_key).toMatch(/^[a-z0-9-]+$/);
+        expect(c.name.length, c.seed_key).toBeLessThanOrEqual(EVAL_CASE_NAME_MAX);
+        if (!c.derived_from) expect(c.origin, c.seed_key).toBe('seeded');
+        expect(parseUnifiedDiff(c.input_diff).files.map((f) => f.path), c.seed_key).toEqual([e.file]);
+        expect(inspectFragment(c.input_diff, e.file, e.start_line, e.end_line), c.seed_key).toBe('ok');
+        expect(validateCaseInput({ name: c.name, expectation: e, input_diff: c.input_diff }), c.seed_key).toEqual([]);
+        const added = c.input_diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
+        for (const l of added) {
+          expect(l, c.seed_key).not.toMatch(/\/\/|\/\*|^\+\s*#/);
+          expect(l, c.seed_key).not.toMatch(/\b(TODO|FIXME|BUG|VULNERABLE|HACK)\b/i);
+        }
+      }
+    });
+  }
 });
 
 describe('seeded eval runs', () => {

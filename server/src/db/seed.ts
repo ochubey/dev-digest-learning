@@ -14,7 +14,8 @@ import type { RunTrace } from '@devdigest/shared';
 import { TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 import { PROJECT_DOCS_FIXTURE, PROJECT_DOCS_FIXTURE_SHA } from './fixtures/project-docs.js';
 import {
-  SEED_EVAL_CASES,
+  type SeedEvalCase,
+  SEED_EVAL_CASES_BY_AGENT,
   SEED_EVAL_PROMPT_V2_SUFFIX,
   SEED_EVAL_RUNS,
   SEED_EVAL_RUN_V1_ID,
@@ -509,9 +510,15 @@ Flag route/handler signature changes that remove or rename a required parameter,
     if (pr482) {
       await seedProjectContextRun(db, { workspaceId, prId: pr482.id, prNumber: pr482.number, agent: securityAgent });
     }
-    await seedEvalCases(db, { workspaceId, agentId: securityAgent.id, prId: pr482?.id ?? null });
-    if (opts.demoContext) await seedEvalFixtureRuns(db, { workspaceId, agentId: securityAgent.id });
   }
+  for (const [agentName, cases] of Object.entries(SEED_EVAL_CASES_BY_AGENT)) {
+    const [agent] = await db
+      .select({ id: t.agents.id })
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, agentName)));
+    if (agent) await seedEvalCases(db, { workspaceId, agentId: agent.id, prId: pr482?.id ?? null }, cases);
+  }
+  if (securityAgent && opts.demoContext) await seedEvalFixtureRuns(db, { workspaceId, agentId: securityAgent.id });
   if (opts.demoContext) await applyFixtureDecisions(db);
 
   return { workspaceId, userId };
@@ -545,13 +552,14 @@ export async function applyFixtureDecisions(db: Db): Promise<void> {
 }
 
 /**
- * Seeded eval cases of the Security Reviewer. Inserted only while the agent has no seeded-origin
+ * Seeded eval cases of one built-in agent. Inserted only while the agent has no seeded-origin
  * case (origin "seeded" or a seed_key), so a case the user deleted is never re-created (OQ-10)
  * and a second run adds nothing. Derived cases link to the seeded sample findings when present.
  */
 async function seedEvalCases(
   db: Db,
   a: { workspaceId: string; agentId: string; prId: string | null },
+  cases: SeedEvalCase[],
 ): Promise<void> {
   const present = await db
     .select({ id: t.evalCases.id })
@@ -567,7 +575,7 @@ async function seedEvalCases(
     .limit(1);
   if (present.length > 0) return;
 
-  for (const c of SEED_EVAL_CASES) {
+  for (const c of cases) {
     const sourceFindingId = c.derived_from ? await findSeedFinding(db, c.derived_from.file, c.derived_from.title) : undefined;
     await db
       .insert(t.evalCases)
