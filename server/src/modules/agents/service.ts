@@ -10,6 +10,7 @@ import type {
 } from '@devdigest/shared';
 import { AgentsRepository } from './repository.js';
 import { toAgentDto, toAgentVersionDto } from './helpers.js';
+import { EvalsRepository } from '../evals/repository.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -68,9 +69,12 @@ export class AgentsService {
     return toAgentDto(row, counts.get(id) ?? 0);
   }
 
-  /** Delete an agent (and its versions/skill-links, via cascade). */
+  /**
+   * Delete an agent (and its versions/skill-links, via cascade). Its eval cases (owned by
+   * id, no FK) are removed in the same transaction; eval runs cascade through the agent FK.
+   */
   async delete(workspaceId: string, id: string): Promise<boolean> {
-    return this.repo.deleteById(workspaceId, id);
+    return this.repo.deleteById(workspaceId, id, (tx) => new EvalsRepository(tx).deleteForAgent(id));
   }
 
   async create(workspaceId: string, input: CreateAgentInput, userId?: string): Promise<Agent> {

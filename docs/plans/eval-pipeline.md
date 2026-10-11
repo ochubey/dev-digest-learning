@@ -322,7 +322,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
 - [x] **T9** `finalize.ts` and `log-lines.ts`. -> AC-38, AC-48 -> `server/test/eval-finalize.test.ts > all ok -> completed; some error -> completed_with_errors; all error -> failed, metrics null; cost null if any case null; durations summed`; `server/test/eval-log-lines.test.ts > start/end/error formats; no fragment parameter exists`
 
 ### P4: Runner, repository, service, routes (after P2 + P3; fake LLMProvider only)
-- [ ] **T10** `manifest.ts` and `runner.ts`. Add the test helper `server/test/helpers/recording-llm.ts`, a provider that records requests and returns scripted findings, with a delay and throw-per-case options. -> AC-33, AC-34, AC-35, AC-36, AC-37, AC-39, AC-40, AC-48 -> `server/test/eval-runner.test.ts`:
+- [x] **T10** `manifest.ts` and `runner.ts`. Add the test helper `server/test/helpers/recording-llm.ts`, a provider that records requests and returns scripted findings, with a delay and throw-per-case options. -> AC-33, AC-34, AC-35, AC-36, AC-37, AC-39, AC-40, AC-48 -> `server/test/eval-runner.test.ts`:
   - `> messages contain fragment + system prompt; no PR description/intent/repo map/callers/project context/memory sections; snapshot of messages for fixture case`
   - `> sentinel name/notes/expectation never in any message`
   - `> two manifests, same cases -> user-message content byte-identical`
@@ -331,8 +331,8 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> max concurrent calls == 3`
   - `> fake timers: 120 s -> error "timeout"`
   - `> captured log lines contain no fragment sentinel`
-- [ ] **T11** `repository.ts`, plus the in-memory `server/test/helpers/fake-eval-store.ts` (repository prototype spies, the project-context-routes pattern). -> AC-79, AC-80 -> covered by T12/T13.
-- [ ] **T12** `service.ts`, `routes.ts`, and registration in `modules/index.ts`. -> AC-3, AC-8, AC-10, AC-11, AC-14, AC-32, AC-41, AC-42, AC-43, AC-44, AC-45, AC-79, AC-80, AC-81 -> `server/test/evals-routes.test.ts` (`db: {} as Db`, fake store, recording LLM override):
+- [x] **T11** `repository.ts`, plus the in-memory `server/test/helpers/fake-eval-store.ts` (repository prototype spies, the project-context-routes pattern). -> AC-79, AC-80 -> covered by T12/T13.
+- [x] **T12** `service.ts`, `routes.ts`, and registration in `modules/index.ts`. -> AC-3, AC-8, AC-10, AC-11, AC-14, AC-32, AC-41, AC-42, AC-43, AC-44, AC-45, AC-79, AC-80, AC-81 -> `server/test/evals-routes.test.ts` (`db: {} as Db`, fake store, recording LLM override):
   - `> draft writes nothing (store write spies 0)`
   - `> draft 422 not-in-diff message`
   - `> create invalid -> 400 per reason, row count unchanged`
@@ -347,8 +347,8 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> unknown uuid -> 404; non-uuid -> 422`
   - `> compare runs of different agents -> 400`
   - `> each endpoint response parses against its contract`
-- [ ] **T13** Boot reaper in `app.ts` and agent-delete cleanup in `AgentsService.delete`. -> AC-22, AC-47 -> covered by T14.
-- [ ] **T14** DB integration tests in `server/test/evals.it.test.ts` (testcontainers, recording LLM). -> AC-8, AC-12, AC-20, AC-22, AC-29, AC-33, AC-37, AC-38, AC-46, AC-47 ->
+- [x] **T13** Boot reaper in `app.ts` and agent-delete cleanup in `AgentsService.delete`. -> AC-22, AC-47 -> covered by T14.
+- [x] **T14** DB integration tests in `server/test/evals.it.test.ts` (testcontainers, recording LLM). -> AC-8, AC-12, AC-20, AC-22, AC-29, AC-33, AC-37, AC-38, AC-46, AC-47 ->
   - `> create stores row + meta (source finding, PR, decision)`
   - `> delete source PR, run still executes the case`
   - `> delete case: past run results/metrics unchanged (case_id null, snapshot kept)`

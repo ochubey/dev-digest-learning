@@ -73,13 +73,22 @@ export class AgentsRepository {
 
   /** Delete an agent (scoped to workspace). Versions/skill-links cascade;
    *  agent_runs keep their history with agent_id set null. Returns false if
-   *  no such agent existed in the workspace. */
-  async deleteById(workspaceId: string, id: string): Promise<boolean> {
-    const rows = await this.db
-      .delete(t.agents)
-      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
-      .returning({ id: t.agents.id });
-    return rows.length > 0;
+   *  no such agent existed in the workspace. `alsoDelete` runs in the same
+   *  transaction, only when the agent row was deleted (used for cross-module
+   *  cleanup of rows that reference the agent without a foreign key). */
+  async deleteById(
+    workspaceId: string,
+    id: string,
+    alsoDelete?: (tx: Db) => Promise<void>,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .delete(t.agents)
+        .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
+        .returning({ id: t.agents.id });
+      if (rows.length > 0) await alsoDelete?.(tx as unknown as Db);
+      return rows.length > 0;
+    });
   }
 
   /** Insert an agent AND record version 1 in agent_versions (immutable snapshot). */
