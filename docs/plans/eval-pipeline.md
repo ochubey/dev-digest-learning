@@ -297,7 +297,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
 - [x] **T4** Add `agents/helpers.ts#versionConfigOf(row, skillIds)`. `snapshotVersion` uses it (no behaviour change). -> AC-33 -> `server/test/eval-manifest.test.ts > versionConfigOf equals the snapshot shape` (plus the existing `agents-versions.it.test.ts` stays green).
 
 ### P3: Pure scoring and helpers (after P1; parallel with P2)
-- [ ] **T5** `matching.ts` and `scoring.ts`. -> AC-23, AC-24, AC-25, AC-26, AC-27, AC-28, AC-29, AC-30 -> `server/test/eval-scoring.test.ts`:
+- [x] **T5** `matching.ts` and `scoring.ts`. -> AC-23, AC-24, AC-25, AC-26, AC-27, AC-28, AC-29, AC-30 -> `server/test/eval-scoring.test.ts`:
   - `> match table: 10–12 vs 12–15 match; 10–11 vs 12–15 no; reversed range matches; other file no; ./src/a.ts == src/a.ts; src/A.ts != src/a.ts`
   - `> must_find pass with 1 and 2 matches, fail with 0; must_not_flag inverse`
   - `> recall 3/4 = 0.75; double match counts once; zero must_find -> null`
@@ -307,8 +307,8 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> metrics recomputable from counts`
   - `> case B on same file/overlap not hit by case A findings`
   - `> spy provider passed alongside: zero calls`
-- [ ] **T6** Purity guard. -> AC-23 -> `server/test/eval-scoring-purity.test.ts > import graph of scoring.ts (recursive, relative) contains no reviewer-core/src/llm, adapters/llm, @devdigest/reviewer-core barrel, openai, @anthropic-ai/sdk; only type imports from @devdigest/shared`
-- [ ] **T7** `fragment.ts` and `draft.ts`. -> AC-4, AC-5, AC-11, AC-6 (default name) -> `server/test/eval-fragment.test.ts`:
+- [x] **T6** Purity guard. -> AC-23 -> `server/test/eval-scoring-purity.test.ts > import graph of scoring.ts (recursive, relative) contains no reviewer-core/src/llm, adapters/llm, @devdigest/reviewer-core barrel, openai, @anthropic-ai/sdk; only type imports from @devdigest/shared`
+- [x] **T7** `fragment.ts` and `draft.ts`. -> AC-4, AC-5, AC-11, AC-6 (default name) -> `server/test/eval-fragment.test.ts`:
   - `> two-hunk file, finding in 2nd hunk -> exactly that hunk with original @@ header; reparse yields same new-side numbers`
   - `> range spanning two hunks -> both`
   - `> no intersecting hunk -> not_in_diff`
@@ -318,8 +318,8 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
   - `> accepted -> must_find, dismissed -> must_not_flag; file/start/end copied`
   - `> name slug <= 80 chars`
   - `> refusal message text`
-- [ ] **T8** `validate.ts`. -> AC-14 -> `server/test/eval-validate.test.ts > empty name / bad kind / start<1 / end<start / empty fragment / unparsable / file absent / range outside hunks -> one reason each`
-- [ ] **T9** `finalize.ts` and `log-lines.ts`. -> AC-38, AC-48 -> `server/test/eval-finalize.test.ts > all ok -> completed; some error -> completed_with_errors; all error -> failed, metrics null; cost null if any case null; durations summed`; `server/test/eval-log-lines.test.ts > start/end/error formats; no fragment parameter exists`
+- [x] **T8** `validate.ts`. -> AC-14 -> `server/test/eval-validate.test.ts > empty name / bad kind / start<1 / end<start / empty fragment / unparsable / file absent / range outside hunks -> one reason each`
+- [x] **T9** `finalize.ts` and `log-lines.ts`. -> AC-38, AC-48 -> `server/test/eval-finalize.test.ts > all ok -> completed; some error -> completed_with_errors; all error -> failed, metrics null; cost null if any case null; durations summed`; `server/test/eval-log-lines.test.ts > start/end/error formats; no fragment parameter exists`
 
 ### P4: Runner, repository, service, routes (after P2 + P3; fake LLMProvider only)
 - [ ] **T10** `manifest.ts` and `runner.ts`. Add the test helper `server/test/helpers/recording-llm.ts`, a provider that records requests and returns scripted findings, with a delay and throw-per-case options. -> AC-33, AC-34, AC-35, AC-36, AC-37, AC-39, AC-40, AC-48 -> `server/test/eval-runner.test.ts`:
