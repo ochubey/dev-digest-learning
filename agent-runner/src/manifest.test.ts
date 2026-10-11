@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadManifest, findManifestPath, loadAgentManifest } from './manifest.js';
@@ -73,5 +73,25 @@ ci_fail_on: "sometimes"
     writeFileSync(path.join(dir, 'agents', 'broken.yaml'), 'name: "unterminated\n  bad: [1, 2\n');
     const manifestPath = path.join(dir, 'agents', 'broken.yaml');
     expect(() => loadAgentManifest(manifestPath)).toThrow(RunnerError);
+  });
+});
+
+describe('server-generated manifest fixture (AC-14)', () => {
+  it('AC-14: loads the server-generated manifest fixture', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'devdigest-runner-fixture-'));
+    try {
+      mkdirSync(path.join(dir, 'agents'), { recursive: true });
+      const fixture = readFileSync(
+        path.resolve(import.meta.dirname, '../../server/test/fixtures/ci/exported-manifest.yaml'),
+        'utf8',
+      );
+      writeFileSync(path.join(dir, 'agents', 'fixture-agent.yaml'), fixture);
+      const manifest = loadManifest(dir);
+      expect(manifest.provider).toBe('openrouter');
+      expect(manifest.version).toBe(3);
+      expect(manifest.skills).toEqual(['secret-gate', 'secret-gate-2']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

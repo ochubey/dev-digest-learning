@@ -83,7 +83,7 @@ export default async function ciRoutes(appBase: FastifyInstance) {
   // AC-57: no payload is accepted; any body answers 422.
   app.post(
     '/ci/sync',
-    { schema: { body: z.object({}).strict().optional(), response: { 200: CiSyncResult } } },
+    { schema: { body: z.object({}).strict().nullish(), response: { 200: CiSyncResult } } },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return serviceFor(req).sync(workspaceId);
