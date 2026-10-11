@@ -3,9 +3,14 @@ import type React from "react";
 export const s: Record<string, React.CSSProperties> = {
   section: { display: "flex", flexDirection: "column", gap: 8 },
   h3: { margin: 0, fontSize: 14, fontWeight: 600 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { textAlign: "left", padding: "6px 8px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", fontWeight: 500 },
-  td: { padding: "6px 8px", borderBottom: "1px solid var(--border)" },
+  cards: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 },
+  card: { display: "flex", flexDirection: "column", gap: 6, padding: 12, border: "1px solid var(--border)", borderRadius: 8, minWidth: 0 },
+  cardLabel: { fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)" },
+  cardValues: { display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" },
+  oldValue: { fontSize: 13, color: "var(--text-muted)" },
+  arrow: { fontSize: 13, color: "var(--text-muted)" },
+  newValue: { fontSize: 22, fontWeight: 600, lineHeight: 1.1 },
+  delta: { fontSize: 12, fontWeight: 500, color: "var(--text-muted)" },
   prompt: {
     margin: 0,
     padding: 8,

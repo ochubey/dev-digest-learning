@@ -50,50 +50,24 @@ function CompareBody({ t, data }: { t: TFn; data: EvalCompare }) {
   const [a, b] = orderPair(data.a, data.b);
   const changes = caseChanges(a, b);
   const diff = manifestDiff(a.manifest, b.manifest);
-  const metricRows: { key: string; label: string; av: string; bv: string; delta: string | null }[] = [
-    { key: "recall", label: t("compare.recall"), av: formatPct(a.metrics.recall), bv: formatPct(b.metrics.recall), delta: deltaPt(b.metrics.recall, a.metrics.recall) },
-    { key: "precision", label: t("compare.precision"), av: formatPct(a.metrics.precision), bv: formatPct(b.metrics.precision), delta: deltaPt(b.metrics.precision, a.metrics.precision) },
-    { key: "citation", label: t("compare.citation"), av: formatPct(a.metrics.citation_accuracy), bv: formatPct(b.metrics.citation_accuracy), delta: deltaPt(b.metrics.citation_accuracy, a.metrics.citation_accuracy) },
-    { key: "cost", label: t("compare.cost"), av: formatCost(a.cost_usd), bv: formatCost(b.cost_usd), delta: costDelta(a.cost_usd, b.cost_usd) },
+  const metricRows: MetricCardProps[] = [
+    { id: "recall", label: t("compare.recall"), oldValue: formatPct(a.metrics.recall), newValue: formatPct(b.metrics.recall), delta: deltaPt(b.metrics.recall, a.metrics.recall), color: "var(--accent)" },
+    { id: "precision", label: t("compare.precision"), oldValue: formatPct(a.metrics.precision), newValue: formatPct(b.metrics.precision), delta: deltaPt(b.metrics.precision, a.metrics.precision), color: "var(--ok)" },
+    { id: "citation", label: t("compare.citation"), oldValue: formatPct(a.metrics.citation_accuracy), newValue: formatPct(b.metrics.citation_accuracy), delta: deltaPt(b.metrics.citation_accuracy, a.metrics.citation_accuracy), color: "var(--warn)" },
+    { id: "cost", label: t("compare.cost"), oldValue: formatCost(a.cost_usd), newValue: formatCost(b.cost_usd), delta: costDelta(a.cost_usd, b.cost_usd), color: "var(--text)" },
   ];
   const noValue = t("common.noValue");
   const otherCount = diff.fields.length + diff.skillsAdded.length + diff.skillsRemoved.length + diff.skillVersionChanges.length;
 
   return (
     <>
+      <p style={s.muted}>{t("compare.subtitle", { count: b.counts?.cases_scored ?? b.results.length })}</p>
       <section style={s.section}>
-        <table style={s.table}>
-          <thead>
-            <tr>
-              <th style={s.th} scope="col">
-                {t("compare.metric")}
-              </th>
-              <th style={s.th} scope="col">
-                {t("compare.colA", { version: a.agent_version })}
-              </th>
-              <th style={s.th} scope="col">
-                {t("compare.colB", { version: b.agent_version })}
-              </th>
-              <th style={s.th} scope="col">
-                {t("compare.colDelta")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {metricRows.map((m) => (
-              <tr key={m.key}>
-                <th style={s.td} scope="row">
-                  {m.label}
-                </th>
-                <td style={s.td}>{m.av}</td>
-                <td style={s.td}>{m.bv}</td>
-                <td style={s.td} data-testid={EVAL_TEST_IDS.compareDelta}>
-                  {m.delta ?? noValue}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={s.cards}>
+          {metricRows.map((m) => (
+            <MetricCard key={m.id} {...m} noValue={noValue} />
+          ))}
+        </div>
         <p style={s.muted}>
           {t("compare.runA", { version: a.agent_version, time: formatRanAt(a.started_at) })} ·{" "}
           {t("compare.runB", { version: b.agent_version, time: formatRanAt(b.started_at) })}
@@ -146,6 +120,37 @@ function CompareBody({ t, data }: { t: TFn; data: EvalCompare }) {
         <NameGroup label={t("compare.onlyBHeading")} items={changes.onlyB} />
       </section>
     </>
+  );
+}
+
+interface MetricCardProps {
+  id: string;
+  label: string;
+  oldValue: string;
+  newValue: string;
+  delta: string | null;
+  color: string;
+  noValue?: string;
+}
+
+/** One metric: muted old value, arrow, large coloured new value, delta text (direction is in the ▲/▼ text, not colour). */
+function MetricCard({ id, label, oldValue, newValue, delta, color, noValue }: MetricCardProps) {
+  return (
+    <div style={s.card} data-testid={`eval-compare-card-${id}`}>
+      <span style={s.cardLabel}>{label}</span>
+      <div style={s.cardValues}>
+        <span style={s.oldValue}>{oldValue}</span>
+        <span style={s.arrow} aria-hidden="true">
+          →
+        </span>
+        <span style={{ ...s.newValue, color }} data-testid={`eval-compare-new-${id}`}>
+          {newValue}
+        </span>
+      </div>
+      <span style={s.delta} data-testid={EVAL_TEST_IDS.compareDelta}>
+        {delta ?? noValue}
+      </span>
+    </div>
   );
 }
 

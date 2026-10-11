@@ -51,24 +51,45 @@ describe("CompareRunsDialog", () => {
     mount([newer, older]);
     expect(screen.getByRole("dialog", { name: "Compare runs · v1 → v2" })).toBeInTheDocument();
     expect(screen.getByTestId("eval-compare-dialog")).toBeInTheDocument();
-    await screen.findByText("Metric");
+    await screen.findByTestId("eval-compare-card-recall");
     expect(get).toHaveBeenCalledWith(expect.stringContaining("a=old&b=new"));
-    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers.slice(1, 3)).toEqual(["A · v1", "B · v2"]);
+    expect(screen.getByText("Old prompt vs new — metric deltas and prompt diff on the 8-case set")).toBeInTheDocument();
+    expect(screen.getByText(/A · v1 · /)).toBeInTheDocument();
+    expect(screen.getByText(/B · v2 · /)).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
-  it('recall/precision/citation/cost cells A, B, delta with ▲/▼, "—" for null', async () => {
+  it("subtitle is plural-aware (1 case)", async () => {
+    get.mockResolvedValue(cmp({ b: mkDetail({ ...newer, results: [], counts: { cases_passed: 1, cases_scored: 1 } as never }) }));
+    mount();
+    expect(await screen.findByText("Old prompt vs new — metric deltas and prompt diff on the 1-case set")).toBeInTheDocument();
+  });
+
+  it('recall/precision/citation/cost cards: old, new, delta with ▲/▼, "—" for null', async () => {
     get.mockResolvedValue(cmp());
     mount();
-    await screen.findByText("Metric");
+    await screen.findByTestId("eval-compare-card-recall");
     const deltas = screen.getAllByTestId("eval-compare-delta").map((d) => d.textContent);
     expect(deltas).toEqual(["▲ 25pt", "▼ 25pt", "—", "▲ $0.0100"]);
-    const recall = screen.getByRole("row", { name: /Recall/ });
-    expect(within(recall).getByText("50%")).toBeInTheDocument();
-    expect(within(recall).getByText("75%")).toBeInTheDocument();
-    const citation = screen.getByRole("row", { name: /Citation accuracy/ });
-    expect(within(citation).getByText("100%")).toBeInTheDocument();
-    expect(within(citation).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    const recall = within(screen.getByTestId("eval-compare-card-recall"));
+    expect(recall.getByText("Recall")).toBeInTheDocument();
+    expect(recall.getByText("50%")).toBeInTheDocument();
+    expect(recall.getByText("75%")).toBeInTheDocument();
+    const citation = within(screen.getByTestId("eval-compare-card-citation"));
+    expect(citation.getByText("Citation")).toBeInTheDocument();
+    expect(citation.getByText("100%")).toBeInTheDocument();
+    expect(citation.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(within(screen.getByTestId("eval-compare-card-precision")).getByText("Precision")).toBeInTheDocument();
+    expect(within(screen.getByTestId("eval-compare-card-cost")).getByText("Cost")).toBeInTheDocument();
+  });
+
+  it("new value is coloured per metric", async () => {
+    get.mockResolvedValue(cmp());
+    mount();
+    const val = async (k: string) => (await screen.findByTestId(`eval-compare-new-${k}`)).style.color;
+    expect(await val("recall")).toBe("var(--accent)");
+    expect(await val("precision")).toBe("var(--ok)");
+    expect(await val("citation")).toBe("var(--warn)");
   });
 
   it("prompt diff: removed with strikethrough, added with underline, \"System prompt unchanged\" when equal; model line", async () => {
