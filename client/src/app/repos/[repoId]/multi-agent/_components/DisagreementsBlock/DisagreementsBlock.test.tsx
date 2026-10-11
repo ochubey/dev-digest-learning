@@ -70,7 +70,7 @@ describe("DisagreementsBlock", () => {
 
   it("switch toggles all-with-takes vs conflicts only", () => {
     renderBlock(groups, cols("done", "done"));
-    const sw = screen.getByRole("switch");
+    const sw = screen.getByRole("switch", { name: "Show only conflicts" });
     expect(screen.getByText("Show only conflicts")).toBeInTheDocument();
     expect(sw).toHaveAttribute("aria-checked", "false");
     expect(screen.getByText("Unbounded query")).toBeInTheDocument();

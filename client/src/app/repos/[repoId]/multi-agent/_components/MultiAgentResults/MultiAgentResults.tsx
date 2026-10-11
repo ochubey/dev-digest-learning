@@ -89,7 +89,7 @@ export function MultiAgentResults({ repoId, id }: { repoId: string; id: string }
         <div style={s.spacer}>
           <div style={s.switchWrap} role="group">
             {VIEWS.map((v) => (
-              <Button key={v} size="sm" kind="tertiary" active={view === v} onClick={() => setView(v)}>
+              <Button key={v} size="sm" kind="tertiary" active={view === v} aria-pressed={view === v} onClick={() => setView(v)}>
                 {viewLabel[v]}
               </Button>
             ))}
@@ -118,23 +118,29 @@ export function MultiAgentResults({ repoId, id }: { repoId: string; id: string }
 
       {columns.length === 0 ? (
         <EmptyState icon="Users" title={t("results.noColumns")} />
-      ) : view === "tabs" ? (
-        <AgentTabsView
-          columns={columns}
-          prId={data.pr_id}
-          repoFullName={activeRepo?.full_name ?? null}
-          headSha={pr?.head_sha ?? null}
-          onOpenTrace={openTrace}
-        />
       ) : (
-        <div style={s.body}>
-          <div style={columnsGrid(columns.length)}>
-            {columns.map((c) => (
-              <AgentColumnCard key={c.run_id} column={c} alsoFlagged={flagged} onOpenTrace={openTrace} />
-            ))}
+        <>
+          {view === "tabs" ? (
+            <AgentTabsView
+              columns={columns}
+              prId={data.pr_id}
+              repoFullName={activeRepo?.full_name ?? null}
+              headSha={pr?.head_sha ?? null}
+              onOpenTrace={openTrace}
+            />
+          ) : (
+            <div style={{ ...s.body, paddingBottom: 0 }}>
+              <div style={columnsGrid(columns.length)}>
+                {columns.map((c) => (
+                  <AgentColumnCard key={c.run_id} column={c} alsoFlagged={flagged} onOpenTrace={openTrace} />
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ padding: "0 28px 40px" }}>
+            <DisagreementsBlock groups={data.groups} columns={columns} />
           </div>
-          <DisagreementsBlock groups={data.groups} columns={columns} />
-        </div>
+        </>
       )}
 
       {trace && (

@@ -117,6 +117,9 @@ describe("MultiAgentResults", () => {
     renderResults();
     expect(screen.getAllByRole("tab")).toHaveLength(3);
     expect(screen.queryAllByTestId("agent-column")).toHaveLength(0);
+    expect(screen.getByText("Where agents disagree")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tabs" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Columns" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("loading -> skeleton; 404 -> \"Multi-agent run not found\" + link; 500 -> error with Retry", () => {

@@ -24,10 +24,10 @@ export function DisagreementsBlock({ groups, columns }: DisagreementsBlockProps)
     <section style={s.root}>
       <div style={s.head}>
         <h2 style={s.title}>{t("disagreements.title")}</h2>
-        <span style={s.switchLabel}>
+        <label style={s.switchLabel}>
           <Toggle on={onlyConflicts} onChange={setOnlyConflicts} size={16} />
           <span>{t("disagreements.onlyConflicts")}</span>
-        </span>
+        </label>
       </div>
 
       {needTwo ? (
