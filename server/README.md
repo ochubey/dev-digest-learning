@@ -366,6 +366,28 @@ finished runs with fixed ids and fixed case results: v1 recall 3/5, precision 3/
 recall 4/5, precision 4/6; one case regressed and two fixed, so compare shows every group.
 No model is called to produce them.
 
+## CI export
+
+Exports a tuned agent to a repository's GitHub Actions and pulls the results back (SPEC-05). Module: `src/modules/ci/`; GitHub Actions reads: `src/adapters/github-actions/octokit.ts`.
+
+**Build the runner first.** The export reads the bundled runner from `agent-runner/dist/index.js` (`pnpm build` in `agent-runner/`). When it is missing, preview and export answer 400 `ci_runner_missing`.
+
+| Route | Result |
+|---|---|
+| `POST /agents/:id/export-ci/preview` | Bundle preview (the runner entry has no contents, only `size_bytes`) |
+| `POST /agents/:id/export-ci` (10 per minute) | `action: open_pr` commits to branch `devdigest/ci` and opens or reuses the PR; `action: files` returns `zip_base64` with no GitHub call |
+| `GET /agents/:id/ci` | Installations (with `config_changed`, `last_run`) and the 20 newest CI runs |
+| `GET /ci/runs` | The 100 newest CI runs of the workspace |
+| `POST /ci/sync` | Pulls and ingests new Actions runs; takes no body (any payload is 422) |
+
+No route accepts an artifact body. Results enter only through `sync`, which lists runs of `devdigest-review.yml` with the studio token, downloads each `devdigest-result` artifact and checks the archive (1 MB, one entry named `devdigest-result.json`, 64 KB JSON), the schema, the run's commit SHA, the repository id and the PR number. A rejected or missing result is stored as a `failed` run with a reason. A sync reads at most 30 runs per installation.
+
+Error codes: `ci_provider_unsupported`, `ci_repo_not_connected`, `ci_triggers_invalid`, `ci_runner_missing` (400/404); `ci_repo_taken`, `ci_slug_changed` (409); `ci_workflow_unsafe` (400, `details.rule`); `github_workflow_scope_missing`, `github_write_denied` (403); `github_error` (502). Sync reports `github_actions_read_denied` per repository.
+
+Studio token (`GITHUB_TOKEN`): Contents write, Pull requests write and Workflows write (`workflow` scope on a classic token) to open the PR; Actions read (or `repo` on a classic token) to sync. The zip path needs no GitHub access.
+
+The generated workflow is a data contract checked by `workflow-safety.ts` (also applied to user edits): permissions exactly `contents: read` + `pull-requests: write`, `pull_request` only, fork guard, base-SHA checkout without persisted credentials, actions pinned to full SHAs, no `${{ }}` in `run:`, `OPENROUTER_API_KEY` only from `secrets`. Pinned SHAs live in `constants.ts`.
+
 ## Testing
 
 The suite splits by filename — `*.it.test.ts` is DB-backed, everything else is
