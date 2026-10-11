@@ -29,6 +29,19 @@ import {
   PROJECT_CONTEXT_MAX_DISCOVERED,
   PROJECT_CONTEXT_SOFT_CAP_TOKENS,
   PROJECT_CONTEXT_HARD_CEILING_TOKENS,
+  EvalCase,
+  EvalCaseInput,
+  EvalRunRecord,
+  EvalDashboard,
+  EvalSuiteRunDetail,
+  EvalOverview,
+  EvalCompare,
+  EvalRunMetrics,
+  EVAL_MAX_CASES_PER_RUN,
+  EVAL_RUN_CONCURRENCY,
+  EVAL_CASE_TIMEOUT_MS,
+  EVAL_FRAGMENT_MAX_BYTES,
+  EVAL_CASE_NAME_MAX,
 } from '@devdigest/shared';
 
 /**
@@ -475,5 +488,71 @@ describe('PrBrief rev 4', () => {
     const b = client.PrBrief.safeParse(fixture);
     expect(a.success).toBe(true);
     expect(b).toEqual(a);
+  });
+});
+
+describe('eval pipeline', () => {
+  const expectation = { kind: 'must_find', file: 'src/a.ts', start_line: 3, end_line: 5 };
+  const counts = {
+    cases_scored: 2, cases_passed: 1, must_find_total: 1, must_find_hit: 1,
+    must_not_flag_total: 1, must_not_flag_violated: 0, tp: 1, fp_zone: 0,
+    fp_unlabeled: 0, grounded: 1, dropped: 0, cases_errored: 0,
+  };
+  const run = (metrics: object, c: object | null = counts) => ({
+    id: 'r1', agent_id: 'a1', agent_version: 2, status: 'completed', error: null,
+    cases_total: 2, cases_done: 2, metrics, counts: c, duration_ms: 10, cost_usd: null,
+    started_at: '2026-10-11T10:00:00Z', finished_at: null,
+  });
+  const result = {
+    id: 'x1', case_id: null, case_name: 'n', expectation, origin: 'seeded', status: 'ok', pass: true,
+    grounded: [{ file: 'src/a.ts', start_line: 3, end_line: 4, severity: 'WARNING', category: 'bug', title: 't', match: 'tp' }],
+    dropped: [{ file: 'src/a.ts', start_line: 9, end_line: 9, title: 'd', reason: 'line not in diff' }],
+    duration_ms: 1, tokens_in: null, tokens_out: null, cost_usd: null, error: null,
+  };
+  const manifest = {
+    provider: 'openrouter', model: 'm', system_prompt: 'p', strategy: 'auto', ci_fail_on: 'critical',
+    repo_intel: false, skills: ['s1'], skill_versions: [{ id: 's1', name: 'Sec', version: 1 }],
+  };
+  const detail = (metrics: object) => ({ ...run(metrics), manifest, results: [result] });
+
+  it('legacy EvalCase/EvalCaseInput/EvalRun/EvalRunRecord/EvalDashboard fixtures still parse', () => {
+    expect(
+      EvalCase.parse({ id: 'c', owner_kind: 'agent', owner_id: 'a', name: 'n', input_diff: '', input_files: null, input_meta: null, expected_output: {} }).id,
+    ).toBe('c');
+    expect(EvalCaseInput.parse({ owner_kind: 'skill', owner_id: 's', name: 'n', expected_output: {} }).input_diff).toBe('');
+    expect(EvalRun.parse({ recall: 0.5, precision: 0.5, citation_accuracy: 1, traces_passed: 1, traces_total: 2, duration_ms: 5, cost_usd: null, per_trace: [] })).toBeTruthy();
+    const rec = {
+      id: 'r', case_id: 'c', ran_at: 't', actual_output: null, pass: null,
+      recall: null, precision: null, citation_accuracy: null, duration_ms: null, cost_usd: null,
+    };
+    expect(EvalRunRecord.parse(rec).id).toBe('r');
+    const dash = EvalDashboard.parse({
+      owner_kind: null, owner_id: null, cases_total: 0,
+      current: { recall: 0, precision: 0, citation_accuracy: 0, traces_passed: 0, traces_total: 0, cost_usd: null },
+      delta: { recall: 0, precision: 0, citation_accuracy: 0 }, trend: [], recent_runs: [rec], alert: null,
+    });
+    expect(dash.recent_runs).toHaveLength(1);
+  });
+
+  it('EvalSuiteRunDetail/EvalOverview/EvalCompare parse; metrics accept null', () => {
+    const nulls = { recall: null, precision: null, citation_accuracy: null };
+    const full = { recall: 1, precision: 0.5, citation_accuracy: 0 };
+    expect(EvalRunMetrics.parse(nulls)).toEqual(nulls);
+    expect(() => EvalRunMetrics.parse({ ...full, recall: 1.5 })).toThrow();
+    const d = EvalSuiteRunDetail.parse(detail(nulls));
+    expect(d.results[0].grounded[0].match).toBe('tp');
+    expect(EvalSuiteRunDetail.parse({ ...detail(full), counts: null }).counts).toBeNull();
+    const o = EvalOverview.parse({
+      agents: [{ agent_id: 'a1', name: 'A', model: 'm', version: 2, latest: run(full), previous: null }],
+      recent: [run(nulls)],
+    });
+    expect(o.agents[0].previous).toBeNull();
+    expect(EvalCompare.parse({ a: detail(nulls), b: detail(full) }).b.id).toBe('r1');
+    expect(() => EvalCompare.parse({ a: detail(nulls) })).toThrow();
+  });
+
+  it('exports the SPEC-03 limits', () => {
+    expect([EVAL_MAX_CASES_PER_RUN, EVAL_RUN_CONCURRENCY, EVAL_CASE_TIMEOUT_MS, EVAL_FRAGMENT_MAX_BYTES, EVAL_CASE_NAME_MAX])
+      .toEqual([50, 3, 120_000, 32_768, 80]);
   });
 });

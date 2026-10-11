@@ -288,8 +288,8 @@ Feature screens:
 Each task lists its ACs and the named test(s). Paths are relative to the repo root.
 
 ### P1: Contracts (alone, first)
-- [ ] **T1** Append the SPEC-03 block (section 3a) to `server/src/vendor/shared/contracts/eval-ci.ts` and the byte-identical block to `client/src/vendor/shared/contracts/eval-ci.ts`. Do not touch existing schemas. -> AC-81, AC-82 -> `server/test/contracts.test.ts > eval pipeline: legacy EvalCase/EvalCaseInput/EvalRun/EvalRunRecord/EvalDashboard fixtures still parse`, `> EvalSuiteRunDetail/EvalOverview/EvalCompare parse; metrics accept null`
-- [ ] **T2** Extend `server/test/contracts-parity.test.ts` with the marker-block comparison for `eval-ci.ts` (it fails if a marker is missing or the blocks differ). Add `client/src/components/evals/constants.ts` (mirrored limits) and `client/src/test/contracts-evals.test.ts`. -> AC-82 -> `contracts-parity.test.ts > eval-ci.ts SPEC-03 block byte-identical`; `contracts-evals.test.ts > client copy parses fixtures; mirrored constants equal vendored`
+- [x] **T1** Append the SPEC-03 block (section 3a) to `server/src/vendor/shared/contracts/eval-ci.ts` and the byte-identical block to `client/src/vendor/shared/contracts/eval-ci.ts`. Do not touch existing schemas. -> AC-81, AC-82 -> `server/test/contracts.test.ts > eval pipeline: legacy EvalCase/EvalCaseInput/EvalRun/EvalRunRecord/EvalDashboard fixtures still parse`, `> EvalSuiteRunDetail/EvalOverview/EvalCompare parse; metrics accept null`
+- [x] **T2** Extend `server/test/contracts-parity.test.ts` with the marker-block comparison for `eval-ci.ts` (it fails if a marker is missing or the blocks differ). Add `client/src/components/evals/constants.ts` (mirrored limits) and `client/src/test/contracts-evals.test.ts`. -> AC-82 -> `contracts-parity.test.ts > eval-ci.ts SPEC-03 block byte-identical`; `contracts-evals.test.ts > client copy parses fixtures; mirrored constants equal vendored`
 - Gate: `pnpm typecheck` in `server`, `client` and `reviewer-core`.
 
 ### P2: DB schema and migration (after P1)
