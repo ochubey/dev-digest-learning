@@ -42,3 +42,18 @@ JSON file: what must stay true about how they run **together**, per
 7. **Flow 11 depends on the seeded `breaking-change-detector` skill** (created
    by `server/src/db/seed.ts`). It only navigates and reads (no attach, no
    model call).
+8. **Flows 12 and 13 depend on the fixture seed** (`PROJECT_DOCS_SOURCE=fixture`,
+   already exported by `scripts/e2e.sh`): it adds the two finished suite runs
+   (v1, v2) of the Security Reviewer to the 9 always-seeded eval cases. Without
+   it the metric strip and the run table are empty. CI: `.github/workflows/e2e-web.yml`
+   must carry `PROJECT_DOCS_SOURCE=fixture` in its `env:` for flows 09-13. They
+   never click `eval-run-button` or start a run, so there is no model call.
+   AC-86 (turn a finding into an eval case from the PR review) is deliberately
+   not covered: in fixture mode the only decided finding (the accepted Stripe
+   key) already has a seeded case, so the capture dialog would show "Already an
+   eval case" instead of the creation form.
+9. **The suite needs a raised API rate limit.** The server's global limit is 120
+   requests/minute per IP; one browser running flows 01-13 exceeds it (the Evals
+   pages fan out several requests each), and the API answers 429 mid-suite.
+   `scripts/e2e.sh` exports `RATE_LIMIT_MAX=5000`; `e2e-web.yml` must set the same
+   `env:` on the API step.

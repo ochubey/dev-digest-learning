@@ -1,0 +1,20 @@
+{
+  "name": "Agent Evals tab lists the seeded cases and the latest run metrics",
+  "description": "From /agents, open the seeded Security Reviewer and switch to ?tab=evals. The seed gives it 9 eval cases (5 must find, 4 must not flag), so at least 8 case rows render with both kind badges. In fixture mode the seed also stores two finished suite runs; the metric strip shows the latest (v2): recall 80% (4/5), precision 67% (4/6), citation accuracy 100%, cases passed 6/9. The dashboard link is present. Read-only: never clicks the run button (eval-run-button), so no model call. Needs the API started with PROJECT_DOCS_SOURCE=fixture (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/agents"], "label": "load the agents page" },
+    { "cmd": ["wait", "--text", "Security Reviewer"], "label": "seeded agent card is visible" },
+    { "cmd": ["find", "text", "Security Reviewer", "click"], "label": "open the Security Reviewer editor" },
+    { "cmd": ["wait", "--url", "/agents/"], "label": "agent editor route reached" },
+    { "cmd": ["eval", "location.search = '?tab=evals'"], "label": "open the Evals tab via the deep link" },
+    { "cmd": ["wait", "--url", "tab=evals"], "label": "evals tab is active in the URL" },
+    { "cmd": ["wait", "--fn", "document.querySelectorAll('[data-testid=\"eval-case-row\"]').length >= 8"], "label": "at least 8 seeded eval cases are listed" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('[data-testid=\"eval-case-kind\"]')].some((e) => e.textContent.trim() === 'must find')"], "label": "a 'must find' kind badge is shown" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('[data-testid=\"eval-case-kind\"]')].some((e) => e.textContent.trim() === 'must not flag')"], "label": "a 'must not flag' kind badge is shown" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[data-testid=\"eval-metric-recall\"]')?.textContent.includes('80%')"], "label": "latest run recall is 80%" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[data-testid=\"eval-metric-precision\"]')?.textContent.includes('67%')"], "label": "latest run precision is 67%" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[data-testid=\"eval-metric-citation\"]')?.textContent.includes('100%')"], "label": "latest run citation accuracy is 100%" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[data-testid=\"eval-metric-passed\"]')?.textContent.includes('6/9')"], "label": "latest run cases passed is 6/9" },
+    { "cmd": ["wait", "--fn", "!!document.querySelector('[data-testid=\"eval-dashboard-link\"]')"], "label": "the full-dashboard link is present" }
+  ]
+}

@@ -29,6 +29,8 @@ const EnvSchema = z.object({
   // Where project-context documents are read from. 'fixture' serves deterministic
   // acme/payments-api docs (e2e/demo, no network); 'github' reads via the GitHub API.
   PROJECT_DOCS_SOURCE: z.enum(['github', 'fixture']).default('github'),
+  // Global per-IP request cap per minute. The hermetic e2e suite (one browser, one IP) raises it.
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -64,6 +66,8 @@ export type AppConfig = {
   repoIntelEnabled: boolean;
   /** Project-context document source: GitHub API or the deterministic fixture. */
   projectDocsSource: 'github' | 'fixture';
+  /** Global rate limit: requests per minute per IP. */
+  rateLimitMax: number;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -83,5 +87,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
     projectDocsSource: parsed.PROJECT_DOCS_SOURCE,
+    rateLimitMax: parsed.RATE_LIMIT_MAX,
   };
 }
