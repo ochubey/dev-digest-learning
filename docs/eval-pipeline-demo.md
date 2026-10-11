@@ -45,3 +45,28 @@ Screenshots of the compare dialog:
 - `docs/eval-pipeline-compare.png`: seeded fixture runs v1 vs v2 (no model call), as used by the e2e flow.
 
 UI note: in the compare dialog the system prompt diff sits inside a scrollable box, so an appended sentence is not visible in a static screenshot; scroll the box to the end on camera.
+
+## Recording checklist (screencast, 4-5 minutes) and submission
+
+Before recording: charger plugged in, `git pull`, `cd server && pnpm db:migrate`, dev stack running (`./scripts/dev.sh`), provider key configured.
+
+On the dev database (repos `microsoft/playwright` and `acme/payments-api`; the seeded PR #482 has two findings, Stripe key at `src/config.ts:12` and N+1 at `src/api/users.ts:45-52`; its review has no agent, so the capture dialog asks for one):
+
+1. Agents -> Security Reviewer -> **Evals**: show the nine cases and the scoring note.
+2. Delete the seeded case "Hardcoded Stripe secret key" (trash icon) so that the capture below does not say "Already an eval case". (There are still eight cases.)
+3. Pull Requests -> acme/payments-api #482 -> Review runs -> expand "Hardcoded Stripe secret key in commit" -> **Accept** -> **Turn into eval case** -> pick **Security Reviewer** -> check the draft (Must find, `src/config.ts`, line 12) -> Save. Back in the Evals tab the case is back (nine).
+4. **Run all evals** (confirm). Wait for the run (about 3 to 5 minutes; cut or speed up in editing). Show recall, precision, citation accuracy and cases passed.
+5. Config tab: append the noisy sentence from step 4 of the script above, Save (new agent version).
+6. **Run all evals** again. Precision drops, recall rises.
+7. Eval Dashboard -> Security Reviewer -> tick the two newest runs -> **Compare**: metric deltas, the system prompt diff, regressed and fixed cases.
+8. Say what the numbers mean and the limits (line matching is not semantic, one trial per case, no model in scoring).
+
+After recording, restore the agent's original prompt (Versions tab) if you want the dev agent back as it was.
+
+Submission (LMS "Send homework"; deadline 2026-10-11 23:45):
+
+- Link to the pull request: https://github.com/ochubey/dev-digest-learning/pull/19
+- Spec: `specs/eval-pipeline.md` (symlink to `specs/03-eval-pipeline.md`) in the PR.
+- `pnpm verify:l06` is green (run it once more on the final commit and mention it).
+- Screenshot of the two-run comparison with different prompts: `docs/eval-pipeline-compare-real.png` (real runs) and `docs/eval-pipeline-compare.png` (fixture runs).
+- The video file (up to 150 MB; 720p is enough).
