@@ -95,6 +95,36 @@ describe("CompareRunsDialog", () => {
     expect(screen.queryByTestId("eval-prompt-ins")).toBeNull();
   });
 
+  it("appended sentence: ins mark, collapsed unchanged row, expandable", async () => {
+    const base = Array.from({ length: 12 }, (_, i) => `Rule ${i + 1}.`).join("\n");
+    get.mockResolvedValue(
+      cmp({
+        a: mkDetail({ ...older, manifest: mkManifest({ system_prompt: base }) }),
+        b: mkDetail({ ...newer, manifest: mkManifest({ system_prompt: `${base} Always cite the line.` }) }),
+      }),
+    );
+    mount();
+    expect(await screen.findByTestId("eval-prompt-ins")).toHaveTextContent("Always cite the line.");
+    expect(screen.getByText("v1 (old)")).toBeInTheDocument();
+    expect(screen.getByText("v2 (new)")).toBeInTheDocument();
+    expect(screen.getByTestId("eval-prompt-collapsed")).toHaveTextContent("… 9 unchanged lines …");
+    expect(screen.queryByText("Rule 1.")).toBeNull();
+    expect(screen.getByText(/Rule 12\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show full prompt" }));
+    expect(screen.queryByTestId("eval-prompt-collapsed")).toBeNull();
+    expect(screen.getByText("Rule 1.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show changes only" }));
+    expect(screen.getByTestId("eval-prompt-collapsed")).toBeInTheDocument();
+  });
+
+  it("equal prompts: no diff, no expand button", async () => {
+    get.mockResolvedValue(cmp());
+    mount();
+    expect(await screen.findByText("System prompt unchanged")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show full prompt" })).toBeNull();
+    expect(screen.queryByTestId("eval-prompt-collapsed")).toBeNull();
+  });
+
   it("Regressed/Fixed/Errored groups + unchanged count", async () => {
     const r = (id: string, name: string, over = {}) => mkResult({ id: `${id}${name}`, case_id: id, case_name: name, ...over });
     get.mockResolvedValue(

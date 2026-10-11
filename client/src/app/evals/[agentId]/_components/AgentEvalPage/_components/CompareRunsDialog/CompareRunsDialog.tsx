@@ -9,7 +9,7 @@ import { useEvalCompare } from "@/lib/hooks/evals";
 import { EvalDialog } from "@/components/evals";
 import { EVAL_TEST_IDS } from "../../../../../constants";
 import { caseState, costDelta, formatCost, formatRanAt } from "../../../../../helpers";
-import { chunkDiff } from "./helpers";
+import { buildDiffRows, chunkDiff } from "./helpers";
 import { s } from "./styles";
 
 type TFn = ReturnType<typeof useTranslations>;
@@ -103,21 +103,7 @@ function CompareBody({ t, data }: { t: TFn; data: EvalCompare }) {
       <section style={s.section}>
         <h3 style={s.h3}>{t("compare.promptHeading")}</h3>
         {diff.promptChanged ? (
-          <pre style={s.prompt}>
-            {chunkDiff(diffWords(a.manifest.system_prompt, b.manifest.system_prompt)).map((c, i) =>
-              c.k === "del" ? (
-                <del key={i} style={s.del} data-testid={EVAL_TEST_IDS.promptDel}>
-                  {c.text}
-                </del>
-              ) : c.k === "add" ? (
-                <ins key={i} style={s.ins} data-testid={EVAL_TEST_IDS.promptIns}>
-                  {c.text}
-                </ins>
-              ) : (
-                <React.Fragment key={i}>{c.text}</React.Fragment>
-              ),
-            )}
-          </pre>
+          <PromptDiff t={t} a={a} b={b} />
         ) : (
           <p style={s.muted}>{t("compare.promptUnchanged")}</p>
         )}
@@ -159,6 +145,51 @@ function CompareBody({ t, data }: { t: TFn; data: EvalCompare }) {
         <NameGroup label={t("compare.onlyAHeading")} items={changes.onlyA} />
         <NameGroup label={t("compare.onlyBHeading")} items={changes.onlyB} />
       </section>
+    </>
+  );
+}
+
+function PromptDiff({ t, a, b }: { t: TFn; a: EvalCompare["a"]; b: EvalCompare["b"] }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const chunks = React.useMemo(() => chunkDiff(diffWords(a.manifest.system_prompt, b.manifest.system_prompt)), [a, b]);
+  const rows = React.useMemo(() => buildDiffRows(chunks, 2, expanded), [chunks, expanded]);
+  const hasGap = React.useMemo(() => buildDiffRows(chunks, 2, false).some((r) => r.kind === "gap"), [chunks]);
+  return (
+    <>
+      <div style={s.legend}>
+        <del style={s.del}>{t("compare.promptLegendOld", { version: a.agent_version })}</del>
+        <ins style={s.ins}>{t("compare.promptLegendNew", { version: b.agent_version })}</ins>
+      </div>
+      <div style={s.prompt} role="group" aria-label={t("compare.promptHeading")}>
+        {rows.map((row, i) =>
+          row.kind === "gap" ? (
+            <div key={i} style={s.gap} data-testid="eval-prompt-collapsed">
+              {t("compare.promptCollapsed", { count: row.count })}
+            </div>
+          ) : (
+            <div key={i} style={s.line}>
+              {row.chunks.map((c, j) =>
+                c.k === "del" ? (
+                  <del key={j} style={s.del} data-testid={EVAL_TEST_IDS.promptDel}>
+                    {c.text}
+                  </del>
+                ) : c.k === "add" ? (
+                  <ins key={j} style={s.ins} data-testid={EVAL_TEST_IDS.promptIns}>
+                    {c.text}
+                  </ins>
+                ) : (
+                  <React.Fragment key={j}>{c.text}</React.Fragment>
+                ),
+              )}
+            </div>
+          ),
+        )}
+      </div>
+      {(hasGap || expanded) && (
+        <button type="button" style={s.linkBtn} aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+          {expanded ? t("compare.promptShowChanges") : t("compare.promptShowFull")}
+        </button>
+      )}
     </>
   );
 }

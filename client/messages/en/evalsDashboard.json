@@ -116,6 +116,11 @@
     "promptUnchanged": "System prompt unchanged",
     "promptRemoved": "Removed text",
     "promptAdded": "Added text",
+    "promptLegendOld": "v{version} (old)",
+    "promptLegendNew": "v{version} (new)",
+    "promptCollapsed": "… {count, plural, one {# unchanged line} other {# unchanged lines}} …",
+    "promptShowFull": "Show full prompt",
+    "promptShowChanges": "Show changes only",
     "otherHeading": "Other differences",
     "noOther": "No other differences in the run settings.",
     "field": {
