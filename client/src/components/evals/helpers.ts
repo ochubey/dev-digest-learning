@@ -143,3 +143,34 @@ export function manifestDiff(a: EvalRunManifest, b: EvalRunManifest): ManifestDi
     promptChanged: a.system_prompt !== b.system_prompt,
   };
 }
+
+export type CaseResultLabel = "pass" | "fail" | "error" | "never";
+
+/** Result of an agent's most recent run for one case; `never` when it was never scored. */
+export function caseResultLabel(c: Pick<EvalCaseView, "last_result">): CaseResultLabel {
+  return c.last_result?.status ?? "never";
+}
+
+export interface CaseResultDetail {
+  /** `evalsTab` message key under `detail.` */
+  key: "mustFindHit" | "mustFindMiss" | "mustNotFlagClean" | "mustNotFlagHit" | "error" | "errorUnknown";
+  /** Matching findings the last run returned for this case. */
+  count: number;
+  /** Runner error text (plain text only); set for `error`. */
+  error: string | null;
+}
+
+/** One-line explanation of the last result, e.g. must-find miss = "expected ≥1 matching finding, got 0".
+    null when the case was never run. */
+export function caseResultDetail(c: Pick<EvalCaseView, "last_result" | "expectation">): CaseResultDetail | null {
+  const r = c.last_result;
+  if (!r) return null;
+  if (r.status === "error") {
+    return { key: r.error ? "error" : "errorUnknown", count: r.matched, error: r.error };
+  }
+  const mustFind = c.expectation.kind === "must_find";
+  const key = mustFind
+    ? r.matched > 0 ? "mustFindHit" : "mustFindMiss"
+    : r.matched > 0 ? "mustNotFlagHit" : "mustNotFlagClean";
+  return { key, count: r.matched, error: null };
+}
