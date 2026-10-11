@@ -6,6 +6,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button, Icon, Skeleton } from "@devdigest/ui";
@@ -67,7 +68,10 @@ export function EvalCaseDialog({ findingId, onClose }: EvalCaseDialogProps) {
     }
   };
 
-  return (
+  // Portal to <body>: a decided finding card is dimmed (opacity) and creates its own stacking
+  // context, which would make an inline dialog translucent and let clicks reach the page behind it.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div style={s.overlay}>
       <div style={s.backdrop} onClick={onClose} />
       <div
@@ -107,7 +111,8 @@ export function EvalCaseDialog({ findingId, onClose }: EvalCaseDialogProps) {
           <EvalCaseForm draft={draft.data} onClose={onClose} />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

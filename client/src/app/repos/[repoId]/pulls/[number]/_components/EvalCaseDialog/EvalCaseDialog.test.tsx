@@ -61,6 +61,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("EvalCaseDialog", () => {
+  it("renders in a portal on document.body, outside a dimmed finding card (no inherited opacity)", async () => {
+    mockApi(DRAFT);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // A decided finding card is dimmed with opacity; an inline dialog would inherit it.
+    const { container } = render(
+      <div data-testid="dimmed-card" style={{ opacity: 0.6, overflow: "hidden" }}>
+        <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+          <QueryClientProvider client={qc}>
+            <EvalCaseDialog findingId="f1" onClose={vi.fn()} />
+          </QueryClientProvider>
+        </NextIntlClientProvider>
+      </div>,
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(screen.getByTestId("dimmed-card").contains(dialog)).toBe(false);
+  });
+
   it("opens with the draft and sends no create request", async () => {
     mockApi(DRAFT);
     renderDialog();

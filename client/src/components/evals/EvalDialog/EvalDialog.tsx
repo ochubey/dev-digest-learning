@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
 import { SIDE_STYLE, s } from "./styles";
@@ -41,7 +42,8 @@ export function EvalDialog({ title, onClose, side = "center", width = 720, testI
     };
   }, []);
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div style={{ ...s.root, ...SIDE_STYLE[side].root }}>
       <div style={s.backdrop} onClick={onClose} aria-hidden="true" />
       <div
@@ -63,6 +65,7 @@ export function EvalDialog({ title, onClose, side = "center", width = 720, testI
         </div>
         <div style={s.body}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
