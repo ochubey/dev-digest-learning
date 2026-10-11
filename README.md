@@ -132,6 +132,18 @@ cd ../client && pnpm install && pnpm dev               # web on :3000
 (unit/integration split: `pnpm exec vitest run --exclude '**/*.it.test.ts'` / `pnpm exec vitest run .it.test`)
 `client/`: `dev` · `build` · `start` · `test` · `typecheck`
 
+## Verify the eval pipeline (`pnpm verify:l06`)
+
+From the **repo root** run `pnpm verify:l06`. It runs server/client/reviewer-core
+typecheck and tests, then the eval seed-fixture, scorer-purity and experiment
+tests. It needs no Docker, database, network or model key (provider keys,
+`GITHUB_TOKEN` and `DATABASE_URL` are unset), and it fails fast with
+`run pnpm install in <pkg>` if a package has no `node_modules`. On failure it
+prints `verify:l06 FAILED at step: <name>`; on success `verify:l06 OK`.
+
+The root `package.json` only holds this script. **Do not run `pnpm install` at
+the root** — the repo is not a workspace; install inside each package.
+
 ## Testing & CI
 
 One test suite per package, each gated by its own GitHub Actions workflow with a

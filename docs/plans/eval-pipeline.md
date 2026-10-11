@@ -447,7 +447,7 @@ Each task lists its ACs and the named test(s). Paths are relative to the repo ro
 - [ ] **T30** Update `e2e/README.md` and `e2e/specs/flows.md` (flows 12-14 need `PROJECT_DOCS_SOURCE=fixture`; A-4). -> AC-84, AC-85, AC-86 -> review only.
 
 ### P10: `pnpm verify:l06` (after P5; can run alongside P6-P9)
-- [ ] **T31** Root `package.json`: `{"name": "devdigest-root", "private": true, "scripts": {"verify:l06": "bash scripts/verify-l06.sh"}}`. No dependencies, no `pnpm-workspace.yaml`, no lockfile.
+- [x] **T31** Root `package.json`: `{"name": "devdigest-root", "private": true, "scripts": {"verify:l06": "bash scripts/verify-l06.sh"}}`. No dependencies, no `pnpm-workspace.yaml`, no lockfile.
 
   `scripts/verify-l06.sh` (`set -euo pipefail`):
   1. Unset `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `DATABASE_URL`.
