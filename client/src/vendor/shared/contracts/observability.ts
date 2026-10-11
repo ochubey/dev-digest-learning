@@ -102,7 +102,7 @@ export const FindingGroup = z.object({
 });
 export type FindingGroup = z.infer<typeof FindingGroup>;
 
-/** Response of GET /multi-agent-runs/:id (also POST /pulls/:id/multi-agent-run and GET /pulls/:id/multi-agent). */
+/** Response of GET /multi-agent-runs/:id. */
 export const MultiAgentRun = z.object({
   id: z.string(),
   pr_id: z.string(),
