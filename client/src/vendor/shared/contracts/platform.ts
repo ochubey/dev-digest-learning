@@ -375,6 +375,12 @@ export type IndexStatus = z.infer<typeof IndexStatus>;
 export const RunRequest = z.object({
   agentId: z.string().optional(),
   all: z.boolean().optional(),
+  agentIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(5)
+    .refine((ids) => new Set(ids).size === ids.length, { message: 'agentIds must be distinct' })
+    .optional(),
 });
 export type RunRequest = z.infer<typeof RunRequest>;
 

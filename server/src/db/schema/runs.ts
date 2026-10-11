@@ -33,6 +33,10 @@ export const agentRuns = pgTable('agent_runs', {
   severityCounts: jsonb('severity_counts'),
   /** USD cost of this run, computed from tokens_in/out via the price book at run time. */
   costUsd: doublePrecision('cost_usd'),
+  /** Parent multi-agent run when launched as part of one; null for single runs. */
+  multiAgentRunId: uuid('multi_agent_run_id').references(() => multiAgentRuns.id, {
+    onDelete: 'set null',
+  }),
 });
 
 /** Whole trace of one run as a SINGLE jsonb document. */
