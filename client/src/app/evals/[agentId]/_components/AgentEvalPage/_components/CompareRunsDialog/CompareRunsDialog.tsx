@@ -1,0 +1,209 @@
+"use client";
+
+import React from "react";
+import { useTranslations } from "next-intl";
+import { Skeleton } from "@devdigest/ui";
+import type { EvalCaseResult, EvalCompare, EvalSuiteRun } from "@devdigest/shared";
+import { caseChanges, deltaPt, diffWords, formatPct, manifestDiff, orderPair, type CaseChange } from "@/components/evals";
+import { useEvalCompare } from "@/lib/hooks/evals";
+import { EvalDialog } from "../../../../../_components/EvalDialog";
+import { EVAL_TEST_IDS } from "../../../../../constants";
+import { caseState, costDelta, formatCost, formatRanAt } from "../../../../../helpers";
+import { chunkDiff } from "./helpers";
+import { s } from "./styles";
+
+type TFn = ReturnType<typeof useTranslations>;
+
+export interface CompareRunsDialogProps {
+  /** The two selected runs, in selection order; the older one by run time becomes A. */
+  runs: readonly [EvalSuiteRun, EvalSuiteRun];
+  onClose: () => void;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
+}
+
+/** AC-67..AC-72: side-by-side comparison of two runs of the same agent. */
+export function CompareRunsDialog({ runs, onClose, returnFocusRef }: CompareRunsDialogProps) {
+  const t = useTranslations("evalsDashboard");
+  const [older, newer] = orderPair(runs[0], runs[1]);
+  const { data, isLoading, isError } = useEvalCompare(older.id, newer.id);
+  const title = t("compare.title", { a: older.agent_version, b: newer.agent_version });
+
+  return (
+    <EvalDialog title={title} onClose={onClose} width={860} testId={EVAL_TEST_IDS.compareDialog} returnFocusRef={returnFocusRef}>
+      {isLoading ? (
+        <div role="status" aria-label={t("compare.loading")} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Skeleton height={80} />
+          <Skeleton height={120} />
+        </div>
+      ) : isError || !data ? (
+        <p role="alert" style={s.error}>
+          {t("compare.error")}
+        </p>
+      ) : (
+        <CompareBody t={t} data={data} />
+      )}
+    </EvalDialog>
+  );
+}
+
+function CompareBody({ t, data }: { t: TFn; data: EvalCompare }) {
+  const [a, b] = orderPair(data.a, data.b);
+  const changes = caseChanges(a, b);
+  const diff = manifestDiff(a.manifest, b.manifest);
+  const metricRows: { key: string; label: string; av: string; bv: string; delta: string | null }[] = [
+    { key: "recall", label: t("compare.recall"), av: formatPct(a.metrics.recall), bv: formatPct(b.metrics.recall), delta: deltaPt(b.metrics.recall, a.metrics.recall) },
+    { key: "precision", label: t("compare.precision"), av: formatPct(a.metrics.precision), bv: formatPct(b.metrics.precision), delta: deltaPt(b.metrics.precision, a.metrics.precision) },
+    { key: "citation", label: t("compare.citation"), av: formatPct(a.metrics.citation_accuracy), bv: formatPct(b.metrics.citation_accuracy), delta: deltaPt(b.metrics.citation_accuracy, a.metrics.citation_accuracy) },
+    { key: "cost", label: t("compare.cost"), av: formatCost(a.cost_usd), bv: formatCost(b.cost_usd), delta: costDelta(a.cost_usd, b.cost_usd) },
+  ];
+  const noValue = t("common.noValue");
+  const otherCount = diff.fields.length + diff.skillsAdded.length + diff.skillsRemoved.length + diff.skillVersionChanges.length;
+
+  return (
+    <>
+      <section style={s.section}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th} scope="col">
+                {t("compare.metric")}
+              </th>
+              <th style={s.th} scope="col">
+                {t("compare.colA", { version: a.agent_version })}
+              </th>
+              <th style={s.th} scope="col">
+                {t("compare.colB", { version: b.agent_version })}
+              </th>
+              <th style={s.th} scope="col">
+                {t("compare.colDelta")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {metricRows.map((m) => (
+              <tr key={m.key}>
+                <th style={s.td} scope="row">
+                  {m.label}
+                </th>
+                <td style={s.td}>{m.av}</td>
+                <td style={s.td}>{m.bv}</td>
+                <td style={s.td} data-testid={EVAL_TEST_IDS.compareDelta}>
+                  {m.delta ?? noValue}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p style={s.muted}>
+          {t("compare.runA", { version: a.agent_version, time: formatRanAt(a.started_at) })} ·{" "}
+          {t("compare.runB", { version: b.agent_version, time: formatRanAt(b.started_at) })}
+        </p>
+      </section>
+
+      <section style={s.section}>
+        <h3 style={s.h3}>{t("compare.promptHeading")}</h3>
+        {diff.promptChanged ? (
+          <pre style={s.prompt}>
+            {chunkDiff(diffWords(a.manifest.system_prompt, b.manifest.system_prompt)).map((c, i) =>
+              c.k === "del" ? (
+                <del key={i} style={s.del} data-testid={EVAL_TEST_IDS.promptDel}>
+                  {c.text}
+                </del>
+              ) : c.k === "add" ? (
+                <ins key={i} style={s.ins} data-testid={EVAL_TEST_IDS.promptIns}>
+                  {c.text}
+                </ins>
+              ) : (
+                <React.Fragment key={i}>{c.text}</React.Fragment>
+              ),
+            )}
+          </pre>
+        ) : (
+          <p style={s.muted}>{t("compare.promptUnchanged")}</p>
+        )}
+      </section>
+
+      <section style={s.section}>
+        <h3 style={s.h3}>{t("compare.otherHeading")}</h3>
+        {otherCount === 0 ? (
+          <p style={s.muted}>{t("compare.noOther")}</p>
+        ) : (
+          <ul style={s.list}>
+            {diff.fields.map((f) => (
+              <li key={f.key}>{t(`compare.field.${f.key}`, { from: f.from, to: f.to })}</li>
+            ))}
+            {diff.skillsAdded.map((n) => (
+              <li key={`add-${n}`}>{t("compare.skillAdded", { name: n })}</li>
+            ))}
+            {diff.skillsRemoved.map((n) => (
+              <li key={`rm-${n}`}>{t("compare.skillRemoved", { name: n })}</li>
+            ))}
+            {diff.skillVersionChanges.map((v) => (
+              <li key={`v-${v.name}`}>{t("compare.skillVersion", { name: v.name, from: v.from, to: v.to })}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={s.section}>
+        <h3 style={s.h3}>{t("compare.casesHeading")}</h3>
+        {(changes.onlyA.length > 0 || changes.onlyB.length > 0) && (
+          <p style={s.notice} role="note">
+            {t("compare.setsDiffer", { onlyA: changes.onlyA.length, onlyB: changes.onlyB.length })}
+          </p>
+        )}
+        <ChangeGroup t={t} label={t("compare.regressed")} items={changes.regressed} />
+        <ChangeGroup t={t} label={t("compare.fixed")} items={changes.fixed} />
+        <ChangeGroup t={t} label={t("compare.errored")} items={changes.errored} />
+        <p style={s.muted}>{t("compare.unchanged", { count: changes.unchanged })}</p>
+        <NameGroup label={t("compare.onlyAHeading")} items={changes.onlyA} />
+        <NameGroup label={t("compare.onlyBHeading")} items={changes.onlyB} />
+      </section>
+    </>
+  );
+}
+
+function ChangeGroup({ t, label, items }: { t: TFn; label: string; items: CaseChange[] }) {
+  return (
+    <fieldset style={s.group} aria-label={label}>
+      <legend style={s.groupTitle}>
+        {label} ({items.length})
+      </legend>
+      {items.length === 0 ? (
+        <p style={s.muted}>{t("compare.none")}</p>
+      ) : (
+        <ul style={s.list}>
+          {items.map((c) => (
+            <li key={c.key}>
+              {t("compare.caseLine", {
+                name: c.name,
+                from: t(`compare.state.${stateKey(c.a)}`),
+                to: t(`compare.state.${stateKey(c.b)}`),
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+    </fieldset>
+  );
+}
+
+function NameGroup({ label, items }: { label: string; items: EvalCaseResult[] }) {
+  if (items.length === 0) return null;
+  return (
+    <fieldset style={s.group} aria-label={label}>
+      <legend style={s.groupTitle}>{label}</legend>
+      <ul style={s.list}>
+        {items.map((r) => (
+          <li key={r.id}>{r.case_name}</li>
+        ))}
+      </ul>
+    </fieldset>
+  );
+}
+
+/** Compare states are pass/fail/error; an unscored (pending) result reads as fail-neutral "fail". */
+function stateKey(r: EvalCaseResult): "pass" | "fail" | "error" {
+  const st = caseState(r);
+  return st === "pending" ? "fail" : st;
+}

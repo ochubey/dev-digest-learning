@@ -1,0 +1,28 @@
+import type React from "react";
+
+export const s: Record<string, React.CSSProperties> = {
+  section: { display: "flex", flexDirection: "column", gap: 8 },
+  h3: { margin: 0, fontSize: 14, fontWeight: 600 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  th: { textAlign: "left", padding: "6px 8px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", fontWeight: 500 },
+  td: { padding: "6px 8px", borderBottom: "1px solid var(--border)" },
+  prompt: {
+    margin: 0,
+    padding: 12,
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    fontSize: 12,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    maxHeight: 280,
+    overflow: "auto",
+  },
+  del: { textDecoration: "line-through", color: "var(--danger, #b42318)", background: "rgba(180,35,24,0.12)" },
+  ins: { textDecoration: "underline", color: "var(--success, #067647)", background: "rgba(6,118,71,0.12)" },
+  list: { margin: 0, paddingLeft: 18, fontSize: 13, display: "flex", flexDirection: "column", gap: 4, overflowWrap: "anywhere" },
+  notice: { margin: 0, fontSize: 13, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 6 },
+  muted: { margin: 0, fontSize: 13, color: "var(--text-muted)" },
+  error: { margin: 0, fontSize: 13, color: "var(--danger, #b42318)" },
+  group: { margin: 0, padding: 0, border: 0, display: "flex", flexDirection: "column", gap: 4 },
+  groupTitle: { fontSize: 13, fontWeight: 600, padding: 0 },
+};
