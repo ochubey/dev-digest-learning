@@ -427,6 +427,93 @@ d('eval pipeline (Testcontainers pg)', () => {
     expect((await app.inject({ method: 'GET', url: `/eval-runs/compare?a=${r1.id}&b=${o.id}` })).statusCode).toBe(400);
   });
 
+  it('overview latest/previous ignore a newer failed run; recent still lists it (AC-51, AC-59, AC-61)', async () => {
+    const { app } = await makeApp();
+    const agentId = await makeAgent(app, 'Overview Agent');
+    const mk = (status: 'completed' | 'completed_with_errors' | 'failed' | 'running', day: number) =>
+      db
+        .insert(t.evalSuiteRuns)
+        .values({
+          workspaceId,
+          agentId,
+          agentVersion: 1,
+          manifest: {},
+          status,
+          casesTotal: 1,
+          startedAt: new Date(`2031-05-0${day}T00:00:00Z`),
+        })
+        .returning()
+        .then((r) => r[0]!);
+    const older = await mk('completed', 1);
+    const newer = await mk('completed_with_errors', 2);
+    const failed = await mk('failed', 3);
+    const running = await mk('running', 4);
+
+    const ov = EvalOverview.parse((await app.inject({ method: 'GET', url: '/evals/overview' })).json());
+    const mine = ov.agents.find((a) => a.agent_id === agentId)!;
+    expect([mine.latest?.id, mine.previous?.id]).toEqual([newer.id, older.id]);
+    expect(ov.recent.map((r) => r.id)).toEqual(expect.arrayContaining([running.id, failed.id]));
+    expect(ov.recent[0]!.id).toBe(running.id);
+    expect(ov.recent[1]!.id).toBe(failed.id);
+    await db.update(t.evalSuiteRuns).set({ status: 'failed' }).where(eq(t.evalSuiteRuns.id, running.id));
+  });
+
+  it('another workspace\'s agent, case and run are invisible and untouched through the real routes (AC-79)', async () => {
+    const { app, llm } = await makeApp();
+    const [wsB] = await db.insert(t.workspaces).values({ name: 'Other WS' }).returning();
+    const [agentB] = await db
+      .insert(t.agents)
+      .values({ workspaceId: wsB!.id, name: 'B Agent', provider: 'openrouter', model: 'test/model-a', systemPrompt: 'B prompt' })
+      .returning();
+    const [caseB] = await db
+      .insert(t.evalCases)
+      .values({
+        workspaceId: wsB!.id,
+        ownerKind: 'agent',
+        ownerId: agentB!.id,
+        name: 'b-case',
+        inputDiff: fragmentWith('b'),
+        inputMeta: { origin: 'seeded', seed_key: 'b' },
+        expectedOutput: { kind: 'must_find', ...HIT },
+      })
+      .returning();
+    const [runB] = await db
+      .insert(t.evalSuiteRuns)
+      .values({ workspaceId: wsB!.id, agentId: agentB!.id, agentVersion: 1, manifest: {}, status: 'completed', casesTotal: 1 })
+      .returning();
+    await db.insert(t.evalRuns).values({
+      caseId: caseB!.id,
+      suiteRunId: runB!.id,
+      status: 'ok',
+      pass: true,
+      actualOutput: { grounded: [], dropped: [] },
+      caseSnapshot: { name: 'b-case', expectation: { kind: 'must_find', ...HIT }, origin: 'seeded' },
+    });
+
+    const agentA = await makeAgent(app, 'A Agent');
+    await insertCase(agentA, 'a-case', 'must_find');
+    const runA = await waitDone(app, await startRun(app, agentA));
+    const callsBefore = llm.calls.length;
+
+    const get = (url: string) => app.inject({ method: 'GET', url });
+    expect((await get(`/agents/${agentB!.id}/eval-cases`)).statusCode).toBe(404);
+    expect((await get(`/agents/${agentB!.id}/eval-runs`)).statusCode).toBe(404);
+    expect((await get(`/eval-runs/${runB!.id}`)).statusCode).toBe(404);
+    expect((await app.inject({ method: 'DELETE', url: `/eval-cases/${caseB!.id}` })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: `/agents/${agentB!.id}/eval-runs` })).statusCode).toBe(404);
+    expect((await get(`/eval-runs/compare?a=${runA.id}&b=${runB!.id}`)).statusCode).toBe(404);
+    expect((await get(`/eval-runs/compare?a=${runB!.id}&b=${runA.id}`)).statusCode).toBe(404);
+
+    const ov = EvalOverview.parse((await get('/evals/overview')).json());
+    expect(ov.agents.map((a) => a.agent_id)).not.toContain(agentB!.id);
+    expect(ov.recent.map((r) => r.id)).not.toContain(runB!.id);
+
+    // Nothing of workspace B changed and no model call was made on its behalf.
+    expect(llm.calls).toHaveLength(callsBefore);
+    expect(await db.select().from(t.evalCases).where(eq(t.evalCases.id, caseB!.id))).toHaveLength(1);
+    expect(await db.select().from(t.evalSuiteRuns).where(eq(t.evalSuiteRuns.agentId, agentB!.id))).toHaveLength(1);
+  });
+
   it('on boot, a run left running becomes failed "interrupted" and keeps its finished results', async () => {
     const { app } = await makeApp();
     const agentId = await makeAgent(app);

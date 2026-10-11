@@ -179,7 +179,7 @@ Everything else is pure (no IO) and unit-tested on its own.
 | `repository.ts` | all SQL, every query workspace-scoped; `createSuiteRun` writes the run row and one pending result per case in one transaction |
 | `runner.ts` | `runEvalCases`: one review per case through an injected `LLMProvider`, concurrency 3, 120 s timeout per case; never touches the DB |
 | `scoring.ts`, `matching.ts` | `scoreCase`, `scoreRun`, `metricsFromCounts`; `matches` (same file + overlapping lines) |
-| `finalize.ts` | final run status, total duration, total cost (null if any case's cost is unknown) |
+| `finalize.ts` | final run status, total duration, total cost (sum of known costs of scored cases, errored cases ignored; null if none is known) |
 | `fragment.ts` | cuts the diff fragment stored with a case: the file header plus every whole hunk that intersects the line range |
 | `draft.ts`, `validate.ts` | draft a case from a finding; validate a case body and return human-readable reasons |
 | `manifest.ts` | freezes what a run executes: the agent's version snapshot (`agents/helpers.ts#versionConfigOf`) plus id, name and version of each enabled linked skill |
@@ -212,7 +212,7 @@ case body is a `400` with reasons rather than the app-wide `422`.
 | `GET /agents/:id/eval-runs?cursor&limit` | `200 EvalRunPage`, newest first, `limit` default 20, max 50 | `404`; `400 invalid_cursor` (strict ISO timestamp, UUID, at most 200 characters); an over-long cursor answers `422` |
 | `GET /eval-runs/compare?a=&b=` | `200 {a, b}` with `a` the older run by `started_at` | `404`; `400 runs_not_comparable` (runs of different agents) |
 | `GET /eval-runs/:id` | `200 EvalSuiteRunDetail` (manifest, counts, metrics, every case result) | `404` |
-| `GET /evals/overview` | `200 EvalOverview`: per agent the latest and previous finished run, plus the 6 most recent runs | |
+| `GET /evals/overview` | `200 EvalOverview`: per agent the latest and previous finished run (`completed` or `completed_with_errors`; failed and running runs are skipped), plus the 6 most recent runs | |
 
 `POST /agents/:id/eval-runs` checks in this order and writes nothing until all pass:
 unknown agent (404), no cases (400), too many cases (400), a run already running for the agent (409 `eval_run_running`),

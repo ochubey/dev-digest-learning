@@ -471,6 +471,21 @@ describe('runs: list, detail, overview, compare', () => {
     EvalCaseView.array().parse((await app.inject({ method: 'GET', url: `/agents/${AGENT_ID}/eval-cases` })).json());
   });
 
+  it('overview latest/previous skip failed and running runs, while recent lists every status (AC-51, AC-59, AC-61)', async () => {
+    const { app } = await setup();
+    const day = (d: number) => new Date(`2026-03-0${d}T00:00:00Z`);
+    const older = store.addRun({ agentId: AGENT_ID, startedAt: day(1), status: 'completed' });
+    const mid = store.addRun({ agentId: AGENT_ID, startedAt: day(2), status: 'completed_with_errors' });
+    const failed = store.addRun({ agentId: AGENT_ID, startedAt: day(3), status: 'failed' });
+    const running = store.addRun({ agentId: AGENT_ID, startedAt: day(4), status: 'running' });
+    const ov = EvalOverview.parse((await app.inject({ method: 'GET', url: '/evals/overview' })).json());
+    const mine = ov.agents.find((a) => a.agent_id === AGENT_ID)!;
+    expect([mine.latest?.id, mine.previous?.id]).toEqual([mid.id, older.id]);
+    expect(ov.recent.map((r) => r.id)).toEqual([running.id, failed.id, mid.id, older.id]);
+    const other = ov.agents.find((a) => a.agent_id === AGENT2_ID)!;
+    expect([other.latest, other.previous]).toEqual([null, null]);
+  });
+
   it('compares two runs of one agent with the older as a, and 400s across agents', async () => {
     const { app } = await setup();
     const older = store.addRun({ agentId: AGENT_ID, startedAt: new Date('2026-03-01T00:00:00Z') });

@@ -11,7 +11,7 @@ export interface FinalizedRun {
   metrics: EvalRunMetrics;
   counts: EvalRunCounts;
   durationMs: number;
-  /** Null when any case's cost is unknown. */
+  /** Sum of the known costs of scored cases; null when no scored case has a known cost. */
   costUsd: number | null;
 }
 
@@ -21,8 +21,7 @@ export function finalizeRun(results: ReadonlyArray<FinalizableResult>): Finalize
   const errored = results.filter((r) => r.status === 'error').length;
   const status = errored === 0 ? 'completed' : errored === results.length ? 'failed' : 'completed_with_errors';
   const durationMs = results.reduce((sum, r) => sum + (r.duration_ms ?? 0), 0);
-  const costUsd = results.some((r) => r.cost_usd == null)
-    ? null
-    : results.reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
+  const known = results.filter((r) => r.status === 'ok' && r.cost_usd != null);
+  const costUsd = known.length === 0 ? null : known.reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
   return { status, metrics, counts, durationMs, costUsd };
 }

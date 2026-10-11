@@ -99,4 +99,6 @@ can be recomputed from them and two runs can be compared without re-reading find
   step. The model is nondeterministic: run-to-run differences with the same agent can
   be noise.
 - Costs and token counts are reported per case and per run but do not enter the
-  metrics.
+  metrics. A run's total cost is the sum of the known costs of its scored cases;
+  errored cases are ignored, and the total is null only when no scored case has a
+  known cost.

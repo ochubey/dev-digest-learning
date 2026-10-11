@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { EvalExpectation } from '@devdigest/shared';
 import { matches } from '../src/modules/evals/matching.js';
 import { scoreCase, scoreRun, metricsFromCounts } from '../src/modules/evals/scoring.js';
@@ -110,11 +110,19 @@ describe('eval scoring', () => {
     expect(counts.cases_passed).toBe(1);
   });
 
-  it('spy provider passed alongside: zero calls', () => {
-    const llm = { complete: vi.fn(), chat: vi.fn() };
-    scoreRun([ok(exp('must_find'), [f(10, 10)], 1), ok(exp('must_not_flag'), [])]);
-    scoreCase(exp('must_find'), [f(10, 10)]);
-    expect(llm.complete).not.toHaveBeenCalled();
-    expect(llm.chat).not.toHaveBeenCalled();
+  it('scoring is a pure function of plain data: inputs are not mutated and repeated calls agree (AC-23; import purity is in eval-scoring-purity.test.ts)', () => {
+    const results = [ok(exp('must_find'), [f(10, 10)], 1), ok(exp('must_not_flag'), [f(50, 50)])];
+    const frozen = structuredClone(results);
+    const deepFreeze = (o: unknown): void => {
+      if (o && typeof o === 'object') {
+        Object.freeze(o);
+        Object.values(o).forEach(deepFreeze);
+      }
+    };
+    deepFreeze(results);
+    const first = scoreRun(results);
+    expect(scoreRun(results)).toEqual(first);
+    expect(results).toEqual(frozen);
+    expect(scoreCase(exp('must_find'), [f(10, 10)])).toEqual(scoreCase(exp('must_find'), [f(10, 10)]));
   });
 });

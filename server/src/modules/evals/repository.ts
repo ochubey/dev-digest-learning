@@ -450,7 +450,8 @@ export class EvalsRepository implements EvalsStore {
           and(
             eq(t.evalSuiteRuns.workspaceId, workspaceId),
             eq(t.evalSuiteRuns.agentId, agentId),
-            ne(t.evalSuiteRuns.status, 'running'),
+            // AC-51: only completed / completed_with_errors runs count as finished.
+            inArray(t.evalSuiteRuns.status, ['completed', 'completed_with_errors']),
           ),
         )
         .orderBy(desc(t.evalSuiteRuns.startedAt), desc(t.evalSuiteRuns.id))

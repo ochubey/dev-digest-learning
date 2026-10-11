@@ -274,7 +274,7 @@ export class FakeEvalStore implements EvalsStore {
     const runs = [...this.runs.values()].filter((r) => r.workspaceId === ws).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
     return {
       agents: agents.map((a) => {
-        const fin = runs.filter((r) => r.agentId === a.id && r.status !== 'running');
+        const fin = runs.filter((r) => r.agentId === a.id && (r.status === 'completed' || r.status === 'completed_with_errors'));
         return {
           agent_id: a.id,
           name: a.name,
