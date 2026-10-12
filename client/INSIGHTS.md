@@ -17,14 +17,21 @@
 
 - `messages/en/skills.json` (pre-existing, unused before this task) documents a different, out-of-scope Skills Lab design (community search, URL import, "untrusted source"/vetting workflow) that doesn't match the actual `Skill` Zod contract (no vetting/trust field) — the `/skills` page built for the in-scope spec (Config/Preview/Versions tabs, file-only import) does NOT use this namespace's keys; inline English strings were used instead to avoid shipping misleading copy. `client/messages/en/skills.json:1`. (2026-09-28)
 
+- `ContextDocPicker` is connected, not controlled: it takes `owner={{kind: "agent"|"skill", id}}`, calls the matching hooks itself and mounts the preview drawer, so the Agent and Skill Context tabs are thin wrappers (repo picker + picker). Attached paths are repo-agnostic; "Not found on main" is relative to the repository selected in the tab, not to the PR repo used at run time. `client/src/components/project-context/ContextDocPicker/ContextDocPicker.tsx:49`. (2026-10-10)
+
 ## Tool & Library Notes
 
 - `@devdigest/ui`'s `Markdown` component (`vendor/ui/primitives/Markdown.tsx`) is react-markdown + remark-gfm with no `rehype-raw` plugin registered and no `dangerouslySetInnerHTML` — it never renders raw HTML, so it satisfies a "no raw HTML in markdown preview" security requirement out of the box; reuse it instead of hand-rolling a markdown parser for previews. `client/src/vendor/ui/primitives/Markdown.tsx:10`. (2026-09-28)
 - `pnpm` in this sandbox was a no-op wrapper (its postinstall never ran, blocked by `allowScripts`) — fixed by running `node install.js` directly in the global pnpm package dir. `pnpm <script>` works normally now; no need for the `npm run` workaround noted earlier. (2026-09-27)
 
+- The client may import only TYPES from `@devdigest/shared`: its barrel re-exports with `.js` specifiers (`vendor/shared/index.ts:17`), which `tsc` and vitest resolve to `.ts` but webpack (`next build`/`next dev`) does not — a runtime import (e.g. a constant) typechecks, passes every test and then fails the build with "Module not found: Can't resolve './contracts/findings.js'". Mirror such values locally and pin parity with a test (`project-context/constants.ts:26` + `src/test/contracts-project-context.test.ts`). (2026-10-10)
+
 ## Recurring Errors & Fixes
 
 - The `Agent` and `Skill` Zod contracts each have TWO physical copies (`server/src/vendor/shared/contracts/knowledge.ts` and `client/src/vendor/shared/contracts/knowledge.ts`) that must be edited in lockstep — adding a required field (e.g. `skill_count`) to one without the other silently breaks `pnpm typecheck` only on the side you forgot, with a confusing "missing property" error pointing at unrelated test files that build object literals against the type. `client/src/vendor/shared/contracts/knowledge.ts:227`, `server/src/vendor/shared/contracts/knowledge.ts:233`. (2026-09-28)
+
+- Running `pnpm build` in `client/` while `pnpm dev` is up overwrites the shared `client/.next` (production output over dev output) and every dev page then returns HTTP 500 until `rm -rf client/.next && pnpm dev`. `next.config.mjs` has no `distDir`, and `scripts/e2e.sh` also starts Next in `client/`. Never run a build as a quick check next to a developer's dev server; `pnpm typecheck` + `pnpm test` do not touch `.next`. `client/next.config.mjs:6`. (2026-10-10)
+- Each detail page kept its own `VALID_TABS` list next to the editor's `TABS` constant, so a new tab was silently unreachable by `?tab=` deep link (fell back to Config) — happened to Agent and Skill pages. Both now derive the list from the editor's `TABS`; add tabs only in `constants.ts`. `client/src/app/agents/[id]/page.tsx:16`, `client/src/app/skills/[id]/page.tsx:26`. (2026-10-10)
 
 ## Session Notes
 
@@ -33,5 +40,7 @@
 - `@devdigest/ui`'s icon registry (`vendor/ui/icons.tsx`) has NO `GitCompare` or `RotateCcw` — used `GitCommit` (Diff button) and `RefreshCw` (Restore button) as the closest available icons instead of adding new lucide-react imports to the vendored (read-only) file. `client/src/vendor/ui/icons.tsx:1`. (2026-09-28)
 
 - `/conventions` has no `:repoId` in its `nav.ts` href (unlike `/repos/:repoId/pulls`), so it needs its own in-page repo picker; reused `useActiveRepo()` (the same repos list `RepoSwitcher` shows) but kept the selection as page-local state rather than calling `setRepoId`/navigating — the sidebar's repo stays untouched while browsing conventions for a different repo. `client/src/app/conventions/_components/ConventionsView/ConventionsView.tsx:1`. (2026-09-28)
+
+- SUPERSEDED 2026-10-10 (skills navigation): a skill card now opens `/skills/<id>?tab=config` directly and `/skills/[id]` is master-detail like `/agents/[id]` (`SkillsSidebar` on the left, active card highlighted); `SkillPreviewDrawer` was deleted. `client/src/app/skills/[id]/page.tsx:56`. (2026-10-10)
 
 ## Open Questions

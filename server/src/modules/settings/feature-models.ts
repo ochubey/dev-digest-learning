@@ -7,6 +7,7 @@ import {
 import type { Container } from '../../platform/container.js';
 import * as t from '../../db/schema.js';
 import { rowsToSettings } from './helpers.js';
+import { SECRET_KEY_BY_PROVIDER } from './constants.js';
 
 /**
  * Per-feature model configuration.
@@ -54,11 +55,25 @@ export async function getFeatureModelOverride(
   return undefined;
 }
 
-/** Resolve `id` to a concrete provider+model: workspace override, else registry default. */
+/**
+ * Resolve `id` to a concrete provider+model: workspace override, else registry
+ * default. An unset feature whose default provider has no key configured falls
+ * back to OpenRouter (same model, `<provider>/<model>`) when that key exists, so
+ * an untouched Settings page works with only an OpenRouter key. Explicit
+ * overrides are never rewritten.
+ */
 export async function resolveFeatureModel(
   container: Container,
   workspaceId: string,
   id: FeatureModelId,
 ): Promise<FeatureModelChoice> {
-  return (await getFeatureModelOverride(container, workspaceId, id)) ?? DEFAULTS[id];
+  const override = await getFeatureModelOverride(container, workspaceId, id);
+  if (override) return override;
+  const def = DEFAULTS[id];
+  if (def.provider === 'openrouter') return def;
+  const secretKey = SECRET_KEY_BY_PROVIDER[def.provider as 'openai' | 'anthropic'];
+  if (secretKey && !(await container.secrets.get(secretKey)) && (await container.secrets.get('OPENROUTER_API_KEY'))) {
+    return { provider: 'openrouter', model: `${def.provider}/${def.model}` };
+  }
+  return def;
 }

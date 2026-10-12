@@ -52,3 +52,19 @@ describe("SkillCard", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 });
+
+describe("SkillCard compact + active", () => {
+  it("renders compact mode without the description and marks the active card", () => {
+    const { container } = render(<SkillCard skill={SKILL} compact active />);
+    expect(screen.getByText("no-any")).toBeInTheDocument();
+    expect(screen.queryByText("Ban explicit any")).not.toBeInTheDocument();
+    expect(screen.getByRole("switch")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete skill" })).toBeInTheDocument();
+    expect((container.firstChild as HTMLElement).getAttribute("aria-current")).toBe("true");
+  });
+
+  it("is not marked active by default", () => {
+    const { container } = render(<SkillCard skill={SKILL} compact />);
+    expect((container.firstChild as HTMLElement).getAttribute("aria-current")).toBeNull();
+  });
+});

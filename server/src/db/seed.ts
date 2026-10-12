@@ -9,6 +9,10 @@ import {
   PERFORMANCE_REVIEWER_PROMPT,
   API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { wrapProjectDoc } from '@devdigest/reviewer-core';
+import type { RunTrace } from '@devdigest/shared';
+import { TiktokenTokenizer } from '../adapters/tokenizer/index.js';
+import { PROJECT_DOCS_FIXTURE, PROJECT_DOCS_FIXTURE_SHA } from './fixtures/project-docs.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -30,7 +34,21 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
 export const DEFAULT_WORKSPACE_NAME = 'default';
 export const SYSTEM_USER_EMAIL = 'you@local';
 
-export async function seed(db: Db): Promise<{ workspaceId: string; userId: string }> {
+/** Fixed id of the seeded agent run whose trace shows injected project context (e2e flow 10). */
+export const SEED_PROJECT_CONTEXT_RUN_ID = '5eed0000-0000-4000-8000-000000000c01';
+/** Project docs attached to the seeded Security Reviewer: 2 of the 4 fixture docs, so "attached first" is observable. */
+export const SEED_CONTEXT_PATHS = ['specs/security-baseline.md', 'docs/architecture.md'];
+
+export interface SeedOptions {
+  /**
+   * Attach the demo documents (SEED_CONTEXT_PATHS) to Security Reviewer. Only meaningful with the
+   * fixture docs source (PROJECT_DOCS_SOURCE=fixture): against a real repository those paths do
+   * not exist on main and every run would skip them as not_found.
+   */
+  demoContext?: boolean;
+}
+
+export async function seed(db: Db, opts: SeedOptions = {}): Promise<{ workspaceId: string; userId: string }> {
   // ---- workspace + user (no-auth defaults) ----
   let [ws] = await db
     .select()
@@ -470,7 +488,90 @@ Flag route/handler signature changes that remove or rename a required parameter,
     }
   }
 
+  // ---- project context: attached docs on Security Reviewer + one run trace that shows them ----
+  const [securityAgent] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'Security Reviewer')));
+  if (securityAgent) {
+    // Top-up only while nothing is attached, so a user's own attach/detach is not overwritten.
+    if (opts.demoContext && securityAgent.contextPaths.length === 0) {
+      await db.update(t.agents).set({ contextPaths: SEED_CONTEXT_PATHS }).where(eq(t.agents.id, securityAgent.id));
+    }
+    if (pr482) {
+      await seedProjectContextRun(db, { workspaceId, prId: pr482.id, prNumber: pr482.number, agent: securityAgent });
+    }
+  }
+
   return { workspaceId, userId };
+}
+
+/**
+ * One finished run (no findings, no review row) whose trace carries the project-context fields,
+ * built with the same wrapper and tokenizer as a live run. Fixed id; insert-if-absent.
+ */
+async function seedProjectContextRun(
+  db: Db,
+  a: { workspaceId: string; prId: string; prNumber: number; agent: typeof t.agents.$inferSelect },
+): Promise<void> {
+  const docs = PROJECT_DOCS_FIXTURE['acme/payments-api']!;
+  const tokenizer = new TiktokenTokenizer();
+  const injected = SEED_CONTEXT_PATHS.map((path) => {
+    const content = docs[path]!;
+    return { path, tokens: tokenizer.count(content), text: wrapProjectDoc(path, content) };
+  });
+  const injectedTokens = injected.reduce((n, d) => n + d.tokens, 0);
+
+  await db
+    .insert(t.agentRuns)
+    .values({
+      id: SEED_PROJECT_CONTEXT_RUN_ID,
+      workspaceId: a.workspaceId,
+      agentId: a.agent.id,
+      prId: a.prId,
+      provider: a.agent.provider,
+      model: a.agent.model,
+      durationMs: 1200,
+      tokensIn: 900,
+      tokensOut: 40,
+      status: 'done',
+      source: 'local',
+      findingsCount: 0,
+      grounding: '0/0',
+      score: 100,
+      blockers: 0,
+      severityCounts: { critical: 0, warning: 0, suggestion: 0 },
+    })
+    .onConflictDoNothing();
+
+  const trace: RunTrace = {
+    config: {
+      agent: a.agent.name,
+      version: `v${a.agent.version}`,
+      provider: a.agent.provider,
+      model: a.agent.model,
+      pr: a.prNumber,
+      source: 'local',
+    },
+    stats: { duration_ms: 1200, tokens_in: 900, tokens_out: 40, cost_usd: null, findings: 0, grounding: '0/0' },
+    prompt_assembly: {
+      system: a.agent.systemPrompt,
+      project_context_blocks: injected,
+      user: `Review PR #${a.prNumber}.`,
+    },
+    tool_calls: [],
+    raw_output: '{"verdict":"comment","summary":"Seeded run showing project context.","findings":[]}',
+    memory_pulled: [],
+    specs_read: injected.map((d) => ({
+      path: d.path,
+      tokens: d.tokens,
+      status: 'injected' as const,
+      origin: 'agent' as const,
+    })),
+    project_context: { commit_sha: PROJECT_DOCS_FIXTURE_SHA, injected_tokens: injectedTokens, soft_cap_exceeded: false },
+    log: [],
+  };
+  await db.insert(t.runTraces).values({ runId: SEED_PROJECT_CONTEXT_RUN_ID, trace }).onConflictDoNothing();
 }
 
 // CLI entrypoint
@@ -482,7 +583,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1);
   }
   const handle = createDb(url);
-  seed(handle.db)
+  seed(handle.db, { demoContext: process.env.PROJECT_DOCS_SOURCE === 'fixture' })
     .then(async (r) => {
       console.log('✓ seeded', r);
       await handle.close();

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces, users } from './core';
@@ -30,6 +31,9 @@ export const agents = pgTable('agents', {
   // REPO_INTEL_ENABLED flag is the second gate (facade degrades when off).
   repoIntel: boolean('repo_intel').notNull().default(true),
   enabled: boolean('enabled').notNull().default(true),
+  // Ordered repo-relative paths of project docs (specs/docs/insights) attached to this agent.
+  // Paths only, never document bodies.
+  contextPaths: jsonb('context_paths').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   version: integer('version').notNull().default(1),
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: now(),

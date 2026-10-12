@@ -1,0 +1,45 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", gap: 12, maxWidth: 760 } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 12 } satisfies CSSProperties,
+  filter: { flex: 1 } satisfies CSSProperties,
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 8,
+    overflow: "hidden",
+  } satisfies CSSProperties,
+  block: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 10,
+    padding: 24,
+    textAlign: "center",
+    color: "var(--text-secondary)",
+    fontSize: 14,
+  } satisfies CSSProperties,
+  errorBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 12px",
+    border: "1px solid var(--crit)",
+    borderRadius: 8,
+    background: "var(--crit-bg)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  errorText: { flex: 1, display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
+  errorTitle: { fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
+  limitNote: { fontSize: 13, color: "var(--text-secondary)" } satisfies CSSProperties,
+  writeError: {
+    padding: "8px 12px",
+    borderRadius: 8,
+    border: "1px solid var(--crit)",
+    background: "var(--crit-bg)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  skeletons: { display: "flex", flexDirection: "column", gap: 10, padding: 16 } satisfies CSSProperties,
+} as const;

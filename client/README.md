@@ -31,10 +31,14 @@ flowchart TD
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
-  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
+  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/brief<br/>POST /pulls/:id/brief · POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   AGENTS -->|"/agents · /agents/:id"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
+
+The PR detail Overview tab renders the PR Brief card (`_components/PrBriefCard`);
+its file/line refs deep-link to `?tab=diff&file=<path>&line=<n>`, which opens and
+highlights that file in the Files changed tab.
 
 Cross-cutting chrome lives in `src/components/app-shell` (nav, breadcrumbs,
 `g`-then-key shortcuts). Pages are thin; feature logic sits in colocated

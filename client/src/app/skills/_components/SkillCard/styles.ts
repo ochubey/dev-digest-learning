@@ -3,17 +3,23 @@ import type { CSSProperties } from "react";
 /** Co-located styles for SkillCard — grid card (mirrors AgentCard's colors,
     laid out as a self-contained card rather than a narrow list row). */
 export const s = {
-  card: (enabled: boolean): CSSProperties => ({
-    padding: 16,
-    borderRadius: 10,
+  card: (enabled: boolean, active = false, compact = false): CSSProperties => ({
+    padding: compact ? 12 : 16,
+    borderRadius: compact ? 8 : 10,
     cursor: "pointer",
-    border: "1px solid var(--border)",
-    background: "var(--bg-elevated)",
+    border: "1px solid " + (active ? "var(--border-strong)" : "var(--border)"),
+    background: active ? "var(--bg-hover)" : "var(--bg-elevated)",
     opacity: enabled ? 1 : 0.6,
     display: "flex",
     flexDirection: "column",
-    minHeight: 150,
+    ...(compact ? { marginBottom: 10 } : { minHeight: 150 }),
   }),
+  /** Compact footer: no top border/spacing, sits in the same row feel as AgentCard. */
+  compactFooterRow: {
+    display: "flex",
+    alignItems: "center",
+    marginTop: 8,
+  } satisfies CSSProperties,
   headerRow: { display: "flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
   iconBox: {
     width: 26,

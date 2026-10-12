@@ -26,6 +26,9 @@ const EnvSchema = z.object({
   // Note: even when on, sections only populate once the repo is indexed; an
   // unindexed repo degrades gracefully. Per-agent override: agents.repo_intel.
   REPO_INTEL_ENABLED: z.string().optional(),
+  // Where project-context documents are read from. 'fixture' serves deterministic
+  // acme/payments-api docs (e2e/demo, no network); 'github' reads via the GitHub API.
+  PROJECT_DOCS_SOURCE: z.enum(['github', 'fixture']).default('github'),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -59,6 +62,8 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
+  /** Project-context document source: GitHub API or the deterministic fixture. */
+  projectDocsSource: 'github' | 'fixture';
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -77,5 +82,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
+    projectDocsSource: parsed.PROJECT_DOCS_SOURCE,
   };
 }

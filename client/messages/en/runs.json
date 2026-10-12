@@ -35,7 +35,18 @@
       "skillsLoaded": "Skills loaded",
       "specsRead": "Specs read",
       "items": "{count, plural, one {# item} other {# items}}",
-      "none": "none"
+      "none": "none",
+      "specTokens": "{path} · {tokens} tok",
+      "specSkipped": "Skipped: {reason}",
+      "specReason": {
+        "not_found": "not found on main",
+        "read_error": "could not be read",
+        "not_text": "not valid UTF-8 text",
+        "invalid_path": "invalid path",
+        "over_budget": "over the 32,000-token ceiling",
+        "empty": "empty document"
+      },
+      "specsSoftCap": "Attached specs total {tokens, number} tokens, above the {cap, number}-token guideline."
     },
     "stat": {
       "duration": "DURATION",
@@ -49,6 +60,7 @@
       "memory": "Memory (dynamic)",
       "repoMap": "Repo skeleton — repo-intel (dynamic)",
       "specs": "Project context (dynamic)",
+      "projectContext": "Project context — attached specs (untrusted)",
       "callers": "Callers of changed symbols — repo-intel (dynamic)",
       "user": "User / diff (dynamic)",
       "copy": "Copy",

@@ -1,3 +1,4 @@
+import { sameOrderedList } from '../_shared/lists.js';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
@@ -145,6 +146,32 @@ export class AgentsRepository {
     return row;
   }
 
+  /**
+   * Replace the ordered project-context attachment list. A differing list bumps
+   * the version and snapshots the new config (incl. `context_paths`); an identical
+   * list is a no-op (no write, no bump). Returns undefined if the agent is unknown.
+   */
+  async setContextPaths(
+    workspaceId: string,
+    id: string,
+    paths: string[],
+  ): Promise<AgentRow | undefined> {
+    const existing = await this.getById(workspaceId, id);
+    if (!existing) return undefined;
+    const current = existing.contextPaths;
+    if (sameOrderedList(current, paths)) {
+      return existing;
+    }
+    const nextVersion = existing.version + 1;
+    const [row] = await this.db
+      .update(t.agents)
+      .set({ contextPaths: paths, version: nextVersion })
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)))
+      .returning();
+    if (row) await this.snapshotVersion(row, nextVersion);
+    return row;
+  }
+
   private async snapshotVersion(row: AgentRow, version: number): Promise<void> {
     const skills = await this.skillIdsForAgent(row.id);
     await this.db
@@ -161,6 +188,7 @@ export class AgentsRepository {
           ci_fail_on: row.ciFailOn,
           repo_intel: row.repoIntel,
           skills,
+          context_paths: row.contextPaths,
         },
       })
       .onConflictDoNothing();

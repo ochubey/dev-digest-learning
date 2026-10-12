@@ -19,10 +19,13 @@ interface DiffTabProps {
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** Deep-link target from the URL (?file=&line=); null when absent or unsafe. */
+  target?: { file: string; line: number | null } | null;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, files, canComment, target }: DiffTabProps) {
   const t = useTranslations("prReview");
+  const tBrief = useTranslations("brief");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   // One switch for GitHub comments and inline finding cards (dots/counters stay).
@@ -48,6 +51,25 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   }, [reviews, files]);
   const findings: DiffFindingsApi = { items: findingItems, show: showComments, prId };
   const reviewNotRun = !!reviews && !reviews.some((r) => r.kind === "review");
+
+  // Toast once per distinct unknown target path; a re-render with the same path stays quiet.
+  const toastedPath = React.useRef<string | null>(null);
+  const targetFile = target?.file ?? null;
+  // Set by the target FileCard once it scrolled; survives FileCard remounts (SmartDiffGroup
+  // key={version}, DiffViewer key={i}). Cleared when the target goes away.
+  const scrolledRef = React.useRef<string | null>(null);
+  if (!target) scrolledRef.current = null;
+  const targetUnknown =
+    targetFile != null && files.length > 0 && !files.some((f) => f.path === targetFile);
+  React.useEffect(() => {
+    if (!targetUnknown) {
+      toastedPath.current = null;
+      return;
+    }
+    if (toastedPath.current === targetFile) return;
+    toastedPath.current = targetFile;
+    notify.info(tBrief("card.notInDiff"));
+  }, [targetUnknown, targetFile, tBrief]);
 
   const commentCount = comments?.length ?? 0;
   const toggleCount = commentCount + findingItems.length;
@@ -139,11 +161,13 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
               findingCounts={g.findingCounts}
               commenting={commenting}
               findings={findings}
+              target={target}
+              scrolledRef={scrolledRef}
             />
           ))}
         </div>
       ) : (
-        <DiffViewer files={files} commenting={commenting} findings={findings} />
+        <DiffViewer files={files} commenting={commenting} findings={findings} target={target} scrolledRef={scrolledRef} />
       )}
     </section>
   );

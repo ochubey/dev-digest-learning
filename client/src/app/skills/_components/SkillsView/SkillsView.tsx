@@ -1,29 +1,28 @@
-/* SkillsView — CSS grid of skill cards on /skills. Clicking a card opens a
-   side-panel preview (SkillPreviewDrawer); "Add Skill" opens AddSkillModal
-   (Create/Import choice). Full editing lives at /skills/[id]. */
+/* SkillsView — CSS grid of skill cards on /skills. Clicking a card goes
+   straight to /skills/[id]?tab=config (like /agents); "Add Skill" opens
+   AddSkillModal (Create/Import choice) and lands on the new skill's editor. */
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { Button, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
-import type { Skill } from "@devdigest/shared";
 import { AppShell } from "../../../../components/app-shell";
 import { useSkills } from "../../../../lib/hooks/skills";
 import { SkillCard } from "../SkillCard";
 import { ImportDialog } from "../ImportDialog";
 import { AddSkillModal } from "../AddSkillModal";
-import { SkillPreviewDrawer } from "./_components/SkillPreviewDrawer";
 import { filterSkills } from "./helpers";
 import { s } from "./styles";
 
 export function SkillsView() {
+  const router = useRouter();
   const { data: skills, isLoading, isError, refetch } = useSkills();
   const [search, setSearch] = React.useState("");
-  const [previewId, setPreviewId] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
 
   const list = filterSkills(skills ?? [], search);
-  const preview: Skill | null = (skills ?? []).find((sk) => sk.id === previewId) ?? null;
+  const openSkill = (id: string) => router.push(`/skills/${id}?tab=config`);
 
   return (
     <AppShell crumb={[{ label: "Skills Lab" }, { label: "Skills" }]}>
@@ -32,7 +31,7 @@ export function SkillsView() {
           onClose={() => setAdding(false)}
           onCreated={(skill) => {
             setAdding(false);
-            setPreviewId(skill.id);
+            openSkill(skill.id);
           }}
           onChooseImport={() => {
             setAdding(false);
@@ -45,11 +44,10 @@ export function SkillsView() {
           onClose={() => setImporting(false)}
           onImported={(skill) => {
             setImporting(false);
-            setPreviewId(skill.id);
+            openSkill(skill.id);
           }}
         />
       )}
-      {preview && <SkillPreviewDrawer skill={preview} onClose={() => setPreviewId(null)} />}
 
       <div style={s.wrap}>
         <div style={s.header}>
@@ -96,7 +94,7 @@ export function SkillsView() {
           {!isLoading && !isError && list.length > 0 && (
             <div style={s.grid}>
               {list.map((sk) => (
-                <SkillCard key={sk.id} skill={sk} onClick={() => setPreviewId(sk.id)} />
+                <SkillCard key={sk.id} skill={sk} onClick={() => openSkill(sk.id)} />
               ))}
             </div>
           )}

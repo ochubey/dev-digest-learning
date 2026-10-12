@@ -47,7 +47,10 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     let details: unknown;
     try {
       const body = await res.json();
-      if (body?.error) {
+      if (typeof body?.error === "string") {
+        // Brief routes: { error: "<fixed server text>", retry_after? }.
+        message = body.error;
+      } else if (body?.error) {
         code = body.error.code;
         message = body.error.message ?? message;
         details = body.error.details;

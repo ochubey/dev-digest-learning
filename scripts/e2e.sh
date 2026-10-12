@@ -39,6 +39,9 @@ WEB_PORT="${E2E_WEB_PORT:-3100}"
 # an IPv6 ::1 vs published-IPv4 mismatch against the container.
 export DATABASE_URL="postgres://${PG_USER}:${PG_PASS}@127.0.0.1:${PG_PORT}/${PG_DB}"
 export API_PORT WEB_PORT
+# Deterministic project documents (server/src/db/fixtures/project-docs.ts) instead of GitHub:
+# the hermetic stack has no token, and flow 09 lists the repo's documents.
+export PROJECT_DOCS_SOURCE=fixture
 export NEXT_PUBLIC_API_BASE="http://localhost:${API_PORT}"
 export E2E_BASE_URL="http://localhost:${WEB_PORT}"
 

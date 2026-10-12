@@ -69,10 +69,12 @@ flowchart TB
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
+    brief["brief<br/>GET/POST /pulls/:id/brief"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id"]
+    projectContext["project-context<br/>GET /context/default-repo<br/>GET /repos/:id/context/docs[?refresh=1] (every eligible .md of main, max 500, with total + truncated) · /docs/preview?path=<br/>GET/PUT /agents/:id/context · /skills/:id/context"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
@@ -95,6 +97,7 @@ flowchart TB
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` | — | optional, per-provider; also settable via Settings UI |
 | `GITHUB_TOKEN` | — | optional; PAT with repo scope (`GITHUB_PAT` accepted as a fallback) |
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
+| `PROJECT_DOCS_SOURCE` | `github` | project-context document source: `github` (default branch via Octokit) or `fixture` (deterministic docs from `src/db/fixtures/project-docs.ts`; used by the e2e stack). Discovery lists every `.md` file on the default branch (max 500) except dot-folders, `node_modules`, `vendor`, `dist`, `build`, `out`, `coverage` and `CHANGELOG.md` |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
@@ -106,7 +109,7 @@ through `SecretsProvider` (`~/.devdigest/secrets.json`, mode `0600`, with
 
 Migrations are **not** applied on boot — run `pnpm db:migrate` (pgvector is
 enabled by migration `0000`). `pnpm db:seed` is idempotent demo data
-(`acme/payments-api`, PR #482, the two built-in agents).
+(`acme/payments-api`, PR #482, the built-in agents). It also attaches two project documents to Security Reviewer and stores one finished run with a project-context trace (`SEED_PROJECT_CONTEXT_RUN_ID`) for PR #482; the demo reset keeps both.
 
 ## Review context (non-obvious)
 
@@ -131,6 +134,29 @@ What the reviewer actually sends to the model is assembled in
 - **Grounding is mandatory.** Every finding must cite a line that exists in the
   diff or it is dropped (`groundFindings`), and the score is recomputed from the
   surviving findings — the model's self-reported score is ignored.
+
+## PR Brief
+
+`modules/brief` serves the Overview "PR brief" card: `GET /pulls/:id/brief`
+returns the stored brief (`404` if none, `403` for another workspace's PR) and
+`POST /pulls/:id/brief` generates one (`429 {error, retry_after}` + `Retry-After`
+when rate limited, `502 {error, retry_after}` when generation fails; nothing is
+written on failure).
+
+- **One model call.** A single `completeStructured` call with `maxRetries: 1` and
+  a 50 s cap; the model comes from the `risk_brief` feature-model setting.
+- **Token budget.** The exact payload is limited to 8000 tokens, with a 1500-token
+  reserve for prompt framing.
+- **Grounding.** File and line refs in the result are checked against the PR diff;
+  refs outside it are flagged and lines are snapped to the nearest changed line.
+  A risk may carry one optional anchor (file and line range); it is grounded to the
+  risk's own refs and a diff file, clipped to the hunk line ranges, and dropped
+  (counted in `dropped_anchors`) when it cannot be validated.
+- **Limiter.** 30 s per PR (in-process), independent of the global rate limit.
+- **No hunk bodies to the model.** Only diff facts (paths, stats, roles), never
+  patch text.
+- **Cache and staleness.** `pr_brief` stores the head SHA the brief was built from;
+  `stale` is computed on read by comparing it with the PR's current head SHA.
 
 ## Testing
 

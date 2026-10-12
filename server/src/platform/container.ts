@@ -28,6 +28,9 @@ import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
+import type { ProjectDocsSource } from '../modules/project-context/ports.js';
+import { OctokitProjectDocsSource } from '../adapters/project-docs/octokit.js';
+import { FixtureProjectDocsSource } from '../adapters/project-docs/fixture.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 
 /**
@@ -51,6 +54,8 @@ export interface ContainerOverrides {
   /** repo-intel T3 adapters — only the indexer pipeline reads these. */
   depgraph?: DepGraph;
   tokenizer?: Tokenizer;
+  /** Project-context document source (tests inject MockProjectDocsSource). */
+  projectDocs?: ProjectDocsSource;
 }
 
 export class Container {
@@ -65,6 +70,7 @@ export class Container {
   private _github?: GitHubClient;
   private _codeIndex?: CodeIndex;
   private _embedder?: Embedder;
+  private _projectDocs?: ProjectDocsSource;
   private llmCache = new Map<string, LLMProvider>();
 
   // Shared repositories for cross-cutting entities (agents, reviews/pulls,
@@ -159,6 +165,20 @@ export class Container {
     return this._github;
   }
 
+  /** Project-context document source: override, fixture (PROJECT_DOCS_SOURCE=fixture), else GitHub. */
+  async projectDocs(): Promise<ProjectDocsSource> {
+    if (this.overrides.projectDocs) return this.overrides.projectDocs;
+    if (this._projectDocs) return this._projectDocs;
+    if (this.config.projectDocsSource === 'fixture') {
+      this._projectDocs = new FixtureProjectDocsSource();
+      return this._projectDocs;
+    }
+    const token = await this.secrets.get('GITHUB_TOKEN');
+    if (!token) throw new ConfigError('GITHUB_TOKEN is not configured');
+    this._projectDocs = new OctokitProjectDocsSource(token);
+    return this._projectDocs;
+  }
+
   /** Resolve an LLM provider by id; constructs from the secret key, cached. */
   async llm(id: 'openai' | 'anthropic' | 'openrouter'): Promise<LLMProvider> {
     const injected = this.overrides.llm?.[id];
@@ -214,6 +234,7 @@ export class Container {
   invalidateSecretCaches(): void {
     this.llmCache.clear();
     this._github = undefined;
+    this._projectDocs = undefined;
     this._embedder = undefined;
   }
 }

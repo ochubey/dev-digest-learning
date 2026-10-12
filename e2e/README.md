@@ -82,6 +82,8 @@ Env knobs:
 
 - Runner: `E2E_BASE_URL`, `AGENT_BROWSER_BIN` (default `agent-browser`),
   `E2E_STEP_TIMEOUT` (ms, default 60000).
+- Server: flows 09 and 10 need `PROJECT_DOCS_SOURCE=fixture` on the API (set by
+  `scripts/e2e.sh` and `.github/workflows/e2e-web.yml`; for your own stack add it to `server/.env`).
 - Hermetic stack (`scripts/e2e.sh`): `E2E_PG_PORT` (5433), `E2E_API_PORT` (3101),
   `E2E_WEB_PORT` (3100), `E2E_PG_CONTAINER` (`devdigest-e2e-postgres`),
   `E2E_PG_IMAGE` (`pgvector/pgvector:pg16`).
@@ -100,3 +102,7 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `05-pr-diff` | PR #482 → Files changed tab → seeded file renders in the diff viewer |
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
+| `08-pr-brief` | PR #482 → Overview → PR Brief card empty state ("Generate brief", no model call); `?tab=diff&file=src%2Fconfig.ts&line=12` deep link → `src/config.ts` file card expanded and highlighted (uses `eval` to navigate) |
+| `09-agent-context` | `/agents` → Security Reviewer → `?tab=context` → the 6 fixture documents listed (including a root `README.md` and `client/specs/ui-components.md`), "2 of 6 attached" badge, attached rows first, footer "2 files · N tokens total" (needs the API started with `PROJECT_DOCS_SOURCE=fixture`) |
+| `10-trace-project-context` | PR #482 → `?tab=findings&trace=<seeded run id>` → Specs read lists the seeded documents as "path · N tok"; Prompt assembly → project context block holds `<untrusted source="specs/security-baseline.md">`, the document text and `</untrusted>` |
+| `11-skill-context` | `/skills` → click the seeded `breaking-change-detector` card → `/skills/<id>?tab=config` with the left skills list (open skill highlighted) → `?tab=context` → "Project context to use" title and Repository picker visible (read-only) |

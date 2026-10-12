@@ -34,6 +34,7 @@ import type {
   SecretKey,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
+import type { ProjectDocsSource, TreeEntry } from '../modules/project-context/ports.js';
 
 /**
  * Deterministic MOCK adapters for tests/dev — NO real network. Each mirrors the
@@ -357,5 +358,58 @@ export class MockSecretsProvider implements SecretsProvider {
   constructor(private secrets: Partial<Record<string, string>> = {}) {}
   async get(key: SecretKey): Promise<string | undefined> {
     return this.secrets[key as string];
+  }
+}
+
+// ---------- Mock project docs source ----------
+export interface MockProjectDocsOptions {
+  /** Branch -> commit sha. Unlisted branches resolve to `head-<branch>`. */
+  heads?: Record<string, string>;
+  /** Files per ref (commit sha): a string/bytes is the content, `null` is not-found, an Error is thrown. */
+  files?: Record<string, Record<string, string | Uint8Array | null | Error>>;
+  /** Extra non-blob tree entries (symlinks, submodules) per ref. */
+  extraEntries?: Record<string, TreeEntry[]>;
+  /** Make resolveBranchHead / listTree throw. */
+  headError?: Error;
+  listError?: Error;
+}
+
+export class MockProjectDocsSource implements ProjectDocsSource {
+  public calls: { method: 'resolveBranchHead' | 'listTree' | 'readBlob'; args: unknown[] }[] = [];
+  private heads: Record<string, string>;
+
+  constructor(private opts: MockProjectDocsOptions = {}) {
+    this.heads = { ...(opts.heads ?? {}) };
+  }
+
+  /** Simulate the branch tip moving. */
+  setHead(branch: string, sha: string): void {
+    this.heads[branch] = sha;
+  }
+
+  async resolveBranchHead(repo: RepoRef, branch: string): Promise<string> {
+    this.calls.push({ method: 'resolveBranchHead', args: [repo, branch] });
+    if (this.opts.headError) throw this.opts.headError;
+    return this.heads[branch] ?? `head-${branch}`;
+  }
+
+  async listTree(repo: RepoRef, sha: string): Promise<TreeEntry[]> {
+    this.calls.push({ method: 'listTree', args: [repo, sha] });
+    if (this.opts.listError) throw this.opts.listError;
+    const files = this.opts.files?.[sha] ?? {};
+    const blobs: TreeEntry[] = Object.keys(files).map((path) => ({
+      path,
+      kind: 'blob',
+      blobSha: `blob:${sha}:${path}`,
+    }));
+    return [...blobs, ...(this.opts.extraEntries?.[sha] ?? [])];
+  }
+
+  async readBlob(repo: RepoRef, path: string, sha: string): Promise<Uint8Array | null> {
+    this.calls.push({ method: 'readBlob', args: [repo, path, sha] });
+    const configured = this.opts.files?.[sha]?.[path];
+    if (configured instanceof Error) throw configured;
+    if (configured === undefined || configured === null) return null;
+    return typeof configured === 'string' ? new TextEncoder().encode(configured) : configured;
   }
 }

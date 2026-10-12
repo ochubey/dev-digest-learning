@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import type { Db } from './client.js';
 import * as t from './schema.js';
+import { SEED_PROJECT_CONTEXT_RUN_ID } from './seed.js';
 
 /** The fictional demo repo created by `seed()`. The reset only ever touches this repo. */
 export const DEMO_REPO_FULL_NAME = 'acme/payments-api';
@@ -46,8 +47,11 @@ export async function resetDemoProject(db: Db): Promise<{ pulls: number }> {
         ),
       );
 
-    // After the reviews (a review may point at its run); run_traces cascade.
-    await tx.delete(t.agentRuns).where(inArray(t.agentRuns.prId, prIds));
+    // After the reviews (a review may point at its run); run_traces cascade. The seeded
+    // project-context run is part of the baseline and stays.
+    await tx
+      .delete(t.agentRuns)
+      .where(and(inArray(t.agentRuns.prId, prIds), ne(t.agentRuns.id, SEED_PROJECT_CONTEXT_RUN_ID)));
 
     const seedReviews = await tx
       .select({ id: t.reviews.id })

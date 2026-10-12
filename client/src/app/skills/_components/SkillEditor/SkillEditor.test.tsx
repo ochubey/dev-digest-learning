@@ -64,12 +64,12 @@ describe("SkillEditor", () => {
     expect(screen.getByText("v1")).toBeInTheDocument();
   });
 
-  it("only renders three tabs (Config, Preview, Versions)", () => {
+  it("renders four tabs (Config, Preview, Versions, Context) and no Evals/Stats", () => {
     render(<SkillEditor skill={SKILL} />);
     expect(screen.getByText("Config")).toBeInTheDocument();
     expect(screen.getByText("Preview")).toBeInTheDocument();
     expect(screen.getByText("Versions")).toBeInTheDocument();
-    expect(screen.queryByText("Context")).not.toBeInTheDocument();
+    expect(screen.getByText("Context")).toBeInTheDocument();
     expect(screen.queryByText("Evals")).not.toBeInTheDocument();
     expect(screen.queryByText("Stats")).not.toBeInTheDocument();
   });

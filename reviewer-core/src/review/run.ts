@@ -8,7 +8,7 @@ import type {
   Intent,
 } from '@devdigest/shared';
 import { ModelReviewSchema, type ModelReviewOut } from './output-schema.js';
-import { assemblePrompt } from '../prompt.js';
+import { assemblePrompt, type ProjectContextDoc } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 import type { Logger } from '../logging/prompt-logger.js';
@@ -62,6 +62,12 @@ export interface ReviewInput {
   memory?: string[];
   /** Project-context spec chunks (untrusted; delimiter-wrapped downstream). */
   specs?: string[];
+  /**
+   * Project-context documents (SPEC-02), in effective order. Untrusted. Injected
+   * whole (never summarised) as `## Project context` in EVERY chunk call. Policy
+   * (scope/grounding/verdict) never reads them. Empty/undefined → section omitted.
+   */
+  projectContext?: ProjectContextDoc[];
   /**
    * Optional callers-of-changed-symbols digest (T1.3). Untrusted; rendered
    * before the diff section. Empty/undefined → section omitted.
@@ -125,6 +131,8 @@ export interface ReviewOutcome {
   mode: ReviewMode;
   /** Prompt assembly (for the run trace). Single-pass: the one call; map-reduce: the whole-diff assembly. */
   assembly: PromptAssembly;
+  /** Project-context blocks exactly as sent (last assembly); [] when none. */
+  projectContext: { path: string; text: string }[];
   /** Per-chunk labels (for the run trace's tool_calls). */
   chunks: { label: string }[];
   tokensIn: number;
@@ -160,6 +168,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     skills: input.skills,
     memory: input.memory,
     specs: input.specs,
+    projectContext: input.projectContext,
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
@@ -169,12 +178,14 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   };
 
   // Whole-diff assembly is the trace default; overwritten below for single-pass.
-  let assembly: PromptAssembly = assemblePrompt(
+  const whole = assemblePrompt(
     { ...promptParts, diff: input.diff.raw },
     input.logger,
     input.model,
     input.correlationId,
-  ).assembly;
+  );
+  let assembly: PromptAssembly = whole.assembly;
+  let projectContext = whole.projectContext;
 
   const chunks =
     mode === 'map-reduce'
@@ -212,6 +223,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
       input.correlationId,
     );
     if (mode === 'single-pass') assembly = a.assembly;
+    projectContext = a.projectContext;
     const res = await input.llm.completeStructured<ModelReviewOut>({
       model: input.model,
       schema: ModelReviewSchema,
@@ -267,6 +279,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     dropped: ground.dropped,
     mode,
     assembly,
+    projectContext,
     chunks: chunks.map((c) => ({ label: c.label })),
     tokensIn,
     tokensOut,

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces } from './core';
@@ -17,6 +18,8 @@ export const skills = pgTable('skills', {
   enabled: boolean('enabled').notNull().default(true),
   version: integer('version').notNull().default(1),
   evidenceFiles: jsonb('evidence_files').$type<string[]>(),
+  // Ordered repo-relative project doc paths attached to this skill (paths only).
+  contextPaths: jsonb('context_paths').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: now(),
 });
 
