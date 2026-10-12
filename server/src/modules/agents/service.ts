@@ -68,9 +68,15 @@ export class AgentsService {
     return toAgentDto(row, counts.get(id) ?? 0);
   }
 
-  /** Delete an agent (and its versions/skill-links, via cascade). */
+  /**
+   * Delete an agent (and its versions/skill-links, via cascade). Other modules clean up
+   * rows that reference the agent without a FK through `container.agentDeleteHooks`, run in
+   * the same transaction (evals removes its cases there; eval runs cascade through the FK).
+   */
   async delete(workspaceId: string, id: string): Promise<boolean> {
-    return this.repo.deleteById(workspaceId, id);
+    return this.repo.deleteById(workspaceId, id, async (tx) => {
+      for (const hook of this.container.agentDeleteHooks ?? []) await hook(tx, id);
+    });
   }
 
   async create(workspaceId: string, input: CreateAgentInput, userId?: string): Promise<Agent> {

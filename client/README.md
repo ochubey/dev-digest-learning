@@ -44,6 +44,34 @@ Cross-cutting chrome lives in `src/components/app-shell` (nav, breadcrumbs,
 `g`-then-key shortcuts). Pages are thin; feature logic sits in colocated
 `_components/<Name>/` folders, each with its own `*.test.tsx`.
 
+## Evals
+
+Eval pipeline UI (SPEC-03). Data comes from `src/lib/hooks/evals.ts` (TanStack
+Query hooks over `src/lib/api.ts`); shared pieces live in `src/components/evals`
+(`MetricStrip`, `ScoringNote`, `RunEvalControl`, `RunDetailDrawer`, `EvalDialog`,
+and pure helpers such as `latestFinished` / `previousFinished` / `passedParts`).
+
+| Where | What |
+|---|---|
+| `/evals` | Dashboard: every agent's latest numbers and recent runs (`EvalOverview`). |
+| `/evals/[agentId]` | One agent: metric cards, run history, run detail drawer, compare dialog (`AgentEvalPage`). |
+| `/agents/[id]?tab=evals` | Agent Evals tab (`EvalsTab`): case list, metric strip, Run all evals, last 10 runs; a run row opens the same run detail drawer. |
+| Finding cards (PR detail) | "Turn into eval case" opens `EvalCaseDialog`, prefilled from `GET /findings/:id/eval-case-draft`. |
+
+"Cases passed" is always `cases_passed / counts.cases_scored`; the metric cards derive
+latest/previous from the runs list (finished runs only), so a failed run never
+shows as "latest".
+
+Message namespaces (`messages/en/`): `evalsShared` (strip, scoring note, run
+control), `evalsTab` (agent tab), `evalsDashboard` (dashboard, drawer, compare).
+
+Test ids used by the e2e flows (`e2e/specs/12-agent-evals-tab.flow.json`,
+`13-eval-dashboard-compare.flow.json`): `eval-case-row`, `eval-case-kind`,
+`eval-metric-recall|precision|citation|passed`, `eval-run-button`,
+`eval-dashboard-link`, `eval-agent-row`, `eval-run-select`, `eval-compare-button`,
+`eval-compare-dialog`, `eval-compare-delta`, `eval-prompt-del`, `eval-prompt-ins`,
+`eval-dashboard-compare`.
+
 ## Testing
 
 Component/interaction tests (`*.test.tsx`) run under vitest + jsdom with `fetch`

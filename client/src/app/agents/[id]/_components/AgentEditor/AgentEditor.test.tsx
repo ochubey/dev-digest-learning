@@ -9,6 +9,10 @@ vi.mock("./_components/ContextTab", () => ({
   ContextTab: () => <div data-testid="agent-context-tab" />,
 }));
 
+vi.mock("./_components/EvalsTab", () => ({
+  EvalsTab: () => <div data-testid="agent-evals-tab" />,
+}));
+
 // Mock the data hooks so the editor renders without a network/query client.
 vi.mock("../../../../../lib/hooks/agents", () => ({
   useUpdateAgent: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, data: undefined }),
@@ -16,6 +20,7 @@ vi.mock("../../../../../lib/hooks/agents", () => ({
 }));
 
 import { AgentEditor } from "./AgentEditor";
+import { TABS } from "./constants";
 
 afterEach(cleanup);
 
@@ -55,5 +60,15 @@ describe("A2 Agent Editor (smoke)", () => {
     renderWithIntl(<AgentEditor agent={AGENT} tab="context" onTab={() => {}} />);
     expect(screen.getByText("Context")).toBeInTheDocument();
     expect(screen.getByTestId("agent-context-tab")).toBeInTheDocument();
+  });
+
+  it("renders Evals tab", () => {
+    renderWithIntl(<AgentEditor agent={AGENT} tab="evals" onTab={() => {}} />);
+    expect(screen.getByText("Evals")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-evals-tab")).toBeInTheDocument();
+  });
+
+  it("?tab=evals is a valid deep link (tab key registered in TABS)", () => {
+    expect(TABS.map((tb) => tb.key)).toContain("evals");
   });
 });

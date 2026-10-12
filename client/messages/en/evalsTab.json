@@ -1,0 +1,77 @@
+{
+  "title": "Evals",
+  "badge": {
+    "passing": "{passed} / {scored} passing",
+    "cases": "{count, plural, one {# case} other {# cases}}"
+  },
+  "loading": "Loading eval cases",
+  "error": {
+    "title": "Couldn’t load eval cases",
+    "body": "The eval cases could not be loaded."
+  },
+  "empty": {
+    "title": "No eval cases yet",
+    "hint": "Open a PR review, accept or dismiss a finding, then use Turn into eval case."
+  },
+  "cases": {
+    "title": "Cases",
+    "kind": {
+      "must_find": "must find",
+      "must_not_flag": "must not flag"
+    },
+    "origin": {
+      "accepted_finding": "from accepted finding",
+      "dismissed_finding": "from dismissed finding",
+      "seeded": "seeded"
+    },
+    "result": {
+      "pass": "pass",
+      "fail": "fail",
+      "error": "error",
+      "never": "never run"
+    },
+    "lines": "{file}:{start}–{end}"
+  },
+  "detail": {
+    "mustFindHit": "expected ≥1 matching finding, got {count}",
+    "mustFindMiss": "expected ≥1 matching finding, got 0",
+    "mustNotFlagClean": "expected no matching finding, got 0",
+    "mustNotFlagHit": "expected no matching finding, got {count}",
+    "error": "run error: {error}",
+    "errorUnknown": "run error"
+  },
+  "delete": {
+    "button": "Delete",
+    "ariaLabel": "Delete case {name}",
+    "confirm": "Delete this case? Past run results are kept.",
+    "confirmYes": "Delete case",
+    "confirmNo": "Cancel",
+    "failed": "Couldn’t delete the case."
+  },
+  "runs": {
+    "title": "Recent runs",
+    "empty": "No eval runs yet",
+    "dashboard": "View full dashboard",
+    "col": {
+      "ranAt": "Ran at",
+      "version": "Version",
+      "model": "Model",
+      "status": "Status",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "passed": "Cases passed",
+      "cost": "Cost"
+    },
+    "status": {
+      "running": "running",
+      "completed": "completed",
+      "completed_with_errors": "completed with errors",
+      "failed": "failed"
+    },
+    "version": "v{version}",
+    "passedValue": "{passed}/{total}",
+    "noValue": "—",
+    "openRun": "Open run details for {time}"
+  }
+}

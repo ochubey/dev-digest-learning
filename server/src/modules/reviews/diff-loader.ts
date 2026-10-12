@@ -4,6 +4,9 @@ import { parseUnifiedDiff } from '../../adapters/git/diff-parser.js';
 import * as schema from '../../db/schema.js';
 import type { ReviewRepository, PullRow } from './repository.js';
 
+/** The only repository capability the loader needs (lets other modules reuse it without a ReviewRepository). */
+export type PrFilesSource = Pick<ReviewRepository, 'getPrFiles'>;
+
 /**
  * Load the unified diff for a PR. Prefers a real `git diff base...head`; falls
  * back to assembling a synthetic unified diff from the persisted pr_files
@@ -11,7 +14,7 @@ import type { ReviewRepository, PullRow } from './repository.js';
  */
 export async function loadDiff(
   container: Container,
-  repo: ReviewRepository,
+  repo: PrFilesSource,
   workspaceId: string,
   pull: PullRow,
   repoRow: typeof schema.repos.$inferSelect,
@@ -30,7 +33,7 @@ export async function loadDiff(
 }
 
 /** Reconstruct a UnifiedDiff from persisted pr_files patches. */
-export async function diffFromPrFiles(repo: ReviewRepository, prId: string): Promise<UnifiedDiff> {
+export async function diffFromPrFiles(repo: PrFilesSource, prId: string): Promise<UnifiedDiff> {
   const files = await repo.getPrFiles(prId);
   const parts: string[] = [];
   for (const f of files) {

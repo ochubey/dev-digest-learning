@@ -26,6 +26,11 @@
 
 - The client may import only TYPES from `@devdigest/shared`: its barrel re-exports with `.js` specifiers (`vendor/shared/index.ts:17`), which `tsc` and vitest resolve to `.ts` but webpack (`next build`/`next dev`) does not — a runtime import (e.g. a constant) typechecks, passes every test and then fails the build with "Module not found: Can't resolve './contracts/findings.js'". Mirror such values locally and pin parity with a test (`project-context/constants.ts:26` + `src/test/contracts-project-context.test.ts`). (2026-10-10)
 
+- 2026-10-11 (eval UI): next-intl namespaces are auto-loaded from every `client/messages/en/*.json` (`src/i18n/request.ts`), so a new feature can ship its own message file (`evalsShared`, `evalsTab`, `evalsDashboard`) without registering it; this also lets parallel work avoid editing one shared JSON. Tests must load the files they use explicitly.
+- 2026-10-11: the vendored `Modal`/`Drawer` have no Escape handling or accessible name; the eval dialogs use a feature-local `EvalDialog` (`components/evals/EvalDialog`) with `role=dialog`, `aria-modal`, Escape, focus trap and focus return.
+- 2026-10-11: `@testing-library/user-event` is not installed; component tests use `fireEvent`. Running the client suite logs `MISSING_MESSAGE ... brief` noise from `DiffTab`; it is not an eval regression.
+- 2026-10-11: a running `next dev` and `scripts/e2e.sh` share `client/.next`; after an e2e run the dev web may talk to the e2e API port (see `e2e/INSIGHTS.md`). Restart the dev web with a clean `.next`.
+
 ## Recurring Errors & Fixes
 
 - The `Agent` and `Skill` Zod contracts each have TWO physical copies (`server/src/vendor/shared/contracts/knowledge.ts` and `client/src/vendor/shared/contracts/knowledge.ts`) that must be edited in lockstep — adding a required field (e.g. `skill_count`) to one without the other silently breaks `pnpm typecheck` only on the side you forgot, with a confusing "missing property" error pointing at unrelated test files that build object literals against the type. `client/src/vendor/shared/contracts/knowledge.ts:227`, `server/src/vendor/shared/contracts/knowledge.ts:233`. (2026-09-28)

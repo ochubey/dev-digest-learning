@@ -1,0 +1,46 @@
+{
+  "metric": {
+    "recall": "Recall",
+    "precision": "Precision",
+    "citation": "Citation accuracy",
+    "passed": "Cases passed",
+    "citationTooltip": "Grounding pass rate: the share of returned findings whose cited lines exist in the diff. It does not check that the citation is correct.",
+    "recallTooltip": "Share of must-find cases where a matching finding was returned.",
+    "precisionTooltip": "Share of returned findings that matched a must-find case.",
+    "passedTooltip": "Cases that passed out of the cases scored in the run.",
+    "deltaTooltip": "Change in percentage points against the previous finished run.",
+    "noValue": "—",
+    "noRuns": "No eval runs yet",
+    "drift": "Metrics are from v{from}; the agent is now v{to}. Run all evals to update.",
+    "passedValue": "{passed}/{total}",
+    "nullReason": {
+      "noMustFind": "no must-find cases",
+      "noFindingsReturned": "no findings returned",
+      "noFindingsProduced": "no findings produced"
+    }
+  },
+  "scoring": {
+    "note": "Scoring is mechanical: a finding counts when the file matches and line ranges overlap. No model call in the scorer.",
+    "summary": "How metrics are computed",
+    "recall": "Recall is the number of must-find cases that were hit by a matching finding, divided by the number of must-find cases.",
+    "precision": "Precision is the number of returned findings that matched a must-find case, divided by all findings returned. A finding that matches nothing counts against it.",
+    "citation": "Citation accuracy is the grounding pass rate: grounded findings divided by grounded plus dropped findings. It measures whether the cited lines exist in the diff, not whether the citation is right.",
+    "limitsTitle": "Limits",
+    "limitSemantic": "Line matching is not semantic: a finding on the right lines for the wrong reason counts as a match.",
+    "limitShifted": "A finding on shifted lines next to the real problem can miss."
+  },
+  "run": {
+    "button": "Run all evals",
+    "confirm": "Run {count, plural, one {# case} other {# cases}} with {model}? Each case makes one review call to the model.",
+    "modelLabel": "Model for this run",
+    "modelDefault": "Agent default ({model})",
+    "modelHint": "This changes the model for this run only; the agent keeps its configuration.",
+    "modelsEmptyHint": "No models loaded — set the {provider} API key in Settings → API Keys. The run uses the agent's model.",
+    "confirmRun": "Run",
+    "confirmCancel": "Cancel",
+    "progress": "Running {done} / {total} cases",
+    "starting": "Starting the run…",
+    "noCases": "Add at least one eval case to run evals.",
+    "errorFallback": "Could not start the eval run."
+  }
+}

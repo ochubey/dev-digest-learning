@@ -15,7 +15,7 @@ import {
   PROJECT_CONTEXT_MAX_DISCOVERED,
   TOKEN_CACHE_SIZE,
 } from './constants.js';
-import { mapLimit } from './map-limit.js';
+import { mapLimit } from '../../platform/map-limit.js';
 import { decodeUtf8Strict, filterDocEntries } from './docs.js';
 import { countUsedBy, effectiveDocs, validateAttachList } from './effective.js';
 import { classifySource, isContextDocPath, normalizeContextPath } from './paths.js';

@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import type { Db } from './client.js';
 import * as t from './schema.js';
-import { SEED_PROJECT_CONTEXT_RUN_ID } from './seed.js';
+import { SEED_PROJECT_CONTEXT_RUN_ID, applyFixtureDecisions } from './seed.js';
 
 /** The fictional demo repo created by `seed()`. The reset only ever touches this repo. */
 export const DEMO_REPO_FULL_NAME = 'acme/payments-api';
@@ -16,8 +16,11 @@ const SEED_REVIEW_MODEL = 'seed';
  *
  * What `seed()` creates (repo, PRs, files + patches, sample reviews + findings, agents) stays.
  * Other repos are never touched. Idempotent. Call after `seed()` so the baseline exists.
+ *
+ * With `demoContext` (fixture mode) the fixture decision on the seeded Stripe finding is applied
+ * again after the marks are cleared, so the e2e/demo state survives every dev boot.
  */
-export async function resetDemoProject(db: Db): Promise<{ pulls: number }> {
+export async function resetDemoProject(db: Db, opts: { demoContext?: boolean } = {}): Promise<{ pulls: number }> {
   const repos = await db
     .select({ id: t.repos.id })
     .from(t.repos)
@@ -69,6 +72,8 @@ export async function resetDemoProject(db: Db): Promise<{ pulls: number }> {
       .set({ lastReviewedSha: null, status: 'needs_review' })
       .where(inArray(t.pullRequests.id, prIds));
   });
+
+  if (opts.demoContext) await applyFixtureDecisions(db);
 
   return { pulls: prIds.length };
 }

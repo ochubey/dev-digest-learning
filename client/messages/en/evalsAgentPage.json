@@ -1,0 +1,47 @@
+{
+  "header": {
+    "subtitle": "Regression harness · {runs, plural, one {# run} other {# runs}} on the {cases} case set",
+    "modelLabel": "Agent model",
+    "rangeLabel": "Time range"
+  },
+  "range": {
+    "7d": "7 days",
+    "30d": "30 days",
+    "90d": "90 days",
+    "all": "All time"
+  },
+  "banner": {
+    "dippedMetric": "{metric} dipped {pt}pt",
+    "upMetric": "{metric} up {pt}pt",
+    "flatMetric": "{metric} flat",
+    "withOthers": "{dropped} on v{version} — {others}.",
+    "only": "{dropped} on v{version}.",
+    "iconLabel": "Warning"
+  },
+  "metricName": {
+    "recall": "Recall",
+    "precision": "Precision",
+    "citation": "Citation",
+    "recallLower": "recall",
+    "precisionLower": "precision",
+    "citationLower": "citation"
+  },
+  "cards": {
+    "trendLabel": "{metric} trend over {count, plural, one {# run} other {# runs}}"
+  },
+  "trend": {
+    "heading": "Metric trend",
+    "empty": "No finished runs in this time range.",
+    "onePoint": "Only one finished run in this time range. A trend needs at least two.",
+    "legend": "Legend",
+    "xAxis": "Run version",
+    "summary": "Metric trend over {count, plural, one {# run} other {# runs}}. {series}",
+    "seriesSummary": "{metric} from {first} to {last}.",
+    "point": "{metric}, v{version}, {date}: {value}"
+  },
+  "table": {
+    "colModel": "Model",
+    "noValue": "—",
+    "noneInRange": "No runs in this time range."
+  }
+}

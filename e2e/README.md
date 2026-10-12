@@ -82,8 +82,9 @@ Env knobs:
 
 - Runner: `E2E_BASE_URL`, `AGENT_BROWSER_BIN` (default `agent-browser`),
   `E2E_STEP_TIMEOUT` (ms, default 60000).
-- Server: flows 09 and 10 need `PROJECT_DOCS_SOURCE=fixture` on the API (set by
+- Server: flows 09-14 need `PROJECT_DOCS_SOURCE=fixture` on the API (set by
   `scripts/e2e.sh` and `.github/workflows/e2e-web.yml`; for your own stack add it to `server/.env`).
+- Server: the suite also needs `RATE_LIMIT_MAX=5000` on the API (global limit defaults to 120 req/min per IP; set by `scripts/e2e.sh`, add it to `e2e-web.yml` and your own `server/.env`).
 - Hermetic stack (`scripts/e2e.sh`): `E2E_PG_PORT` (5433), `E2E_API_PORT` (3101),
   `E2E_WEB_PORT` (3100), `E2E_PG_CONTAINER` (`devdigest-e2e-postgres`),
   `E2E_PG_IMAGE` (`pgvector/pgvector:pg16`).
@@ -106,3 +107,6 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `09-agent-context` | `/agents` → Security Reviewer → `?tab=context` → the 6 fixture documents listed (including a root `README.md` and `client/specs/ui-components.md`), "2 of 6 attached" badge, attached rows first, footer "2 files · N tokens total" (needs the API started with `PROJECT_DOCS_SOURCE=fixture`) |
 | `10-trace-project-context` | PR #482 → `?tab=findings&trace=<seeded run id>` → Specs read lists the seeded documents as "path · N tok"; Prompt assembly → project context block holds `<untrusted source="specs/security-baseline.md">`, the document text and `</untrusted>` |
 | `11-skill-context` | `/skills` → click the seeded `breaking-change-detector` card → `/skills/<id>?tab=config` with the left skills list (open skill highlighted) → `?tab=context` → "Project context to use" title and Repository picker visible (read-only) |
+| `12-agent-evals-tab` | `/agents` → Security Reviewer → `?tab=evals` → at least 8 `eval-case-row` rows with both kind badges ("must find", "must not flag"); metric strip of the seeded latest run (v2: recall 80%, precision 67%, citation 100%, cases passed 6/9); `eval-dashboard-link` present. Never clicks `eval-run-button` (needs `PROJECT_DOCS_SOURCE=fixture`, which seeds the runs) |
+| `13-eval-dashboard-compare` | sidebar "Eval Dashboard" → `eval-agent-row` for Security Reviewer → `/evals/<id>` → tick the two seeded runs → Compare → `eval-compare-dialog` titled "Compare runs · v1 → v2" with a `▲` delta and a prompt ins/del mark → Escape closes. Never starts a run (needs `PROJECT_DOCS_SOURCE=fixture`) |
+| `14-turn-into-eval-case` | PR #482 → Agent runs → expand the accepted Stripe finding → "Turn into eval case" → labelled dialog with "Must find" selected, `src/config.ts`, line 12 → pick Security Reviewer in the agent picker → "Already an eval case" + Evals tab link, no enabled Save → Escape closes. Never clicks Save (needs `PROJECT_DOCS_SOURCE=fixture`, which seeds the accepted finding and the linked case) |

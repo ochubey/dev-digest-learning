@@ -1,0 +1,30 @@
+{
+  "name": "PR finding: 'Turn into eval case' dialog shows the draft and flags the existing case",
+  "description": "From PR #482 open the Agent runs tab, make sure the accepted Stripe finding ('Hardcoded Stripe secret key in commit', src/config.ts:12) is expanded (the first finding of the newest run opens by default, so the header is only clicked when the action row is not rendered yet) and click 'Turn into eval case'. The dialog is labelled 'Turn into eval case', the 'Must find' radio is checked and the read-only File / Lines show src/config.ts and 12. The seeded review has no agent, so the 'Owner agent' picker is shown (AC-9); picking Security Reviewer (which already has a seeded case linked to this finding) swaps Save for 'Already an eval case' with a link (AC-10). Closed with Escape. Read-only: never clicks Save or any run button, so no model call. Needs the API started with PROJECT_DOCS_SOURCE=fixture, which seeds the accepted finding and the linked case (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "Add rate limiting to public API endpoints"], "label": "seeded PR title row is visible" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Agent runs"], "label": "switch to the Agent runs tab" },
+    { "cmd": ["wait", "--url", "tab=findings"], "label": "findings tab is active in the URL" },
+    { "cmd": ["wait", "--text", "Hardcoded Stripe secret key in commit"], "label": "seeded Stripe FindingCard is visible" },
+    { "cmd": ["wait", "--fn", "(() => { const c = [...document.querySelectorAll('[data-finding-id]')].find((e) => e.textContent.includes('Hardcoded Stripe secret key in commit')); return !!c && c.textContent.includes('accepted'); })()"], "label": "the Stripe finding is marked accepted by the seed" },
+    { "cmd": ["eval", "(() => { const c = [...document.querySelectorAll('[data-finding-id]')].find((e) => e.textContent.includes('Hardcoded Stripe secret key in commit')); if (![...c.querySelectorAll('button')].some((b) => b.textContent.includes('Turn into eval case'))) c.firstElementChild.click(); })()"], "label": "expand the Stripe finding unless it is already open" },
+    { "cmd": ["wait", "--fn", "(() => { const c = [...document.querySelectorAll('[data-finding-id]')].find((e) => e.textContent.includes('Hardcoded Stripe secret key in commit')); const b = c && [...c.querySelectorAll('button')].find((x) => x.textContent.includes('Turn into eval case')); return !!b && !b.disabled; })()"], "label": "'Turn into eval case' is enabled for the accepted finding"},
+    { "cmd": ["eval", "[...[...document.querySelectorAll('[data-finding-id]')].find((e) => e.textContent.includes('Hardcoded Stripe secret key in commit')).querySelectorAll('button')].find((x) => x.textContent.includes('Turn into eval case')).click()"], "label": "click 'Turn into eval case'" },
+    { "cmd": ["wait", "--fn", "(() => { const d = document.querySelector('[role=\"dialog\"][aria-modal=\"true\"]'); const t = d && document.getElementById(d.getAttribute('aria-labelledby')); return !!t && t.textContent.trim() === 'Turn into eval case'; })()"], "label": "the dialog opens, labelled 'Turn into eval case'" },
+    { "cmd": ["wait", "--fn", "(() => { const r = document.querySelector('[role=\"dialog\"] [role=\"radiogroup\"] input[value=\"must_find\"]'); return !!r && r.checked && r.parentElement.textContent.trim() === 'Must find'; })()"], "label": "the 'Must find' expectation is selected" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[role=\"dialog\"]').textContent.includes('src/config.ts')"], "label": "the dialog shows the file src/config.ts" },
+    { "cmd": ["wait", "--fn", "(() => { const l = [...document.querySelectorAll('[role=\"dialog\"] span')].find((s) => s.textContent.trim() === 'Lines'); return !!l && l.nextElementSibling.textContent.trim() === '12'; })()"], "label": "the dialog shows line 12"},
+    { "cmd": ["wait", "--fn", "(() => { const s = document.querySelector('[role=\"dialog\"] select'); return !!s && [...s.options].some((o) => o.textContent.trim() === 'Security Reviewer'); })()"], "label": "the owner-agent picker lists Security Reviewer (review has no agent)" },
+    { "cmd": ["eval", "(() => { const s = document.querySelector('[role=\"dialog\"] select'); const o = [...s.options].find((x) => x.textContent.trim() === 'Security Reviewer'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, o.value); s.dispatchEvent(new Event('change', { bubbles: true })); })()"], "label": "pick Security Reviewer in the agent picker" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('[role=\"dialog\"] [role=\"status\"]')].some((e) => e.textContent.includes('Already an eval case'))"], "label": "the dialog says 'Already an eval case'" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('[role=\"dialog\"] a')].some((a) => a.textContent.trim() === 'Open the Evals tab' && a.getAttribute('href').includes('tab=evals'))"], "label": "a link to the Evals tab is shown" },
+    { "cmd": ["wait", "--fn", "![...document.querySelectorAll('[role=\"dialog\"] button')].some((b) => b.textContent.includes('Save eval case') && !b.disabled)"], "label": "there is no enabled Save button" },
+    { "cmd": ["press", "Escape"], "label": "close the dialog with Escape" },
+    { "cmd": ["wait", "--fn", "!document.querySelector('[role=\"dialog\"]')"], "label": "dialog is closed" }
+  ]
+}

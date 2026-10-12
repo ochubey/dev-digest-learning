@@ -5,3 +5,4 @@ One spec per feature or cohesive behavior change, written by `spec-creator`, nam
 - `specs/` = behavior we build or maintain. `docs/` = architecture, ADRs, contracts. `insights/` = raw agent observations, curated by a human into `docs/` or `AGENTS.md`.
 - Status: `draft` -> `approved` (human) -> `implemented`.
 - Plans live in `docs/plans/`.
+- `eval-pipeline.md` is a symlink to `03-eval-pipeline.md`: the L06 homework checklist names `specs/eval-pipeline.md`; the numbered file stays the source of truth.

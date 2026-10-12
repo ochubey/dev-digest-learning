@@ -42,6 +42,9 @@ export API_PORT WEB_PORT
 # Deterministic project documents (server/src/db/fixtures/project-docs.ts) instead of GitHub:
 # the hermetic stack has no token, and flow 09 lists the repo's documents.
 export PROJECT_DOCS_SOURCE=fixture
+# The suite drives one browser from one IP and the Evals pages fan out several requests; the
+# default 120 req/min global limit would 429 mid-suite.
+export RATE_LIMIT_MAX=5000
 export NEXT_PUBLIC_API_BASE="http://localhost:${API_PORT}"
 export E2E_BASE_URL="http://localhost:${WEB_PORT}"
 
