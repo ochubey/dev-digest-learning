@@ -12,8 +12,6 @@ import {
 } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
-import { ConfigError } from '../../platform/errors.js';
-import { OctokitActionsSource } from '../../adapters/github-actions/octokit.js';
 import { CI_EXPORT_RATE_LIMIT, RUNNER_BUNDLE_PATH } from './constants.js';
 import { CiRepository } from './repository.js';
 import { CiService } from './service.js';
@@ -35,11 +33,7 @@ export default async function ciRoutes(appBase: FastifyInstance) {
     new CiService({
       repo: new CiRepository(container.db),
       github: () => container.github(),
-      actions: async () => {
-        const token = await container.secrets.get('GITHUB_TOKEN');
-        if (!token) throw new ConfigError('GITHUB_TOKEN is not configured');
-        return new OctokitActionsSource(token);
-      },
+      actions: () => container.actions(),
       runnerPath: RUNNER_BUNDLE_PATH,
       readFile: (p) => readFile(p, 'utf8'),
       log: { info: (m) => req.log.info(m), warn: (m) => req.log.warn(m) },

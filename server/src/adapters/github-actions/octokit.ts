@@ -5,7 +5,7 @@ import {
   ArtifactTooLargeError,
   type ActionsRun,
   type CiActionsSource,
-} from '../../modules/ci/ports.js';
+} from './types.js';
 
 const TIMEOUT = 30_000;
 

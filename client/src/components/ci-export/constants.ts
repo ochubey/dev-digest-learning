@@ -1,4 +1,4 @@
-import type { CiFailOn, CiPostAs, CiTrigger } from "@devdigest/shared";
+import type { CiFailOn, CiRunStatus, CiPostAs, CiTrigger } from "@devdigest/shared";
 
 /* Local mirrors of the shared CI constants (the client may import only types from
    @devdigest/shared; a runtime import breaks `next build`). */
@@ -7,6 +7,7 @@ export const CI_TRIGGERS: readonly CiTrigger[] = ["opened", "synchronize", "reop
 export const DEFAULT_TRIGGERS: readonly CiTrigger[] = ["opened", "synchronize"];
 export const POST_AS_VALUES: readonly CiPostAs[] = ["github_review", "pr_comment", "none"];
 export const DEFAULT_POST_AS: CiPostAs = "github_review";
+export const RUN_STATUSES: readonly CiRunStatus[] = ["succeeded", "failed", "no_findings", "running"];
 export const FAIL_ON_VALUES: readonly CiFailOn[] = ["never", "critical", "warning", "any"];
 
 export const CI_BRANCH = "devdigest/ci";

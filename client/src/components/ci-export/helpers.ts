@@ -1,5 +1,5 @@
-import type { CiPostAs, CiTrigger } from "@devdigest/shared";
-import { CI_TRIGGERS, CI_WORKFLOW_PATH, GITHUB_PREFIX, POST_AS_VALUES } from "./constants";
+import type { CiPostAs, CiRunStatus, CiTrigger } from "@devdigest/shared";
+import { CI_TRIGGERS, CI_WORKFLOW_PATH, GITHUB_PREFIX, POST_AS_VALUES, RUN_STATUSES } from "./constants";
 
 const NONE = "—";
 
@@ -70,4 +70,9 @@ export function knownTriggers(values: readonly string[] | null | undefined): CiT
 
 export function knownPostAs(value: string | null | undefined): CiPostAs | undefined {
   return POST_AS_VALUES.find((v) => v === value);
+}
+
+/** The run status when the UI knows it (a stored value may be anything), otherwise undefined. */
+export function knownRunStatus(value: string | null | undefined): CiRunStatus | undefined {
+  return RUN_STATUSES.find((v) => v === value);
 }

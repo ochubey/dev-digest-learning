@@ -4,7 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, EmptyState, ErrorState, FormField, SelectInput, Skeleton } from "@devdigest/ui";
 import type { Agent, CiFailOn, CiInstallation } from "@devdigest/shared";
-import { CiRunsTable, ExportCiWizard, FAIL_ON_VALUES, formatTime, knownPostAs, knownTriggers, safeGithubUrl, type ExportCiWizardProps } from "@/components/ci-export";
+import { CiRunsTable, ExportCiWizard, FAIL_ON_VALUES, formatTime, knownPostAs, knownRunStatus, knownTriggers, safeGithubUrl, type ExportCiWizardProps } from "@/components/ci-export";
 import { useUpdateAgent } from "@/lib/hooks/agents";
 import { useAgentCi, useCiSync } from "@/lib/hooks/ci";
 import { s } from "./styles";
@@ -45,9 +45,8 @@ export function CiTab({ agent }: { agent: Agent }) {
   const statusText = (i: CiInstallation) => {
     const last = i.last_run;
     if (!last) return t("noRuns");
-    const status = last.status && ["succeeded", "no_findings", "failed", "running"].includes(last.status)
-      ? tRuns(`status.${last.status as "succeeded"}`)
-      : (last.status ?? tRuns("noValue"));
+    const known = knownRunStatus(last.status);
+    const status = known ? tRuns(`status.${known}`) : (last.status ?? tRuns("noValue"));
     return t("lastRun", { status, time: formatTime(last.ran_at) });
   };
 

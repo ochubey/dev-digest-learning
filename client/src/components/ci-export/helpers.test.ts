@@ -7,6 +7,7 @@ import {
   formatCost,
   formatTime,
   knownTriggers,
+  knownRunStatus,
 } from "./helpers";
 
 describe("safeGithubUrl", () => {
@@ -48,5 +49,13 @@ describe("formatters", () => {
   it("knownTriggers drops unknown values and keeps canonical order", () => {
     expect(knownTriggers(["reopened", "bogus", "opened"])).toEqual(["opened", "reopened"]);
     expect(knownTriggers(null)).toEqual([]);
+  });
+});
+
+describe("knownRunStatus", () => {
+  it("returns known statuses and undefined for anything else", () => {
+    expect(knownRunStatus("no_findings")).toBe("no_findings");
+    expect(knownRunStatus("weird")).toBeUndefined();
+    expect(knownRunStatus(null)).toBeUndefined();
   });
 });

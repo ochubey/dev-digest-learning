@@ -62,6 +62,35 @@ describe('checkWorkflow', () => {
     expect(rule(t)).toBe('ok');
   });
 
+  it('refuses a case-variant second checkout of the head, a checkout with repository/path, and a non-base ref', () => {
+    const head = (extra: string) =>
+      base().replace(
+        '      - uses: actions/setup-node',
+        `      - uses: Actions/Checkout@${SHA}\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          persist-credentials: false${extra}\n      - uses: actions/setup-node`,
+      );
+    expect(rule(head(''))).toBe('base_checkout_missing');
+    const baseRef = (extra: string) =>
+      base().replace(
+        '      - uses: actions/setup-node',
+        `      - uses: ACTIONS/checkout@${SHA}\n        with:\n          ref: \${{ github.event.pull_request.base.sha }}\n          persist-credentials: false${extra}\n      - uses: actions/setup-node`,
+      );
+    expect(rule(baseRef(''))).toBe('ok');
+    expect(rule(baseRef('\n          repository: evil/repo'))).toBe('base_checkout_missing');
+    expect(rule(baseRef('\n          path: x'))).toBe('base_checkout_missing');
+    expect(rule(base().replace('ref: ${{ github.event.pull_request.base.sha }}', 'ref: main'))).toBe('base_checkout_missing');
+  });
+
+  it('refuses a secret smuggled after a } in another expression, and secrets: inherit', () => {
+    const t = base().replace('PR_NUMBER:', "EXTRA: ${{ format('{0}', secrets.GH_PAT) }}\n          PR_NUMBER:");
+    expect(t).not.toBe(base());
+    expect(rule(t)).toBe('secret_misassigned');
+    const t2 = base().replace('PR_NUMBER:', "EXTRA: ${{ github.sha }} ${{ secrets.GH_PAT }}\n          PR_NUMBER:");
+    expect(rule(t2)).toBe('secret_misassigned');
+    const t3 = base().replace('    runs-on: ubuntu-latest\n', '    runs-on: ubuntu-latest\n    secrets: inherit\n');
+    expect(t3).not.toBe(base());
+    expect(rule(t3)).toBe('secret_misassigned');
+  });
+
   it('AC-30: node-version 20 edit passes', () => {
     expect(checkWorkflow(base().replace('node-version: 22', 'node-version: 20'))).toEqual({ ok: true });
   });

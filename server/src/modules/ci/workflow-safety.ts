@@ -31,6 +31,14 @@ function hasForkGuard(cond: unknown): boolean {
   return expr.split('&&').some((part) => part.trim().replace(/\s+/g, ' ') === FORK_GUARD);
 }
 
+/** True when any `${{ ... }}` expression body (to its closing `}}`, or the end when unclosed) names `secrets`. */
+function usesSecretsContext(value: string): boolean {
+  for (const m of value.matchAll(/\$\{\{([\s\S]*?)(?:\}\}|$)/g)) {
+    if (/\bsecrets\b/i.test(m[1] ?? '')) return true;
+  }
+  return false;
+}
+
 /** Every string leaf with its parent key, depth first. */
 function leaves(node: unknown, key: string | null, out: { key: string | null; value: string }[]): void {
   if (typeof node === 'string') out.push({ key, value: node });
@@ -102,9 +110,13 @@ export function checkWorkflow(text: string): WorkflowCheck {
   }
 
   for (const [name, job] of jobs) {
-    const checkouts = stepsOf(job).filter((s) => typeof s.uses === 'string' && s.uses.startsWith('actions/checkout@'));
+    // Action refs are case-insensitive on GitHub, so match on the lowercased `uses`.
+    const checkouts = stepsOf(job).filter(
+      (s) => typeof s.uses === 'string' && s.uses.toLowerCase().startsWith('actions/checkout@'),
+    );
     const good = checkouts.every((s) => {
       const w = isObj(s.with) ? s.with : {};
+      if ('repository' in w || 'path' in w) return false;
       return w.ref === BASE_SHA_REF && w['persist-credentials'] === false;
     });
     if (checkouts.length === 0 || !good) {
@@ -136,9 +148,9 @@ export function checkWorkflow(text: string): WorkflowCheck {
   }
   const all: { key: string | null; value: string }[] = [];
   leaves(doc, null, all);
-  const misused = all.some(
-    (l) => /\$\{\{[^}]*\bsecrets\b/.test(l.value) && !(l.key === SECRET_NAME && l.value === SECRET_EXPR),
-  );
+  const misused =
+    jobs.some(([, job]) => typeof job.secrets === 'string' && job.secrets.trim().toLowerCase() === 'inherit') ||
+    all.some((l) => !(l.key === SECRET_NAME && l.value === SECRET_EXPR) && usesSecretsContext(l.value));
   if (misused) {
     return fail('secret_misassigned', `Secrets may only be used as ${SECRET_NAME}: ${SECRET_EXPR}.`);
   }

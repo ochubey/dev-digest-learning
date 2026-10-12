@@ -127,8 +127,10 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
       llm: deps.llm,
       strategy: manifest.strategy,
       skills,
-      prDescription: ctx.body,
-      task: `Review PR #${ctx.prNumber}: ${ctx.title}`,
+      // The title is attacker-controlled: it travels inside the wrapped (untrusted) PR-description
+      // section, never in the trusted task line.
+      prDescription: `PR title: ${ctx.title}\n\n${ctx.body}`,
+      task: `Review PR #${ctx.prNumber}`,
     });
     const durationMs = now() - start;
 
