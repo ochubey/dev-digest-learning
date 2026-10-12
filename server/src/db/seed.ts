@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, asc, inArray, isNull, sql } from 'drizzle-orm';
 import { pathToFileURL } from 'node:url';
 import {
   GENERAL_REVIEWER_PROMPT,
@@ -13,6 +13,15 @@ import { wrapProjectDoc } from '@devdigest/reviewer-core';
 import type { RunTrace } from '@devdigest/shared';
 import { TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 import { PROJECT_DOCS_FIXTURE, PROJECT_DOCS_FIXTURE_SHA } from './fixtures/project-docs.js';
+import {
+  type SeedEvalCase,
+  SEED_EVAL_CASES_BY_AGENT,
+  SEED_EVAL_PROMPT_V2_SUFFIX,
+  SEED_EVAL_RUNS,
+  SEED_EVAL_RUN_V1_ID,
+  SEED_EVAL_RUN_V2_ID,
+} from './fixtures/eval-cases.js';
+import { buildManifest, versionConfigOf } from '../platform/agent-config.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -502,8 +511,221 @@ Flag route/handler signature changes that remove or rename a required parameter,
       await seedProjectContextRun(db, { workspaceId, prId: pr482.id, prNumber: pr482.number, agent: securityAgent });
     }
   }
+  for (const [agentName, cases] of Object.entries(SEED_EVAL_CASES_BY_AGENT)) {
+    const [agent] = await db
+      .select({ id: t.agents.id })
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, agentName)));
+    if (agent) await seedEvalCases(db, { workspaceId, agentId: agent.id, prId: pr482?.id ?? null }, cases);
+  }
+  if (securityAgent && opts.demoContext) await seedEvalFixtureRuns(db, { workspaceId, agentId: securityAgent.id });
+  if (opts.demoContext) await applyFixtureDecisions(db);
 
   return { workspaceId, userId };
+}
+
+/** Title and file of the seeded sample finding that the fixture marks accepted (SPEC-03 OQ-11). */
+const FIXTURE_ACCEPTED_FINDING = { file: 'src/config.ts', title: 'Hardcoded Stripe secret key in commit' };
+
+/** Id of the seeded sample finding (review model "seed") with this file and title, if it still exists. */
+async function findSeedFinding(db: Db, file: string, title: string): Promise<string | undefined> {
+  const [row] = await db
+    .select({ id: t.findings.id })
+    .from(t.findings)
+    .innerJoin(t.reviews, eq(t.findings.reviewId, t.reviews.id))
+    .where(and(eq(t.reviews.model, 'seed'), eq(t.findings.file, file), eq(t.findings.title, title)));
+  return row?.id;
+}
+
+/**
+ * Fixture mode only: the seeded Stripe finding is shown as accepted so a "Turn into eval case"
+ * flow has a decided finding. Never overrides a decision already made; `resetDemoProject` clears
+ * the marks on every dev boot and calls this again. The N+1 finding stays undecided.
+ */
+export async function applyFixtureDecisions(db: Db): Promise<void> {
+  const id = await findSeedFinding(db, FIXTURE_ACCEPTED_FINDING.file, FIXTURE_ACCEPTED_FINDING.title);
+  if (!id) return;
+  await db
+    .update(t.findings)
+    .set({ acceptedAt: new Date() })
+    .where(and(eq(t.findings.id, id), isNull(t.findings.acceptedAt), isNull(t.findings.dismissedAt)));
+}
+
+/**
+ * Seeded eval cases of one built-in agent. Inserted only while the agent has no seeded-origin
+ * case (origin "seeded" or a seed_key), so a case the user deleted is never re-created (OQ-10)
+ * and a second run adds nothing. Derived cases link to the seeded sample findings when present.
+ * Existing cases that carry a fixture `seed_key` are healed in place: `expected_output` and
+ * `input_diff` are rewritten to the fixture value when they differ (cases without a seed_key are
+ * never touched, and nothing is inserted on that path).
+ */
+async function seedEvalCases(
+  db: Db,
+  a: { workspaceId: string; agentId: string; prId: string | null },
+  cases: SeedEvalCase[],
+): Promise<void> {
+  // Resolved before the transaction (read-only lookups of the seeded sample findings).
+  const sourceFindingIds = new Map<string, string | undefined>();
+  for (const c of cases) {
+    sourceFindingIds.set(
+      c.seed_key,
+      c.derived_from ? await findSeedFinding(db, c.derived_from.file, c.derived_from.title) : undefined,
+    );
+  }
+
+  // The check and the inserts run under one advisory lock per agent: a dev server restart seeds on
+  // boot, and a manual `db:seed` at the same moment must not add the set twice.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`seed_eval_cases:${a.agentId}`}))`);
+    const present = await tx
+      .select({ id: t.evalCases.id })
+      .from(t.evalCases)
+      .where(
+        and(
+          eq(t.evalCases.workspaceId, a.workspaceId),
+          eq(t.evalCases.ownerKind, 'agent'),
+          eq(t.evalCases.ownerId, a.agentId),
+          sql`(${t.evalCases.inputMeta}->>'origin' = 'seeded' or ${t.evalCases.inputMeta}->>'seed_key' is not null)`,
+        ),
+      )
+      .limit(1);
+    if (present.length > 0) {
+      for (const c of cases) {
+        await tx
+          .update(t.evalCases)
+          .set({ expectedOutput: c.expectation, inputDiff: c.input_diff })
+          .where(
+            and(
+              eq(t.evalCases.workspaceId, a.workspaceId),
+              eq(t.evalCases.ownerKind, 'agent'),
+              eq(t.evalCases.ownerId, a.agentId),
+              sql`${t.evalCases.inputMeta}->>'seed_key' = ${c.seed_key}`,
+              sql`(${t.evalCases.expectedOutput} is distinct from ${JSON.stringify(c.expectation)}::jsonb or ${t.evalCases.inputDiff} is distinct from ${c.input_diff})`,
+            ),
+          );
+      }
+      return;
+    }
+
+    for (const c of cases) {
+      const sourceFindingId = sourceFindingIds.get(c.seed_key);
+      await tx
+        .insert(t.evalCases)
+        .values({
+          workspaceId: a.workspaceId,
+          ownerKind: 'agent',
+          ownerId: a.agentId,
+          name: c.name,
+          inputDiff: c.input_diff,
+          inputMeta: {
+            origin: c.origin,
+            seed_key: c.seed_key,
+            ...(sourceFindingId
+              ? { source_finding_id: sourceFindingId, source_pr_id: a.prId, source_decision: c.derived_from!.decision }
+              : {}),
+          },
+          expectedOutput: c.expectation,
+          notes: null,
+        })
+        // A user-made case for the same finding wins (unique per owner and source finding).
+        .onConflictDoNothing();
+    }
+  });
+}
+
+/**
+ * Fixture mode only (A-3): bump Security Reviewer from v1 to v2 (prompt + one-sentence suffix, with
+ * agent_versions snapshots) and insert the two finished suite runs. Skipped once either seeded run
+ * exists; the bump itself happens only while the agent is still at v1.
+ */
+async function seedEvalFixtureRuns(db: Db, a: { workspaceId: string; agentId: string }): Promise<void> {
+  const [done] = await db
+    .select({ id: t.evalSuiteRuns.id })
+    .from(t.evalSuiteRuns)
+    .where(inArray(t.evalSuiteRuns.id, [SEED_EVAL_RUN_V1_ID, SEED_EVAL_RUN_V2_ID]));
+  if (done) return;
+
+  await db.transaction(async (tx) => {
+    let [agent] = await tx.select().from(t.agents).where(eq(t.agents.id, a.agentId));
+    if (!agent) return;
+    const links = await tx
+      .select({ skillId: t.agentSkills.skillId })
+      .from(t.agentSkills)
+      .where(eq(t.agentSkills.agentId, agent.id))
+      .orderBy(asc(t.agentSkills.order));
+    const skillIds = links.map((l) => l.skillId);
+
+    if (agent.version === 1) {
+      await tx
+        .insert(t.agentVersions)
+        .values({ agentId: agent.id, version: 1, configJson: versionConfigOf(agent, skillIds) })
+        .onConflictDoNothing();
+      [agent] = await tx
+        .update(t.agents)
+        .set({ systemPrompt: agent.systemPrompt + SEED_EVAL_PROMPT_V2_SUFFIX, version: 2 })
+        .where(eq(t.agents.id, a.agentId))
+        .returning();
+      await tx
+        .insert(t.agentVersions)
+        .values({ agentId: a.agentId, version: 2, configJson: versionConfigOf(agent!, skillIds) })
+        .onConflictDoNothing();
+    }
+
+    // The manifests freeze the shipped prompt (v1) and prompt + suffix (v2), whatever the agent is now.
+    const manifestFor = (version: 1 | 2) =>
+      buildManifest(
+        {
+          ...agent!,
+          systemPrompt: version === 1 ? SECURITY_REVIEWER_PROMPT : SECURITY_REVIEWER_PROMPT + SEED_EVAL_PROMPT_V2_SUFFIX,
+        },
+        skillIds,
+        [],
+      );
+
+    const caseRows = await tx
+      .select({ id: t.evalCases.id, seedKey: sql<string | null>`${t.evalCases.inputMeta}->>'seed_key'` })
+      .from(t.evalCases)
+      .where(and(eq(t.evalCases.ownerKind, 'agent'), eq(t.evalCases.ownerId, a.agentId)));
+    const caseIdByKey = new Map(caseRows.filter((r) => r.seedKey).map((r) => [r.seedKey!, r.id]));
+
+    for (const r of SEED_EVAL_RUNS) {
+      await tx.insert(t.evalSuiteRuns).values({
+        id: r.id,
+        workspaceId: a.workspaceId,
+        agentId: a.agentId,
+        agentVersion: r.agent_version,
+        manifest: manifestFor(r.agent_version),
+        status: r.status,
+        casesTotal: r.results.length,
+        recall: r.metrics.recall,
+        precision: r.metrics.precision,
+        citationAccuracy: r.metrics.citation_accuracy,
+        counts: r.counts,
+        durationMs: r.duration_ms,
+        costUsd: r.cost_usd,
+        startedAt: new Date(r.started_at),
+        finishedAt: new Date(r.finished_at),
+      });
+      await tx.insert(t.evalRuns).values(
+        r.results.map((x) => ({
+          id: x.id,
+          // A case the user deleted leaves the historical row without a link (case_id set null).
+          caseId: caseIdByKey.get(x.seed_key) ?? null,
+          suiteRunId: r.id,
+          status: x.status,
+          caseSnapshot: { name: x.case_name, expectation: x.expectation, origin: x.origin },
+          error: x.error,
+          tokensIn: x.tokens_in,
+          tokensOut: x.tokens_out,
+          ranAt: new Date(r.started_at),
+          actualOutput: { grounded: x.grounded, dropped: x.dropped },
+          pass: x.pass,
+          durationMs: x.duration_ms,
+          costUsd: x.cost_usd,
+        })),
+      );
+    }
+  });
 }
 
 /**

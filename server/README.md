@@ -158,6 +158,186 @@ written on failure).
 - **Cache and staleness.** `pr_brief` stores the head SHA the brief was built from;
   `stale` is computed on read by comparing it with the PR's current head SHA.
 
+## Eval pipeline
+
+`modules/evals` lets a user turn a decided finding into a regression case for an
+agent, run the agent's whole case set in one batch, and compare the scored runs.
+It calls `reviewPullRequest` from `reviewer-core` unchanged and makes no model call
+of its own: scoring is mechanical. The formulas and their limits are also written up in
+[`../docs/eval-scoring.md`](../docs/eval-scoring.md).
+
+### Module layout
+
+Onion order: `routes.ts` -> `service.ts` -> `repository.ts` (behind the `EvalsStore`
+interface). The only adapter is the LLM provider, resolved through the container.
+Everything else is pure (no IO) and unit-tested on its own.
+
+| File | Role |
+|------|------|
+| `routes.ts` | HTTP surface (below); registered in `modules/index.ts` |
+| `service.ts` | draft, create, list and delete cases; start a run and execute it in the background; list/get/compare runs; overview; boot reaper |
+| `repository.ts` | all SQL, every query workspace-scoped; `createSuiteRun` writes the run row and one pending result per case in one transaction |
+| `runner.ts` | `runEvalCases`: one review per case through an injected `LLMProvider`, concurrency 3, 120 s timeout per case; never touches the DB |
+| `scoring.ts`, `matching.ts` | `scoreCase`, `scoreRun`, `metricsFromCounts`; `matches` (same file + overlapping lines) |
+| `finalize.ts` | final run status, total duration, total cost (sum of known costs of scored cases, errored cases ignored; null if none is known) |
+| `fragment.ts` | cuts the diff fragment stored with a case: the file header plus every whole hunk that intersects the line range |
+| `draft.ts`, `validate.ts` | draft a case from a finding; validate a case body and return human-readable reasons |
+| `manifest.ts` | freezes what a run executes: the agent's version snapshot (`agents/helpers.ts#versionConfigOf`) plus id, name and version of each enabled linked skill |
+| `log-lines.ts` | start / end / per-error log lines; they never carry fragment or model text |
+| `constants.ts` | limits re-exported from `@devdigest/shared`, `EVAL_TASK_LINE`, `EVAL_RUN_RATE_LIMIT` |
+
+The contracts (`EvalCaseView`, `EvalSuiteRunDetail`, ...) live in
+`src/vendor/shared/contracts/eval-ci.ts`, in a block delimited by
+`// ==== SPEC-03 eval pipeline: begin/end ====` that is kept identical in the server
+and client copies.
+
+Limits: at most 50 cases per run (`EVAL_MAX_CASES_PER_RUN`), concurrency 3
+(`EVAL_RUN_CONCURRENCY`), 120 s per case (`EVAL_CASE_TIMEOUT_MS`), 32 KiB per stored
+fragment, 80 characters per case name.
+
+### Routes
+
+All routes are workspace-scoped; an unknown id and another workspace's id both answer
+`404`. Path and query shapes are validated by zod (a bad UUID, missing `a`/`b`, or `limit`
+outside 1..50 answers `422`). `POST /eval-cases` is parsed by the service instead, so a bad
+case body is a `400` with reasons rather than the app-wide `422`.
+
+| Method and path | Success | Errors |
+|-----------------|---------|--------|
+| `GET /findings/:id/eval-case-draft` | `200 EvalCaseDraft` (kind from the decision: accepted -> `must_find`, dismissed -> `must_not_flag`; slugified name; fragment). Writes nothing | `404`; `409 finding_undecided`; `422 finding_not_in_diff` (its lines are no longer in the PR diff); `422 fragment_too_large` |
+| `POST /eval-cases` | `201 EvalCaseView` | `400 invalid_eval_case` (`details.reasons`: bad ids, empty or over-80-char name, bad kind, bad line range, empty/oversized/unparsable fragment, fragment lacks the file or range, `agent_id` is not the finding's agent); `404`; `409 finding_undecided`; `409 eval_case_exists` (`details.case_id`; one case per agent and source finding, also enforced by a unique index); `409 eval_case_limit` (the agent already has 50 cases). Also rejected with 400: `notes` over 2000 or `expectation.file` over 500 characters, and an expectation whose file or lines differ from the source finding's |
+| `GET /agents/:id/eval-cases` | `200 EvalCaseView[]` with `last_result`, `must_find` first, then by name | `404` |
+| `DELETE /eval-cases/:id` | `200 {ok: true}`; past runs keep the case's results (they carry a snapshot) | `404` |
+| `POST /agents/:id/eval-runs` | Optional body `{model?}` (1-200 chars; none or `{}` = the agent's model). `202 {run_id}`; the cases run in the background. A `model` that differs from the agent's replaces `model` in the run's manifest for this run only (same provider; the agent and its version are not changed; the model is not validated against the provider, an unknown one makes the cases `error`). The run's `model` is read back from the manifest. Rate limited to **10 per minute** (`EVAL_RUN_RATE_LIMIT`, per-route; the global limit is off under `NODE_ENV=test`) | `404`; `400 no_eval_cases`; `400 too_many_eval_cases`; `409 eval_run_running` (`details.running_run_id`); `409 eval_run_limit` (3 runs already running in the workspace); `500 config_error` when the agent's provider key is missing; `422` for a bad body; `429` over the rate limit |
+| `GET /agents/:id/eval-runs?cursor&limit` | `200 EvalRunPage`, newest first, `limit` default 20, max 50 | `404`; `400 invalid_cursor` (strict ISO timestamp, UUID, at most 200 characters); an over-long cursor answers `422` |
+| `GET /eval-runs/compare?a=&b=` | `200 {a, b}` with `a` the older run by `started_at` | `404`; `400 runs_not_comparable` (runs of different agents) |
+| `GET /eval-runs/:id` | `200 EvalSuiteRunDetail` (manifest, counts, metrics, every case result) | `404` |
+| `GET /evals/overview` | `200 EvalOverview`: per agent the latest and previous finished run (`completed` or `completed_with_errors`; failed and running runs are skipped), plus the 6 most recent runs | |
+
+The start route takes an optional `{model}` body to try another model of the agent's provider; the override is recorded in the manifest (`EvalSuiteRun.model`, null for older runs) and used for every case, nothing else of the agent changes.
+
+`POST /agents/:id/eval-runs` checks in this order and writes nothing until all pass:
+unknown agent (404), no cases (400), too many cases (400), a run already running for the agent (409 `eval_run_running`),
+3 runs already running in the workspace (409 `eval_run_limit`),
+missing provider key (500 `config_error`, the container's own `ConfigError`, e.g.
+`<X>_API_KEY is not configured`). An eval run writes no `reviews`, `findings`,
+`agent_runs` or `run_traces` rows.
+
+### Run lifecycle
+
+```
+POST -> running -+-- no case errored ---------> completed
+                 +-- some cases errored ------> completed_with_errors
+                 +-- every case errored ------> failed
+                 +-- runner/sink failure, or the process died -> failed (run.error set)
+```
+
+- Starting a run captures the manifest and the bodies of the enabled linked skills in
+  memory, creates the run (`running`) and one `pending` result per case (with a snapshot of
+  the case), answers `202`, then runs in the background. Editing the agent or a skill
+  afterwards does not change a run in flight or a finished run.
+- Each finished case is saved immediately (`ok` or `error`), so progress is visible while
+  the run is `running`.
+- A case that throws or times out is stored as `error` (`timeout` for the timeout; otherwise
+  the first line of the message with provider keys and bearer tokens redacted, max 300
+  characters), has `pass = null`, and is excluded from every metric. It does not stop the
+  other cases.
+- At most one `running` run per agent: the 409 check plus a partial unique index
+  (`eval_suite_runs_one_running_uq`), so two tabs cannot race.
+- **Boot reaper.** Runs execute in-process, so on startup `app.ts` calls
+  `EvalsService.reapInterrupted()` (its own non-fatal try/catch, next to the review
+  reaper): every run still `running` becomes `failed` with error `interrupted`, its
+  `pending` results become `error` / `interrupted`, and results that already finished are
+  kept.
+
+### Scoring
+
+All of it is code (`scoring.ts`, `matching.ts`), no model call:
+
+- **Match.** A grounded finding matches an expectation when the file is the same (exact,
+  case-sensitive, one leading `./` stripped) and the inclusive line ranges overlap.
+- **Case pass.** `must_find`: at least one matching finding. `must_not_flag`: no matching
+  finding. A case is only ever scored against its own findings.
+- **Finding labels.** On a `must_find` case a matching finding is `tp`; on a
+  `must_not_flag` case a matching finding is `fp_zone`; a finding that matches nothing is
+  `fp_unlabeled`.
+- **recall** = `must_find` cases with at least one match / `must_find` cases scored. `null`
+  when no `must_find` case was scored.
+- **precision** (strict) = `tp / (tp + fp_zone + fp_unlabeled)`: true positives over all
+  grounded findings. `null` when there are no grounded findings.
+- **citation_accuracy** = `grounded / (grounded + dropped)`, where `dropped` are findings
+  the grounding gate removed. It is a **grounding pass rate** (how many findings cited lines
+  that exist in the fragment), not a correctness score. `null` when the run produced no
+  findings at all.
+
+The run stores the three metrics next to the counts they come from (`counts`:
+`cases_scored`, `cases_passed`, `must_find_total`, `must_find_hit`, `must_not_flag_total`,
+`must_not_flag_violated`, `tp`, `fp_zone`, `fp_unlabeled`, `grounded`, `dropped`,
+`cases_errored`), so each metric can be recomputed from `counts` alone
+(`metricsFromCounts`).
+
+Limits: matching is by file and line range, not meaning, so a finding on the right lines for
+the wrong reason counts as a match and a correct finding on shifted lines can miss. Strict
+precision counts any finding outside the labelled range as a false positive, including a
+real bug nobody labelled. Case sets are small and the model is nondeterministic, so
+single-run differences are noisy.
+
+### Isolation
+
+Each case is **one stateless call** to `reviewPullRequest`: a fresh message list built only
+from the manifest's system prompt, model and strategy, the recorded skill bodies, the case's
+stored fragment and the fixed task line `Review the following change.` (`EVAL_TASK_LINE`).
+No tools are offered; no PR description, intent, repo map, callers, project context or
+memory is passed; nothing carries over between cases or runs. The expectation, case name,
+notes and origin are **never** sent to the model, so it cannot see the answer. Fragments and
+model output are not logged.
+
+### Tables
+
+Migration `0015` (generated with `pnpm db:generate` from `src/db/schema/eval.ts`):
+
+- **`eval_suite_runs`** (new): one batch run of an agent. `agent_id` (cascade),
+  `agent_version`, `manifest` jsonb (frozen provider/model/prompt/strategy/skills +
+  `skill_versions`), `status` (`running|completed|completed_with_errors|failed`), `error`,
+  `cases_total`, `recall`, `precision`, `citation_accuracy` (nullable doubles), `counts`
+  jsonb, `duration_ms`, `cost_usd`, `started_at`, `finished_at`. Indexes on
+  `(agent_id, started_at)` and `(workspace_id, started_at)`, plus the partial unique
+  `eval_suite_runs_one_running_uq`.
+- **`eval_runs`** (existing, one row per case result): new `suite_run_id` (cascade),
+  `status` (`pending|ok|error`, default `pending`), `case_snapshot` jsonb, `error`,
+  `tokens_in`, `tokens_out`; `case_id` is now nullable with `ON DELETE SET NULL` so deleting
+  a case keeps history.
+- **`eval_cases`** (existing): an agent's case is `owner_kind = 'agent'`, `owner_id`, with the
+  fragment in `input_diff`, the expectation in `expected_output` and origin / source
+  finding / source PR / decision / `seed_key` in `input_meta`. New unique index
+  `eval_cases_owner_source_finding_uq` on `(owner_id, input_meta->>'source_finding_id')`.
+
+Cases have no FK to the agent; `AgentsService.delete` removes them in the same transaction
+as the agent, and suite runs cascade through the `agents` FK.
+
+### Seeding and fixture mode
+
+`pnpm db:seed` (idempotent) adds 9 cases to Security Reviewer from
+`src/db/fixtures/eval-cases.ts` (pure data): 5 `must_find` (hardcoded Stripe key, SSRF
+webhook URL, missing Retry-After, service-role key in client, SQL string concat) and 4
+`must_not_flag` (unused import, raw body parser on a verified webhook, clean rename, N+1
+user list). Two are derived from the seeded PR #482 findings. They are inserted only while
+the agent has no seeded case, so a case the user deleted is not re-created and a second
+seed adds nothing. Every expectation range covers the whole changed region of its fragment
+(first to last changed line plus one context line each side), because models often cite a
+neighbouring line and the match is strict file + line overlap (see
+[`../docs/eval-scoring.md`](../docs/eval-scoring.md#choosing-expectation-ranges)). The seed
+self-heals existing databases: under the same advisory lock it rewrites `expected_output` and
+`input_diff` of every case whose `seed_key` matches a fixture case when they differ; cases
+without a `seed_key` are never touched and a deleted seeded case is never re-created.
+
+With `PROJECT_DOCS_SOURCE=fixture` (the e2e stack) the seed also marks the seeded Stripe
+finding accepted (re-applied after the demo reset, so "Turn into eval case" is available),
+bumps Security Reviewer from v1 to v2 with a one-sentence prompt suffix, and inserts two
+finished runs with fixed ids and fixed case results: v1 recall 3/5, precision 3/6; v2
+recall 4/5, precision 4/6; one case regressed and two fixed, so compare shows every group.
+No model is called to produce them.
+
 ## Testing
 
 The suite splits by filename — `*.it.test.ts` is DB-backed, everything else is

@@ -24,4 +24,20 @@ describe('vendored contracts parity', () => {
       ).toBe(true);
     });
   }
+
+  it('eval-ci.ts SPEC-03 block byte-identical', () => {
+    const begin = '// ==== SPEC-03 eval pipeline: begin ====';
+    const end = '// ==== SPEC-03 eval pipeline: end ====';
+    const block = (rel: string) => {
+      const text = read(rel).toString('utf8');
+      expect(text.split(begin).length, `${rel}: missing or duplicate begin marker`).toBe(2);
+      expect(text.split(end).length, `${rel}: missing or duplicate end marker`).toBe(2);
+      const from = text.indexOf(begin);
+      const to = text.indexOf(end);
+      expect(to, `${rel}: end marker before begin marker`).toBeGreaterThan(from);
+      return text.slice(from, to + end.length);
+    };
+    const { server, client } = pair('eval-ci.ts');
+    expect(block(server), `${server} and ${client} SPEC-03 blocks differ`).toBe(block(client));
+  });
 });

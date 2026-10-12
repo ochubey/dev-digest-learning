@@ -32,6 +32,8 @@ Root: `./scripts/dev.sh` (Postgres up, env files, deps, migrate, seed, launch bo
 
 `e2e/`: see `e2e/README.md`, run via `scripts/e2e.sh`
 
+Root: `pnpm verify:l06` (run from repo root; typecheck + hermetic eval-pipeline tests, no DB/network/keys; never `pnpm install` at the root — it is not a workspace).
+
 No lint script/config in repo (no eslint/prettier config files) — don't invent one, don't add lint step to CI.
 
 CI: path-filtered GH Actions — `client.yml`, `server-unit.yml`, `server-integration.yml` (needs Docker/testcontainers), `reviewer-core.yml`, `e2e-web.yml`.

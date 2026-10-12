@@ -1,0 +1,23 @@
+{
+  "name": "Eval Dashboard: open the agent, compare the two seeded runs",
+  "description": "From /agents go to the sidebar 'Eval Dashboard': the landing lists the Security Reviewer row; opening it reaches /evals/<agent id>. Ticking the two seeded runs (v1 and v2) enables Compare, which opens the dialog titled 'Compare runs · v1 → v2' with a metric delta containing an up-arrow and the system-prompt diff (the v2 suffix is an inserted mark). Closed with Escape. Never starts a run (no model call). Needs the API started with PROJECT_DOCS_SOURCE=fixture, which seeds the two runs (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/agents"], "label": "load the agents page" },
+    { "cmd": ["wait", "--text", "Security Reviewer"], "label": "app shell rendered" },
+    { "cmd": ["eval", "[...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/evals' && /Eval Dashboard/.test(a.textContent)).click()"], "label": "click 'Eval Dashboard' in the sidebar" },
+    { "cmd": ["wait", "--url", "/evals"], "label": "eval dashboard landing reached" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('[data-testid=\"eval-agent-row\"]')].some((r) => r.textContent.includes('Security Reviewer'))"], "label": "landing shows the Security Reviewer row" },
+    { "cmd": ["eval", "[...document.querySelectorAll('[data-testid=\"eval-agent-row\"]')].find((r) => r.textContent.includes('Security Reviewer')).click()"], "label": "open the Security Reviewer dashboard" },
+    { "cmd": ["wait", "--url", "/evals/"], "label": "per-agent dashboard route reached" },
+    { "cmd": ["wait", "--fn", "document.querySelectorAll('[data-testid=\"eval-run-select\"]').length >= 2"], "label": "the two seeded runs are listed" },
+    { "cmd": ["eval", "document.querySelectorAll('[data-testid=\"eval-run-select\"]')[0].click()"], "label": "tick the first run" },
+    { "cmd": ["eval", "document.querySelectorAll('[data-testid=\"eval-run-select\"]')[1].click()"], "label": "tick the second run" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[data-testid=\"eval-compare-button\"]') && !document.querySelector('[data-testid=\"eval-compare-button\"]').disabled"], "label": "Compare is enabled with two runs selected" },
+    { "cmd": ["eval", "document.querySelector('[data-testid=\"eval-compare-button\"]').click()"], "label": "open the comparison" },
+    { "cmd": ["wait", "--fn", "document.querySelector('[data-testid=\"eval-compare-dialog\"]')?.textContent.includes('Compare runs') && document.querySelector('[data-testid=\"eval-compare-dialog\"]').textContent.includes('v1 → v2')"], "label": "dialog is titled 'Compare runs · v1 → v2'" },
+    { "cmd": ["wait", "--fn", "[...document.querySelectorAll('[data-testid=\"eval-compare-delta\"]')].some((e) => e.textContent.includes('▲'))"], "label": "a metric delta shows an improvement (▲)" },
+    { "cmd": ["wait", "--fn", "document.querySelectorAll('[data-testid=\"eval-prompt-ins\"], [data-testid=\"eval-prompt-del\"]').length >= 1"], "label": "the prompt diff shows an inserted or removed mark" },
+    { "cmd": ["press", "Escape"], "label": "close the dialog with Escape" },
+    { "cmd": ["wait", "--fn", "!document.querySelector('[data-testid=\"eval-compare-dialog\"]')"], "label": "dialog is closed" }
+  ]
+}

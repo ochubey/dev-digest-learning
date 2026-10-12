@@ -3,7 +3,18 @@ import { and, eq } from 'drizzle-orm';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { PROJECT_DOCS_FIXTURE_SHA } from '../src/db/fixtures/project-docs.js';
 import { seed, SEED_PROJECT_CONTEXT_RUN_ID, SEED_CONTEXT_PATHS } from '../src/db/seed.js';
-import { RunTrace } from '@devdigest/shared';
+import { RunTrace, EvalSuiteRunDetail } from '@devdigest/shared';
+import {
+  SEED_EVAL_CASES,
+  SEED_EVAL_CASES_BY_AGENT,
+  SEED_EVAL_PROMPT_V2_SUFFIX,
+  SEED_EVAL_RUNS,
+  SEED_EVAL_RUN_V1_ID,
+  SEED_EVAL_RUN_V2_ID,
+} from '../src/db/fixtures/eval-cases.js';
+import { SECURITY_REVIEWER_PROMPT } from '../src/db/seed-prompts.js';
+import { resetDemoProject } from '../src/db/demo-reset.js';
+import { EvalsRepository } from '../src/modules/evals/repository.js';
 import * as t from '../src/db/schema.js';
 
 const hasDocker = await dockerAvailable();
@@ -134,7 +145,171 @@ d('demo seed (Testcontainers pg)', () => {
     expect(reviews.filter((r) => r.runId === SEED_PROJECT_CONTEXT_RUN_ID)).toEqual([]);
     expect(reviews).toHaveLength(1);
   });
+
+  // ---- SPEC-03: eval cases, fixture runs, fixture decisions --------------------------------
+  const securityAgent = async () =>
+    (await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Security Reviewer')))[0]!;
+  const casesOf = async (agentId: string) =>
+    pg.handle.db.select().from(t.evalCases).where(eq(t.evalCases.ownerId, agentId));
+  const stripeFinding = async () =>
+    (await pg.handle.db.select().from(t.findings).where(eq(t.findings.title, 'Hardcoded Stripe secret key in commit')))[0]!;
+  const n1Finding = async () =>
+    (await pg.handle.db.select().from(t.findings).where(eq(t.findings.title, 'N+1 query in user list endpoint')))[0]!;
+
+  it('seeds the eval cases on Security Reviewer: derived ones are linked, the rest are "seeded"; a second seed adds none', async () => {
+    const agent = await securityAgent();
+    const cases = await casesOf(agent.id);
+    expect(cases.length).toBe(SEED_EVAL_CASES.length);
+    expect(cases.length).toBeGreaterThanOrEqual(8);
+    const meta = (c: (typeof cases)[number]) => c.inputMeta as Record<string, string>;
+    expect(cases.map((c) => meta(c).seed_key).sort()).toEqual(SEED_EVAL_CASES.map((c) => c.seed_key).sort());
+    const stripe = cases.find((c) => meta(c).seed_key === 'hardcoded-stripe-key')!;
+    const n1 = cases.find((c) => meta(c).seed_key === 'n-plus-one-user-list')!;
+    expect(meta(stripe)).toMatchObject({ origin: 'accepted_finding', source_finding_id: (await stripeFinding()).id, source_decision: 'accepted' });
+    expect(meta(n1)).toMatchObject({ origin: 'dismissed_finding', source_finding_id: (await n1Finding()).id, source_decision: 'dismissed' });
+    for (const c of cases) if (!['hardcoded-stripe-key', 'n-plus-one-user-list'].includes(meta(c).seed_key!)) expect(meta(c).origin).toBe('seeded');
+
+    await seed(pg.handle.db, { demoContext: true });
+    expect((await casesOf(agent.id)).length).toBe(cases.length);
+  });
+
+  it('the repository lists the seeded cases (they parse through the evals mappers)', async () => {
+    const agent = await securityAgent();
+    const views = await new EvalsRepository(pg.handle.db).listCases(agent.workspaceId, agent.id);
+    expect(views.length).toBe(SEED_EVAL_CASES.length);
+  });
+
+  it('fixture on: Security Reviewer is v2 with snapshots, and the two fixed runs exist and parse', async () => {
+    const agent = await securityAgent();
+    expect(agent.version).toBe(2);
+    expect(agent.systemPrompt).toBe(SECURITY_REVIEWER_PROMPT + SEED_EVAL_PROMPT_V2_SUFFIX);
+    const versions = await pg.handle.db.select().from(t.agentVersions).where(eq(t.agentVersions.agentId, agent.id));
+    expect(versions.map((v) => v.version).sort()).toEqual([1, 2]);
+    expect((versions.find((v) => v.version === 1)!.configJson as { system_prompt: string }).system_prompt).toBe(SECURITY_REVIEWER_PROMPT);
+    expect((versions.find((v) => v.version === 2)!.configJson as { system_prompt: string }).system_prompt).toBe(agent.systemPrompt);
+
+    const repo = new EvalsRepository(pg.handle.db);
+    const page = await repo.listRuns(agent.workspaceId, agent.id, null, 10);
+    if (page === 'bad_cursor') throw new Error('bad cursor');
+    expect(page.items.map((r) => [r.id, r.agent_version, r.status]).sort()).toEqual(
+      [
+        [SEED_EVAL_RUN_V1_ID, 1, 'completed'],
+        [SEED_EVAL_RUN_V2_ID, 2, 'completed'],
+      ].sort(),
+    );
+    for (const r of SEED_EVAL_RUNS) {
+      const detail = await repo.getRunDetail(agent.workspaceId, r.id);
+      expect(EvalSuiteRunDetail.safeParse(detail).success, r.id).toBe(true);
+      expect(detail!.metrics).toEqual(r.metrics);
+      expect(detail!.counts).toEqual(r.counts);
+      expect(detail!.results.length).toBe(SEED_EVAL_CASES.length);
+      expect(detail!.results.every((x) => x.case_id !== null)).toBe(true);
+      expect(detail!.manifest.system_prompt).toBe(
+        r.agent_version === 1 ? SECURITY_REVIEWER_PROMPT : SECURITY_REVIEWER_PROMPT + SEED_EVAL_PROMPT_V2_SUFFIX,
+      );
+    }
+    // seeding again neither duplicates runs nor bumps the agent again
+    await seed(pg.handle.db, { demoContext: true });
+    expect((await pg.handle.db.select().from(t.evalSuiteRuns)).length).toBe(2);
+    expect((await securityAgent()).version).toBe(2);
+  });
+
+  it('fixture on: the Stripe finding is accepted (the N+1 one is not decided), and resetDemoProject keeps it', async () => {
+    const stripe = await stripeFinding();
+    expect(stripe.acceptedAt).not.toBeNull();
+    expect(stripe.dismissedAt).toBeNull();
+    expect((await n1Finding()).acceptedAt).toBeNull();
+    expect((await n1Finding()).dismissedAt).toBeNull();
+
+    // without the flag the reset clears the mark (the pre-SPEC-03 behaviour) ...
+    await resetDemoProject(pg.handle.db);
+    expect((await stripeFinding()).acceptedAt).toBeNull();
+    // ... with it, the fixture decision is re-applied after clearing
+    await resetDemoProject(pg.handle.db, { demoContext: true });
+    expect((await stripeFinding()).acceptedAt).not.toBeNull();
+    expect((await n1Finding()).acceptedAt).toBeNull();
+    expect((await n1Finding()).dismissedAt).toBeNull();
+    // the reset does not touch eval data
+    expect((await pg.handle.db.select().from(t.evalSuiteRuns)).length).toBe(2);
+  });
+
+  it('a deleted seeded case is not re-created by the next seed (the runs keep their snapshot)', async () => {
+    const agent = await securityAgent();
+    const before = await casesOf(agent.id);
+    const victim = before.find((c) => (c.inputMeta as { seed_key: string }).seed_key === 'unused-import')!;
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, victim.id));
+    await seed(pg.handle.db, { demoContext: true });
+    expect((await casesOf(agent.id)).length).toBe(before.length - 1);
+    const orphaned = await pg.handle.db.select().from(t.evalRuns).where(eq(t.evalRuns.suiteRunId, SEED_EVAL_RUN_V1_ID));
+    expect(orphaned.filter((r) => r.caseId === null).length).toBe(1);
+  });
+
+  it('seeding restores a tampered seeded expectation and diff, and does not re-create a deleted seeded case', async () => {
+    const agent = await securityAgent();
+    const before = await casesOf(agent.id);
+    const keyOf = (c: (typeof before)[number]) => (c.inputMeta as { seed_key?: string }).seed_key;
+    const tampered = before.find((c) => keyOf(c) === 'sql-string-concat')!;
+    const fixture = SEED_EVAL_CASES.find((c) => c.seed_key === 'sql-string-concat')!;
+    await pg.handle.db
+      .update(t.evalCases)
+      .set({ expectedOutput: { ...fixture.expectation, start_line: 61, end_line: 61 }, inputDiff: 'stale' })
+      .where(eq(t.evalCases.id, tampered.id));
+    const plain = await pg.handle.db
+      .insert(t.evalCases)
+      .values({
+        workspaceId: agent.workspaceId,
+        ownerKind: 'agent',
+        ownerId: agent.id,
+        name: 'user made case',
+        inputDiff: 'keep me',
+        inputMeta: { origin: 'seeded' },
+        expectedOutput: { kind: 'must_find', file: 'a.ts', start_line: 1, end_line: 1 },
+      })
+      .returning();
+    const deleted = before.find((c) => keyOf(c) === 'ssrf-webhook-url')!;
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, deleted.id));
+
+    await seed(pg.handle.db, { demoContext: true });
+
+    const after = await casesOf(agent.id);
+    const healed = after.find((c) => c.id === tampered.id)!;
+    expect(healed.expectedOutput).toEqual(fixture.expectation);
+    expect(healed.inputDiff).toBe(fixture.input_diff);
+    expect(after.some((c) => keyOf(c) === 'ssrf-webhook-url')).toBe(false);
+    const untouched = after.find((c) => c.id === plain[0]!.id)!;
+    expect(untouched.inputDiff).toBe('keep me');
+    expect(after.length).toBe(before.length); // -1 deleted, +1 user case
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, plain[0]!.id));
+  });
+
+  it('every built-in agent gets its own seeded cases, and no fixture runs for the new agents', async () => {
+    for (const [name, expected] of Object.entries(SEED_EVAL_CASES_BY_AGENT)) {
+      if (name === 'Security Reviewer') continue;
+      const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, name));
+      const cases = await casesOf(agent!.id);
+      const keys = cases.map((c) => (c.inputMeta as { seed_key: string }).seed_key).sort();
+      expect(keys, name).toEqual(expected.map((c) => c.seed_key).sort());
+      expect(cases.every((c) => (c.inputMeta as { origin: string }).origin === 'seeded'), name).toBe(true);
+      expect(cases.filter((c) => (c.expectedOutput as { kind: string }).kind === 'must_find').length, name).toBe(2);
+      expect(cases.filter((c) => (c.expectedOutput as { kind: string }).kind === 'must_not_flag').length, name).toBe(2);
+      const runs = await pg.handle.db.select().from(t.evalSuiteRuns).where(eq(t.evalSuiteRuns.agentId, agent!.id));
+      expect(runs, name).toEqual([]);
+    }
+  });
+
+  it('a deleted seeded case of another agent is not re-created and a second seed adds none', async () => {
+    const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Performance Reviewer'));
+    const before = await casesOf(agent!.id);
+    const victim = before.find((c) => (c.inputMeta as { seed_key: string }).seed_key === 'perf-sync-read-in-handler')!;
+    await pg.handle.db.delete(t.evalCases).where(eq(t.evalCases.id, victim.id));
+    await seed(pg.handle.db, { demoContext: true });
+    await seed(pg.handle.db, { demoContext: true });
+    expect((await casesOf(agent!.id)).length).toBe(before.length - 1);
+    const [general] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'General Reviewer'));
+    expect((await casesOf(general!.id)).length).toBe(SEED_EVAL_CASES_BY_AGENT['General Reviewer']!.length);
+  });
 });
+
 
 d('demo seed without the fixture docs source (Testcontainers pg)', () => {
   let pg: PgFixture;
@@ -149,5 +324,22 @@ d('demo seed without the fixture docs source (Testcontainers pg)', () => {
   it('attaches no demo documents: against a real repo those paths would be skipped as not_found', async () => {
     const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Security Reviewer'));
     expect(agent!.contextPaths).toEqual([]);
+  });
+
+  it('adds the eval cases but no runs, no version bump and no decisions', async () => {
+    const [agent] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Security Reviewer'));
+    expect(agent!.version).toBe(1);
+    expect(agent!.systemPrompt).toBe(SECURITY_REVIEWER_PROMPT);
+    expect((await pg.handle.db.select().from(t.evalCases).where(eq(t.evalCases.ownerId, agent!.id))).length).toBe(SEED_EVAL_CASES.length);
+    expect(await pg.handle.db.select().from(t.evalSuiteRuns)).toEqual([]);
+    const [perf] = await pg.handle.db.select().from(t.agents).where(eq(t.agents.name, 'Performance Reviewer'));
+    expect((await pg.handle.db.select().from(t.evalCases).where(eq(t.evalCases.ownerId, perf!.id))).length).toBe(
+      SEED_EVAL_CASES_BY_AGENT['Performance Reviewer']!.length,
+    );
+    expect(await pg.handle.db.select().from(t.agentVersions)).toEqual([]);
+    const findings = await pg.handle.db.select().from(t.findings);
+    expect(findings.every((f) => f.acceptedAt === null && f.dismissedAt === null)).toBe(true);
+    await resetDemoProject(pg.handle.db);
+    expect((await pg.handle.db.select().from(t.findings)).every((f) => f.acceptedAt === null)).toBe(true);
   });
 });

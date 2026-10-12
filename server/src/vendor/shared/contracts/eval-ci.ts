@@ -273,3 +273,228 @@ export const HookScanResult = z.object({
   findings: z.array(Finding),
 });
 export type HookScanResult = z.infer<typeof HookScanResult>;
+
+// ==== SPEC-03 eval pipeline: begin ====
+// Additive block (SPEC-03 OQ-2). Must stay byte-identical in the server and
+// client vendored copies of this file. Imports nothing beyond `z`.
+
+export const EVAL_MAX_CASES_PER_RUN = 50;
+export const EVAL_RUN_CONCURRENCY = 3;
+export const EVAL_CASE_TIMEOUT_MS = 120_000;
+export const EVAL_FRAGMENT_MAX_BYTES = 32_768;
+export const EVAL_CASE_NAME_MAX = 80;
+
+export const EvalExpectationKind = z.enum(['must_find', 'must_not_flag']);
+export type EvalExpectationKind = z.infer<typeof EvalExpectationKind>;
+
+export const EvalCaseOrigin = z.enum(['accepted_finding', 'dismissed_finding', 'seeded']);
+export type EvalCaseOrigin = z.infer<typeof EvalCaseOrigin>;
+
+export const EvalSuiteRunStatus = z.enum(['running', 'completed', 'completed_with_errors', 'failed']);
+export type EvalSuiteRunStatus = z.infer<typeof EvalSuiteRunStatus>;
+
+export const EvalCaseResultStatus = z.enum(['pending', 'ok', 'error']);
+export type EvalCaseResultStatus = z.infer<typeof EvalCaseResultStatus>;
+
+export const EvalFindingMatch = z.enum(['tp', 'fp_zone', 'unlabeled']);
+export type EvalFindingMatch = z.infer<typeof EvalFindingMatch>;
+
+export const EvalExpectation = z.object({
+  kind: EvalExpectationKind,
+  file: z.string(),
+  start_line: z.number().int().min(1),
+  end_line: z.number().int().min(1),
+});
+export type EvalExpectation = z.infer<typeof EvalExpectation>;
+
+/** Stored in `eval_cases.input_meta`. */
+export const EvalCaseMeta = z.object({
+  origin: EvalCaseOrigin,
+  source_finding_id: z.string().nullish(),
+  source_pr_id: z.string().nullish(),
+  source_decision: z.enum(['accepted', 'dismissed']).nullish(),
+  seed_key: z.string().nullish(),
+});
+export type EvalCaseMeta = z.infer<typeof EvalCaseMeta>;
+
+export const EvalCaseDraft = z.object({
+  finding_id: z.string(),
+  pr_id: z.string(),
+  agent_id: z.string().nullable(),
+  name: z.string(),
+  expectation: EvalExpectation,
+  input_diff: z.string(),
+  origin: EvalCaseOrigin,
+  existing_cases: z.array(z.object({ agent_id: z.string(), case_id: z.string() })),
+});
+export type EvalCaseDraft = z.infer<typeof EvalCaseDraft>;
+
+/** Request body for creating a case from a finding; the service validates and answers 400. */
+export const EvalCaseCreateInput = z.object({
+  agent_id: z.string(),
+  finding_id: z.string(),
+  name: z.string(),
+  expectation: EvalExpectation,
+  input_diff: z.string(),
+  notes: z.string().nullish(),
+});
+export type EvalCaseCreateInput = z.infer<typeof EvalCaseCreateInput>;
+
+export const EvalCaseLastResult = z.object({
+  run_id: z.string(),
+  status: z.enum(['pass', 'fail', 'error']),
+  matched: z.number().int(),
+  kind: EvalExpectationKind,
+  error: z.string().nullable(),
+});
+export type EvalCaseLastResult = z.infer<typeof EvalCaseLastResult>;
+
+export const EvalCaseView = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  name: z.string(),
+  expectation: EvalExpectation,
+  input_diff: z.string(),
+  notes: z.string().nullable(),
+  origin: EvalCaseOrigin,
+  source_finding_id: z.string().nullable(),
+  source_pr_id: z.string().nullable(),
+  last_result: EvalCaseLastResult.nullable(),
+});
+export type EvalCaseView = z.infer<typeof EvalCaseView>;
+
+export const EvalRunManifest = z.object({
+  provider: z.enum(['openai', 'anthropic', 'openrouter']),
+  model: z.string(),
+  system_prompt: z.string(),
+  output_schema: z.unknown().nullish(),
+  strategy: z.enum(['single-pass', 'map-reduce', 'auto']),
+  ci_fail_on: z.string(),
+  repo_intel: z.boolean(),
+  skills: z.array(z.string()),
+  skill_versions: z.array(z.object({ id: z.string(), name: z.string(), version: z.number().int() })),
+});
+export type EvalRunManifest = z.infer<typeof EvalRunManifest>;
+
+export const EvalRunCounts = z.object({
+  cases_scored: z.number().int(),
+  cases_passed: z.number().int(),
+  must_find_total: z.number().int(),
+  must_find_hit: z.number().int(),
+  must_not_flag_total: z.number().int(),
+  must_not_flag_violated: z.number().int(),
+  tp: z.number().int(),
+  fp_zone: z.number().int(),
+  fp_unlabeled: z.number().int(),
+  grounded: z.number().int(),
+  dropped: z.number().int(),
+  cases_errored: z.number().int(),
+});
+export type EvalRunCounts = z.infer<typeof EvalRunCounts>;
+
+export const EvalRunMetrics = z.object({
+  recall: z.number().min(0).max(1).nullable(),
+  precision: z.number().min(0).max(1).nullable(),
+  citation_accuracy: z.number().min(0).max(1).nullable(),
+});
+export type EvalRunMetrics = z.infer<typeof EvalRunMetrics>;
+
+export const EvalSuiteRun = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  agent_name: z.string().nullish(),
+  agent_version: z.number().int(),
+  /** Model the run used (from the run manifest); can differ from the agent's current model. */
+  model: z.string().nullish(),
+  status: EvalSuiteRunStatus,
+  error: z.string().nullable(),
+  cases_total: z.number().int(),
+  cases_done: z.number().int(),
+  metrics: EvalRunMetrics,
+  counts: EvalRunCounts.nullable(),
+  duration_ms: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  started_at: z.string(),
+  finished_at: z.string().nullable(),
+});
+export type EvalSuiteRun = z.infer<typeof EvalSuiteRun>;
+
+export const EvalResultFinding = z.object({
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  severity: z.enum(['CRITICAL', 'WARNING', 'SUGGESTION']),
+  category: z.enum(['bug', 'security', 'perf', 'style', 'test']),
+  title: z.string(),
+  match: EvalFindingMatch,
+});
+export type EvalResultFinding = z.infer<typeof EvalResultFinding>;
+
+export const EvalDroppedFinding = z.object({
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  title: z.string(),
+  reason: z.string(),
+});
+export type EvalDroppedFinding = z.infer<typeof EvalDroppedFinding>;
+
+export const EvalCaseResult = z.object({
+  id: z.string(),
+  case_id: z.string().nullable(),
+  case_name: z.string(),
+  expectation: EvalExpectation,
+  origin: EvalCaseOrigin,
+  status: EvalCaseResultStatus,
+  pass: z.boolean().nullable(),
+  grounded: z.array(EvalResultFinding),
+  dropped: z.array(EvalDroppedFinding),
+  duration_ms: z.number().int().nullable(),
+  tokens_in: z.number().int().nullable(),
+  tokens_out: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  error: z.string().nullable(),
+});
+export type EvalCaseResult = z.infer<typeof EvalCaseResult>;
+
+export const EvalSuiteRunDetail = EvalSuiteRun.extend({
+  manifest: EvalRunManifest,
+  results: z.array(EvalCaseResult),
+});
+export type EvalSuiteRunDetail = z.infer<typeof EvalSuiteRunDetail>;
+
+export const EvalRunStartResponse = z.object({ run_id: z.string() });
+export type EvalRunStartResponse = z.infer<typeof EvalRunStartResponse>;
+
+/** Optional body of the run start: use another model of the agent's provider for this run only. */
+export const EvalRunStartInput = z.object({ model: z.string().min(1).max(200).optional() });
+export type EvalRunStartInput = z.infer<typeof EvalRunStartInput>;
+
+export const EvalRunPage = z.object({
+  items: z.array(EvalSuiteRun),
+  next_cursor: z.string().nullable(),
+});
+export type EvalRunPage = z.infer<typeof EvalRunPage>;
+
+export const EvalOverview = z.object({
+  agents: z.array(
+    z.object({
+      agent_id: z.string(),
+      name: z.string(),
+      model: z.string(),
+      version: z.number().int(),
+      latest: EvalSuiteRun.nullable(),
+      previous: EvalSuiteRun.nullable(),
+    }),
+  ),
+  recent: z.array(EvalSuiteRun),
+});
+export type EvalOverview = z.infer<typeof EvalOverview>;
+
+/** `a` is the older run by `started_at`. */
+export const EvalCompare = z.object({
+  a: EvalSuiteRunDetail,
+  b: EvalSuiteRunDetail,
+});
+export type EvalCompare = z.infer<typeof EvalCompare>;
+// ==== SPEC-03 eval pipeline: end ====

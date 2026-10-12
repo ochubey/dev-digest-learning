@@ -94,3 +94,16 @@ mid-single-call. A single-pass review cannot be interrupted once the one
 LLM call has started; only a chunked (map-reduce) review can actually stop
 early. A caller that needs sub-second cancellation for large single-file
 diffs would need `strategy: 'map-reduce'` forced, not `'auto'`.
+
+## Eval callers (fragment-only inputs)
+
+The server eval pipeline (`server/src/modules/evals/runner.ts`) calls
+`reviewPullRequest` once per eval case with fragment-only inputs: `systemPrompt`,
+`model`, `strategy`, `skills` (bodies of the enabled linked skills, omitted when none),
+`diff` (the case's stored fragment parsed by `parseUnifiedDiff`), `llm`, a fixed `task`
+line, and `checkCancelled` (so a timeout stops map-reduce before the next chunk). It
+passes no `prDescription`, `intent`/`intentObj`, `repoMap`, `callers`, `projectContext`,
+`specs` or `memory`, so those prompt sections are omitted as described above. Scope policy
+is therefore inactive and every grounded finding is `in`. The caller scores
+`outcome.allFindings` and counts `outcome.dropped`; `reviewer-core` itself is unchanged by
+the eval pipeline and knows nothing about cases or metrics.

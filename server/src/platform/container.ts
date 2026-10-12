@@ -8,7 +8,7 @@ import type {
   LLMProvider,
 } from '@devdigest/shared';
 import type { AppConfig } from './config.js';
-import type { Db } from '../db/client.js';
+import type { Db, DbOrTx } from '../db/client.js';
 import { JobRunner } from './jobs.js';
 import { runBus, type RunBus } from './sse.js';
 import { LocalSecretsProvider } from '../adapters/secrets/local.js';
@@ -25,6 +25,7 @@ import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
+import { EvalsRepository } from '../modules/evals/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
@@ -58,6 +59,9 @@ export interface ContainerOverrides {
   projectDocs?: ProjectDocsSource;
 }
 
+/** Cross-module cleanup run inside the agent-delete transaction (rows that reference the agent without a FK). */
+export type AgentDeleteHook = (tx: DbOrTx, agentId: string) => Promise<void>;
+
 export class Container {
   readonly config: AppConfig;
   readonly db: Db;
@@ -65,6 +69,10 @@ export class Container {
   readonly auth: AuthProvider;
   readonly jobs: JobRunner;
   readonly runBus: RunBus;
+  /** Registered here, in the composition root, so `agents` does not import other modules. */
+  readonly agentDeleteHooks: AgentDeleteHook[] = [
+    (tx, agentId) => new EvalsRepository(tx).deleteForAgent(agentId),
+  ];
 
   private _git?: GitClient;
   private _github?: GitHubClient;

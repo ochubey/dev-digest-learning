@@ -20,6 +20,7 @@ import {
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
+import { EvalCaseDialog } from "../EvalCaseDialog";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
 
@@ -45,6 +46,7 @@ export function FindingCard({
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
+  const [evalOpen, setEvalOpen] = React.useState(false);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
   const fileHref =
     repoFullName && headSha
@@ -52,6 +54,8 @@ export function FindingCard({
       : undefined;
   const accepted = !!f.accepted_at;
   const dismissed = !!f.dismissed_at;
+  const decided = accepted || dismissed;
+  const hintId = React.useId();
   const muted = accepted || dismissed || !!mutedProp;
   const isSignal = f.scope === "signal";
   const isOut = f.scope === "out";
@@ -122,7 +126,24 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            {/* Capture as an eval case (SPEC-03): only once the finding is accepted or dismissed. */}
+            <Button
+              kind="ghost"
+              size="sm"
+              icon="FlaskConical"
+              disabled={!decided}
+              aria-describedby={decided ? undefined : hintId}
+              onClick={() => setEvalOpen(true)}
+            >
+              {t("finding.turnIntoEvalCase")}
+            </Button>
+            {!decided && (
+              <span id={hintId} style={s.evalHint}>
+                {t("finding.turnIntoEvalCaseHint")}
+              </span>
+            )}
           </div>
+          {evalOpen && <EvalCaseDialog findingId={f.id} onClose={() => setEvalOpen(false)} />}
         </div>
       )}
     </div>

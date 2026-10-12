@@ -21,6 +21,11 @@
 
 - `OctokitGitHubClient.readRepoFile` decodes with `Buffer.toString('utf-8')`, which silently replaces invalid bytes, so it cannot tell a binary file from text; `ProjectDocsSource.readBlob` returns raw bytes and the caller decodes strictly (`TextDecoder` with `fatal: true`) to produce the `not_text` skip reason. `server/src/adapters/project-docs/octokit.ts:94`. (2026-10-10)
 
+- 2026-10-11 (eval pipeline): Zod request validation answers 422 in this app, not 400; the evals service therefore does its own validation (400 `invalid_eval_case`, `no_eval_cases`, ...) and only path ids, compare ids and `limit` rely on zod (422). The generic error handler now returns "Internal error" for 5xx, so the real cause of a 500 is only in the server log.
+- 2026-10-11: `withTimeout` (`platform/resilience.ts`) does not abort the underlying provider call: a case that hits the 120 s eval timeout is recorded as `error` but the model call may still finish and be billed. Plumbing an AbortSignal through `reviewPullRequest` is the open follow-up.
+- 2026-10-11: the dev server runs `tsx watch`, so saving any server file restarts it and kills an eval run in progress (the boot reaper then marks it `failed` "interrupted"). Do not edit server files while a real-model eval run is going.
+- 2026-10-11: one eval case with real `deepseek/deepseek-v4-flash` takes roughly 15 to 60 s and about $0.0004; nine cases at concurrency 3 take 3 to 5 minutes and about $0.004. One case can hit the 120 s timeout; with a single trial per case, identical prompts can differ by one or two cases (recall 60% vs 80% in two runs of the same prompt).
+
 ## Recurring Errors & Fixes
 
 - `pnpm db:migrate` / `pnpm db:seed` silently do NOTHING on Windows (exit 0, no output, no DB changes) — both `migrate.ts:35` and `seed.ts:227` gate their CLI entrypoint on `import.meta.url === \`file://${process.argv[1]}\``, but on Windows `process.argv[1]` is a backslash path (`E:\...`) while `import.meta.url` is a `file:///E:/...` URL — they never match, so the guarded block never runs. Workaround: write a one-off script that imports `runMigrations`/`seed` directly and calls them, instead of running the file as a CLI entrypoint. `server/src/db/migrate.ts:35`, `server/src/db/seed.ts:227`. (2026-09-27)
