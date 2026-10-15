@@ -1,0 +1,98 @@
+{
+  "wizard": {
+    "title": "Export to CI",
+    "stepOf": "Step {step} of {total}: {label}",
+    "back": "Back",
+    "continue": "Continue",
+    "done": "Done",
+    "steps": {
+      "target": "Target",
+      "preview": "Preview",
+      "configure": "Configure",
+      "install": "Install"
+    }
+  },
+  "target": {
+    "heading": "Where should the agent run?",
+    "gha": "GitHub Actions",
+    "ghaDesc": "Runs on pull_request events",
+    "recommended": "recommended",
+    "repoLabel": "Repository",
+    "noRepos": "Connect a repository first",
+    "noReposLink": "Go to repository setup",
+    "unsupportedProvider": "CI export supports OpenRouter agents only",
+    "checking": "Generating the preview…"
+  },
+  "preview": {
+    "filesTitle": "Files to create",
+    "editable": "editable",
+    "readOnly": "read-only",
+    "editLabel": "Edit {path}",
+    "runnerInfo": "Runner bundle, {size}, runner version {version}. Its contents are not shown.",
+    "confirmRegenerate": "Discard your workflow edits and regenerate?",
+    "confirmYes": "Discard and regenerate",
+    "confirmNo": "Keep my edits",
+    "regenerating": "Regenerating the workflow…"
+  },
+  "configure": {
+    "triggers": "Trigger",
+    "trigger": {
+      "opened": "pull_request: opened",
+      "synchronize": "pull_request: synchronize",
+      "reopened": "pull_request: reopened"
+    },
+    "pickOne": "Pick at least one event",
+    "postAs": "Post results as",
+    "postOptions": {
+      "github_review": "GitHub review",
+      "pr_comment": "PR comment",
+      "none": "None (exit code only)"
+    },
+    "failOn": "Fail CI on",
+    "blockNote": "To block merges, make the `devdigest-review` check required in the repository's branch protection or ruleset. DevDigest cannot do this for you."
+  },
+  "install": {
+    "heading": "How do you want to install it?",
+    "openPr": "Open a PR with these files",
+    "openPrDesc": "The PR is opened from branch devdigest/ci into the repository's default branch. Branch devdigest/ci is overwritten if it exists.",
+    "zip": "Download files as zip",
+    "zipDesc": "Add the files to the repository yourself.",
+    "working": "Working…",
+    "tryAgain": "Try again",
+    "successPr": "The pull request is ready.",
+    "viewPr": "View the pull request",
+    "successZip": "The zip was downloaded. Add its files to the repository on a branch and open a PR.",
+    "secretTitle": "One more step: add the OPENROUTER_API_KEY secret",
+    "secretBody": "Add OPENROUTER_API_KEY under Settings -> Secrets and variables -> Actions.",
+    "secretLink": "Open the Actions secrets settings"
+  },
+  "tab": {
+    "title": "CI deployment",
+    "empty": "Not in CI yet",
+    "emptyBody": "Deploy this agent to run automatically on every pull request in a repository's CI pipeline.",
+    "addToCi": "Add to CI",
+    "addRepo": "Add repository",
+    "updateConfig": "Update CI config",
+    "configChanged": "Config changed since export",
+    "target": "GitHub Actions",
+    "workflowVersion": "Workflow v{version}",
+    "installedAt": "Installed {time}",
+    "prLink": "Pull request",
+    "filesDownloaded": "Files downloaded",
+    "lastRun": "Last run: {status} at {time}",
+    "noRuns": "No runs yet",
+    "failOn": "Fail CI on",
+    "failOnOptions": {
+      "never": "Never",
+      "critical": "Critical",
+      "warning": "Warning and above",
+      "any": "Any"
+    },
+    "failOnHint": "Fail CI on makes the check exit non-zero. Blocking merges also needs the check to be required in the repository settings.",
+    "failOnSaveFailed": "Could not save Fail CI on. Try again.",
+    "runsTitle": "Recent CI runs",
+    "loading": "Loading CI deployment",
+    "errorTitle": "Could not load the CI deployment",
+    "errorBody": "Check that the API is running and try again."
+  }
+}

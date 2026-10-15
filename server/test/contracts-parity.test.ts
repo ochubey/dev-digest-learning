@@ -25,19 +25,24 @@ describe('vendored contracts parity', () => {
     });
   }
 
-  it('eval-ci.ts SPEC-03 block byte-identical', () => {
-    const begin = '// ==== SPEC-03 eval pipeline: begin ====';
-    const end = '// ==== SPEC-03 eval pipeline: end ====';
-    const block = (rel: string) => {
-      const text = read(rel).toString('utf8');
-      expect(text.split(begin).length, `${rel}: missing or duplicate begin marker`).toBe(2);
-      expect(text.split(end).length, `${rel}: missing or duplicate end marker`).toBe(2);
-      const from = text.indexOf(begin);
-      const to = text.indexOf(end);
-      expect(to, `${rel}: end marker before begin marker`).toBeGreaterThan(from);
-      return text.slice(from, to + end.length);
-    };
-    const { server, client } = pair('eval-ci.ts');
-    expect(block(server), `${server} and ${client} SPEC-03 blocks differ`).toBe(block(client));
-  });
+  for (const spec of [
+    { id: 'SPEC-03', label: 'eval pipeline' },
+    { id: 'SPEC-05', label: 'export to CI' },
+  ]) {
+    it(`eval-ci.ts ${spec.id} block byte-identical`, () => {
+      const begin = `// ==== ${spec.id} ${spec.label}: begin ====`;
+      const end = `// ==== ${spec.id} ${spec.label}: end ====`;
+      const block = (rel: string) => {
+        const text = read(rel).toString('utf8');
+        expect(text.split(begin).length, `${rel}: missing or duplicate begin marker`).toBe(2);
+        expect(text.split(end).length, `${rel}: missing or duplicate end marker`).toBe(2);
+        const from = text.indexOf(begin);
+        const to = text.indexOf(end);
+        expect(to, `${rel}: end marker before begin marker`).toBeGreaterThan(from);
+        return text.slice(from, to + end.length);
+      };
+      const { server, client } = pair('eval-ci.ts');
+      expect(block(server), `${server} and ${client} ${spec.id} blocks differ`).toBe(block(client));
+    });
+  }
 });

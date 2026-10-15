@@ -21,6 +21,7 @@ import path from 'node:path';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { OpenRouterProvider } from '@devdigest/reviewer-core';
 import { runCi, type PostAs } from './run.js';
+import { redactSecrets } from './redact.js';
 
 function resolvePostAs(value: string | undefined): PostAs {
   if (value === 'github_review' || value === 'pr_comment' || value === 'none') return value;
@@ -28,6 +29,8 @@ function resolvePostAs(value: string | undefined): PostAs {
 }
 
 export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number> {
+  const secrets = [env.OPENROUTER_API_KEY, env.GITHUB_TOKEN];
+  const redact = (text: string) => redactSecrets(text, secrets);
   const devdigestDir = env.DEVDIGEST_DIR ?? path.join(process.cwd(), '.devdigest');
   const resultPath = env.DEVDIGEST_RESULT_PATH ?? path.join(process.cwd(), 'devdigest-result.json');
   const postAs = resolvePostAs(env.DEVDIGEST_POST_AS);
@@ -43,6 +46,7 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
     env,
     llm,
     postAs,
+    secrets: secrets.filter((s): s is string => !!s),
     resultPath,
     readFile: readFileSync,
     readDir: readdirSync,
@@ -50,11 +54,13 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
   });
 
   if (result.artifact === null) {
-    console.error(`[agent-runner] FAILED: ${result.error}`);
+    console.error(redact(`[agent-runner] FAILED: ${result.error}`));
   } else {
     console.log(
-      `[agent-runner] findings=${result.artifact.findings_count} blockers=${result.blockers} ` +
-        `gateTriggered=${result.gateTriggered} posted=${result.posted.kind}`,
+      redact(
+        `[agent-runner] findings=${result.artifact.findings_count} blockers=${result.blockers} ` +
+          `gateTriggered=${result.gateTriggered} posted=${result.posted.kind}`,
+      ),
     );
   }
   return result.exitCode;
@@ -73,7 +79,9 @@ if (isDirectRun) {
       process.exitCode = code;
     },
     (err) => {
-      console.error('[agent-runner] fatal error:', err);
+      const secrets = [process.env.OPENROUTER_API_KEY, process.env.GITHUB_TOKEN];
+      const text = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      console.error(redactSecrets(`[agent-runner] fatal error: ${text}`, secrets));
       process.exitCode = 1;
     },
   );

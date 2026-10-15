@@ -14,6 +14,8 @@ import { runBus, type RunBus } from './sse.js';
 import { LocalSecretsProvider } from '../adapters/secrets/local.js';
 import { LocalNoAuthProvider } from '../adapters/auth/local.js';
 import { OctokitGitHubClient } from '../adapters/github/octokit.js';
+import { OctokitActionsSource } from '../adapters/github-actions/octokit.js';
+import type { CiActionsSource } from '../adapters/github-actions/types.js';
 import { SimpleGitClient } from '../adapters/git/simple-git.js';
 import { RipgrepCodeIndex } from '../adapters/codeindex/ripgrep.js';
 import { OpenAIProvider } from '../adapters/llm/openai.js';
@@ -45,6 +47,7 @@ export interface ContainerOverrides {
   secrets?: SecretsProvider;
   auth?: AuthProvider;
   github?: GitHubClient;
+  actions?: CiActionsSource;
   git?: GitClient;
   codeIndex?: CodeIndex;
   embedder?: Embedder;
@@ -76,6 +79,7 @@ export class Container {
 
   private _git?: GitClient;
   private _github?: GitHubClient;
+  private _actions?: CiActionsSource;
   private _codeIndex?: CodeIndex;
   private _embedder?: Embedder;
   private _projectDocs?: ProjectDocsSource;
@@ -173,6 +177,15 @@ export class Container {
     return this._github;
   }
 
+  async actions(): Promise<CiActionsSource> {
+    if (this.overrides.actions) return this.overrides.actions;
+    if (this._actions) return this._actions;
+    const token = await this.secrets.get('GITHUB_TOKEN');
+    if (!token) throw new ConfigError('GITHUB_TOKEN is not configured');
+    this._actions = new OctokitActionsSource(token);
+    return this._actions;
+  }
+
   /** Project-context document source: override, fixture (PROJECT_DOCS_SOURCE=fixture), else GitHub. */
   async projectDocs(): Promise<ProjectDocsSource> {
     if (this.overrides.projectDocs) return this.overrides.projectDocs;
@@ -242,6 +255,7 @@ export class Container {
   invalidateSecretCaches(): void {
     this.llmCache.clear();
     this._github = undefined;
+    this._actions = undefined;
     this._projectDocs = undefined;
     this._embedder = undefined;
   }

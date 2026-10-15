@@ -35,4 +35,4 @@ See also: `insights/gotchas.md` for known quirks at project start.
 
 ## Open Questions
 
-2026-07-08 — `AgentManifest` has no `post_as` field and the generated GHA workflow (`server/src/modules/ci/workflow.ts`) doesn't set a `POST_AS`-equivalent env var, so in production the runner will always fall back to `index.ts`'s default (`'github_review'`) regardless of what the studio's export dialog captured (`CiExportInput.post_as`). Should `post_as` be folded into `AgentManifest` (persisted per-agent, read by the runner) or threaded through the workflow as an explicit env var? Whoever owns the export/workflow-generation track should close this loop — `runCi()` already accepts `postAs` as a first-class parameter, so wiring either fix through only touches `index.ts` plus the manifest/workflow generator. ref: server/src/vendor/shared/contracts/eval-ci.ts (AgentManifest), agent-runner/src/index.ts:25
+2026-10-11 — Closed: the `post_as` question. The generated workflow sets `DEVDIGEST_POST_AS` on the review step (SPEC-05), and `index.ts` already reads it, so `post_as` stays out of `AgentManifest`.

@@ -1,9 +1,9 @@
 import type { Finding } from '@devdigest/shared';
-import { CiResultArtifact } from '@devdigest/shared';
+import { CiResultArtifact, CI_RUNNER_VERSION } from '@devdigest/shared';
 import { RunnerError } from './errors.js';
 
-/** Runner version string embedded in every artifact (informational only). */
-export const RUNNER_VERSION = '1';
+/** Runner version string embedded in every artifact (shared with the server). */
+export const RUNNER_VERSION = CI_RUNNER_VERSION;
 
 export interface BuildResultArtifactInput {
   findings: Finding[];
@@ -11,6 +11,12 @@ export interface BuildResultArtifactInput {
   durationMs: number;
   agent: string;
   prNumber: number;
+  commitSha: string | null;
+  repositoryId: number | null;
+  model: string;
+  agentVersion: number | null;
+  verdict: 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES';
+  blockers: number;
 }
 
 function severityCounts(findings: Finding[]): { critical: number; warning: number; suggestion: number } {
@@ -41,6 +47,12 @@ export function buildResultArtifact(input: BuildResultArtifactInput): CiResultAr
     agent: input.agent,
     version: RUNNER_VERSION,
     pr_number: input.prNumber,
+    commit_sha: input.commitSha,
+    repository_id: input.repositoryId,
+    model: input.model,
+    agent_version: input.agentVersion,
+    verdict: input.verdict,
+    blockers: input.blockers,
   };
   const result = CiResultArtifact.safeParse(candidate);
   if (!result.success) {

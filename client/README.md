@@ -29,11 +29,13 @@ flowchart TD
 
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config)"]
   SETTINGS["/settings/:section<br/>API keys · models"]
+  CIRUNS["/ci-runs<br/>CI runs"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/brief<br/>POST /pulls/:id/brief · POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   AGENTS -->|"/agents · /agents/:id"| API
   SETTINGS -->|"/settings · /providers"| API
+  CIRUNS -->|"GET /ci/runs · POST /ci/sync"| API
 ```
 
 The PR detail Overview tab renders the PR Brief card (`_components/PrBriefCard`);
@@ -81,3 +83,15 @@ mocked, so they need neither the API nor a browser. The real browser journeys
 (client + API + seeded DB) are covered by the deterministic agent-browser suite
 in [`../e2e`](../e2e/README.md) and the `e2e-web.yml` workflow. See
 [`../TESTING.md`](../TESTING.md).
+
+## Export to CI (SPEC-05)
+
+Hooks live in `src/lib/hooks/ci.ts`; shared UI in `src/components/ci-export`
+(`ExportCiWizard`: Target, Preview, Configure, Install; `CiRunsTable`). The
+client mirrors the shared CI constants locally (runtime imports from
+`@devdigest/shared` break `next build`). Messages: `ciExport`, `ciRuns`.
+
+| Route | What it shows |
+|---|---|
+| `/ci-runs` | The workspace's 100 newest CI runs (`CiRunsView`); one sync on open, Refresh button, per-repository sync warnings. |
+| `/agents/[id]?tab=ci` | Agent CI tab (`CiTab`): installations, "Config changed since export" + Update CI config, Fail CI on, 20 recent runs, Add to CI wizard. |

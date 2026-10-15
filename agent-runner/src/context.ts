@@ -15,6 +15,7 @@ import { RunnerError } from './errors.js';
 export interface CiEnv {
   GITHUB_REPOSITORY?: string;
   PR_NUMBER?: string;
+  GITHUB_REPOSITORY_ID?: string;
   GITHUB_EVENT_PATH?: string;
   [key: string]: string | undefined;
 }
@@ -30,6 +31,10 @@ export interface PrContext {
   /** True when the PR head is a fork — informational only; the workflow
    *  itself is responsible for never scheduling this job for fork PRs. */
   isFork: boolean;
+  /** `pull_request.head.sha` from the event payload, null when absent. */
+  headSha: string | null;
+  /** Numeric `GITHUB_REPOSITORY_ID` (auto-set by Actions), null when absent/invalid. */
+  repositoryId: number | null;
 }
 
 interface PullRequestEventPayload {
@@ -37,7 +42,7 @@ interface PullRequestEventPayload {
     number?: number;
     title?: string;
     body?: string | null;
-    head?: { repo?: { fork?: boolean } | null };
+    head?: { sha?: string; repo?: { fork?: boolean } | null };
   };
 }
 
@@ -83,6 +88,8 @@ export function resolvePrContext(
     );
   }
 
+  const repoIdRaw = env.GITHUB_REPOSITORY_ID ? Number(env.GITHUB_REPOSITORY_ID) : NaN;
+
   return {
     owner,
     repo,
@@ -90,5 +97,7 @@ export function resolvePrContext(
     title: pr?.title ?? '',
     body: pr?.body ?? '',
     isFork: pr?.head?.repo?.fork ?? false,
+    headSha: pr?.head?.sha ?? null,
+    repositoryId: Number.isInteger(repoIdRaw) && repoIdRaw > 0 ? repoIdRaw : null,
   };
 }

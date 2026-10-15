@@ -1,0 +1,49 @@
+{
+  "page": {
+    "breadcrumb": "CI Runs",
+    "title": "CI Runs",
+    "subtitle": "Agent reviews executed inside CI, not local runs",
+    "refresh": "Refresh",
+    "lastSynced": "Last synced {time}",
+    "loading": "Loading CI runs",
+    "errorTitle": "Could not load CI runs",
+    "errorBody": "Check that the API is running and try again.",
+    "tryAgain": "Try again",
+    "syncFailed": "The sync failed: {message}",
+    "emptyNoInstallations": "No CI runs yet. Once you export an agent to CI, every automated review shows up here.",
+    "setUp": "Set up CI for an agent",
+    "emptyWithInstallations": "No CI runs yet. Runs appear after the DevDigest PR is merged and a pull request triggers the workflow.",
+    "failuresTitle": "Some repositories could not be synced",
+    "failureItem": "{repo}: {message}"
+  },
+  "table": {
+    "col": {
+      "time": "Time",
+      "repo": "Repository",
+      "pr": "Pull request",
+      "agent": "Agent",
+      "verdict": "Verdict",
+      "findings": "Findings",
+      "cost": "Cost",
+      "duration": "Duration",
+      "status": "Status",
+      "link": "Job"
+    },
+    "viewJob": "View job",
+    "noValue": "—",
+    "critical": "{count} critical",
+    "warning": "{count} warning",
+    "suggestion": "{count} suggestion",
+    "status": {
+      "succeeded": "Succeeded",
+      "no_findings": "No findings",
+      "failed": "Failed",
+      "running": "Running"
+    },
+    "verdicts": {
+      "APPROVE": "Approve",
+      "COMMENT": "Comment",
+      "REQUEST_CHANGES": "Request changes"
+    }
+  }
+}

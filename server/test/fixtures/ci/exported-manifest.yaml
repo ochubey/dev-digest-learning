@@ -1,0 +1,12 @@
+name: Secret Gate
+provider: openrouter
+model: deepseek/deepseek-v4-flash
+system_prompt: |-
+  Review for secrets.
+  Be strict: never approve a leaked key.
+skills:
+  - secret-gate
+  - secret-gate-2
+strategy: single-pass
+ci_fail_on: critical
+version: 3
