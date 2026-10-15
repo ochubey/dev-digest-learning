@@ -4,7 +4,7 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -455,6 +455,8 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       config: config(),
       db: pg.handle.db,
       overrides: {
+        // Intent derivation needs a GitHub client; without this it only works where GITHUB_TOKEN is set.
+        github: new MockGitHubClient(),
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
         llm: { openai: mockOpenai, openrouter: mockRouter },
@@ -572,6 +574,8 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
         config: config(),
         db: pg.handle.db,
         overrides: {
+          // Intent derivation needs a GitHub client; without this it only works where GITHUB_TOKEN is set.
+          github: new MockGitHubClient(),
           embedder: new MockEmbedder(),
           git: new MockGitClient({ diff: DIFF }),
           llm: {
