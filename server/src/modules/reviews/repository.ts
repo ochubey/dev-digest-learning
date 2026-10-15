@@ -127,6 +127,11 @@ export class ReviewRepository {
 
   // ---- observability: agent_runs + run_traces ----------------------------
 
+  /** Create the parent row of a multi-agent launch; returns its id. */
+  createMultiAgentRun(values: { workspaceId: string; prId: string }): Promise<string> {
+    return runRepo.createMultiAgentRun(this.db, values);
+  }
+
   /** Create an agent_runs row in `running` state; returns its id (= the runId). */
   createAgentRun(values: {
     workspaceId: string;
@@ -134,6 +139,7 @@ export class ReviewRepository {
     prId: string;
     provider: string | null;
     model: string | null;
+    multiAgentRunId?: string | null;
   }): Promise<string> {
     return runRepo.createAgentRun(this.db, values);
   }

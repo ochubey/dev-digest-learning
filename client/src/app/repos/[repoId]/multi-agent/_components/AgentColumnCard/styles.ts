@@ -1,0 +1,57 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  card: {
+    border: "1px solid var(--border)",
+    borderRadius: 9,
+    background: "var(--bg-elevated)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  } satisfies CSSProperties,
+  head: {
+    padding: 12,
+    borderBottom: "1px solid var(--border)",
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+  } satisfies CSSProperties,
+  headBody: { minWidth: 0, flex: 1 } satisfies CSSProperties,
+  name: {
+    fontSize: 12.5,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  } satisfies CSSProperties,
+  meta: { fontSize: 10.5, color: "var(--text-muted)" } satisfies CSSProperties,
+  status: { fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" } satisfies CSSProperties,
+  body: { padding: 12, display: "flex", flexDirection: "column", gap: 7, flex: 1 } satisfies CSSProperties,
+  error: { fontSize: 12, color: "var(--crit)", lineHeight: 1.4 } satisfies CSSProperties,
+  empty: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+  item: (color: string): CSSProperties => ({
+    padding: "8px 10px",
+    borderRadius: 6,
+    background: "var(--bg-surface)",
+    borderLeft: `2px solid ${color}`,
+  }),
+  itemTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    lineHeight: 1.3,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  } satisfies CSSProperties,
+  itemLoc: { fontSize: 10.5, color: "var(--text-muted)", marginTop: 4 } satisfies CSSProperties,
+  also: { fontSize: 10.5, color: "var(--text-secondary)", marginTop: 3 } satisfies CSSProperties,
+  footer: {
+    padding: "9px 12px",
+    borderTop: "1px solid var(--border)",
+    background: "var(--bg-surface)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  } satisfies CSSProperties,
+  count: { fontSize: 11, color: "var(--text-muted)" } satisfies CSSProperties,
+};

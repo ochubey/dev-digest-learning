@@ -41,12 +41,26 @@ export class ReviewService {
   // ===========================================================================
 
   /**
-   * Resolve which agents to run. `all` → all enabled agents; else a single agent.
+   * Resolve which agents to run. `agentIds` → exactly those agents, in order
+   * (any unknown/foreign id is a 404 before any write); `all` → all enabled
+   * agents; else a single agent. `agentIds` cannot be combined with the others.
    */
   async resolveTargets(
     workspaceId: string,
-    opts: { agentId?: string; all?: boolean },
+    opts: { agentId?: string; all?: boolean; agentIds?: string[] },
   ): Promise<AgentRow[]> {
+    if (opts.agentIds) {
+      if (opts.agentId !== undefined || opts.all) {
+        throw new AppError('invalid_run_request', 'agentIds cannot be combined with agentId or all', 400);
+      }
+      const found: AgentRow[] = [];
+      for (const id of opts.agentIds) {
+        const agent = await this.agents.getById(workspaceId, id);
+        if (!agent) throw new NotFoundError('Agent not found');
+        found.push(agent);
+      }
+      return found;
+    }
     if (opts.all) return this.agents.listEnabled(workspaceId);
     if (opts.agentId) {
       const agent = await this.agents.getById(workspaceId, opts.agentId);
@@ -98,14 +112,20 @@ export class ReviewService {
    * Run a review for each target agent. Each agent gets its own runId
    * (= agent_runs.id) created up-front so the SSE route can be subscribed
    * before/while the run progresses. A partial failure in one agent does not
-   * abort the others.
+   * abort the others. With `opts.multiAgent` the runs share a parent
+   * `multi_agent_runs` row (returned as `multiAgentRunId`).
    */
   async runReview(
     workspaceId: string,
     prId: string,
     targets: AgentRow[],
     logger?: Logger,
-  ): Promise<{ runs: { run_id: string; agent_id: string; agent_name: string }[]; reviews: ReviewDto[] }> {
+    opts: { multiAgent?: boolean } = {},
+  ): Promise<{
+    runs: { run_id: string; agent_id: string; agent_name: string }[];
+    reviews: ReviewDto[];
+    multiAgentRunId?: string;
+  }> {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
     const repo = await this.repo.getRepo(pull.repoId);
@@ -114,6 +134,9 @@ export class ReviewService {
     // Create the agent_run rows up front so a runId is available IMMEDIATELY —
     // the client persists these in global state and subscribes to the SSE
     // stream. The actual (slow) review runs in the background below.
+    const multiAgentRunId = opts.multiAgent
+      ? await this.repo.createMultiAgentRun({ workspaceId, prId })
+      : undefined;
     const runs: { run_id: string; agent_id: string; agent_name: string }[] = [];
     const jobs: { agent: AgentRow; runId: string }[] = [];
     for (const agent of targets) {
@@ -123,9 +146,17 @@ export class ReviewService {
         prId,
         provider: agent.provider,
         model: agent.model,
+        ...(multiAgentRunId ? { multiAgentRunId } : {}),
       });
       runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
       jobs.push({ agent, runId });
+    }
+
+    if (multiAgentRunId) {
+      logger?.info(
+        { multi_agent_run_id: multiAgentRunId, pr_id: prId, agents: targets.length },
+        'review: multi-agent launch',
+      );
     }
 
     // Fire-and-forget: the HTTP response returns now with the runIds; reviews
@@ -134,7 +165,7 @@ export class ReviewService {
       logger?.error({ prId, err: (err as Error).message }, 'review: background execution crashed');
     });
 
-    return { runs, reviews: [] };
+    return { runs, reviews: [], ...(multiAgentRunId ? { multiAgentRunId } : {}) };
   }
 
   private publish(runId: string, kind: RunEventKind, msg: string, data?: unknown) {

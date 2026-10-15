@@ -42,6 +42,7 @@
   },
   "runReview": {
     "runAll": "Run all enabled agents",
+    "multiAgent": "Multi-agent review…",
     "configureAgents": "Configure agents…",
     "running": "Running…",
     "runReview": "Run Review",

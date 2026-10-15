@@ -9,6 +9,7 @@ import type { PrDetail } from "@/lib/types";
 interface PrDetailHeaderProps {
   pr: PrDetail;
   prId: string | null;
+  repoId: string;
   tab: string;
   findingsCount: number;
   /** github.com PR URL; null when the repo's full_name isn't known yet. */
@@ -21,6 +22,7 @@ interface PrDetailHeaderProps {
 export function PrDetailHeader({
   pr,
   prId,
+  repoId,
   tab,
   findingsCount,
   githubUrl,
@@ -92,6 +94,8 @@ export function PrDetailHeader({
           {prId && (
             <RunReviewDropdown
               prId={prId}
+              repoId={repoId}
+              prNumber={pr.number}
               warnMerged={pr.status === "merged" || pr.status === "closed"}
               onRunStart={handleRunStart}
               onRunsStarted={handleRunsStarted}
