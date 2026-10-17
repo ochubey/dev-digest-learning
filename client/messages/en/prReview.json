@@ -15,6 +15,8 @@
     "replyPlaceholder": "Reply to the author about this finding…",
     "sendReply": "Send reply",
     "cancel": "Cancel",
+    "replySuccess": "Reply posted to the pull request.",
+    "replyError": "Could not send the reply: {message}",
     "turnIntoEvalCase": "Turn into eval case",
     "turnIntoEvalCaseHint": "Accept or dismiss the finding first"
   },
@@ -54,6 +56,7 @@
     "configureAgents": "Configure agents…",
     "running": "Running…",
     "runReview": "Run Review",
+    "multiAgentView": "Multi-agent view",
     "mergedWarning": "Already merged — review is informational",
     "mergedTooltip": "This PR is already merged; running a review won’t affect the merged code."
   },

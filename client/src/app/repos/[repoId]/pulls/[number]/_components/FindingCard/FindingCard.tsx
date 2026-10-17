@@ -23,6 +23,7 @@ import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
 import { EvalCaseDialog } from "../EvalCaseDialog";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
+import { ReplyToAuthor } from "./ReplyToAuthor";
 import { s } from "./styles";
 
 /** Per-call outcome callbacks the card passes to the owner's mutation (used by Learn). */
@@ -40,6 +41,7 @@ export function FindingCard({
   pending,
   repoFullName,
   headSha,
+  prId,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -50,10 +52,13 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** PR id; enables "Reply to author" (posts a review comment on the finding line). */
+  prId?: string | null;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
   const [evalOpen, setEvalOpen] = React.useState(false);
+  const [replyOpen, setReplyOpen] = React.useState(false);
   // The server has no "learned" marker, so the confirmed state lives here for the card's lifetime.
   const [learned, setLearned] = React.useState(false);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
@@ -171,7 +176,21 @@ export function FindingCard({
                 {t("finding.turnIntoEvalCaseHint")}
               </span>
             )}
+            {prId && (
+              <Button
+                kind="ghost"
+                size="sm"
+                icon="MessageSquare"
+                active={replyOpen}
+                onClick={() => setReplyOpen((o) => !o)}
+              >
+                {t("finding.replyToAuthor")}
+              </Button>
+            )}
           </div>
+          {prId && replyOpen && (
+            <ReplyToAuthor f={f} prId={prId} onDone={() => setReplyOpen(false)} />
+          )}
           {evalOpen && <EvalCaseDialog findingId={f.id} onClose={() => setEvalOpen(false)} />}
         </div>
       )}
