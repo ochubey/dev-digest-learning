@@ -73,6 +73,24 @@ export class MultiAgentRepository {
     return row?.id ?? null;
   }
 
+  /** Newest multi-agent run of one pull request (optionally also required to belong to `repoId`). */
+  async latestForPr(workspaceId: string, prId: string, repoId?: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: t.multiAgentRuns.id })
+      .from(t.multiAgentRuns)
+      .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.multiAgentRuns.prId))
+      .where(
+        and(
+          eq(t.multiAgentRuns.workspaceId, workspaceId),
+          eq(t.multiAgentRuns.prId, prId),
+          repoId ? eq(t.pullRequests.repoId, repoId) : undefined,
+        ),
+      )
+      .orderBy(desc(t.multiAgentRuns.ranAt))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
   async pullNumber(prId: string): Promise<number | null> {
     const [row] = await this.db
       .select({ number: t.pullRequests.number })

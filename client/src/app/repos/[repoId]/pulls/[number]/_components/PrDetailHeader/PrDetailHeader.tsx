@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, Button, Tabs } from "@devdigest/ui";
 import { RunReviewDropdown } from "../RunReviewDropdown";
+import { useLatestMultiAgentRunForPr } from "@/lib/hooks/multi-agent";
+import { resultsHref } from "../../../../multi-agent/_components/ConfigureRun/helpers";
 import { s } from "./styles";
 import type { PrDetail } from "@/lib/types";
 
@@ -30,6 +34,11 @@ export function PrDetailHeader({
   onRunStart,
   onRunsStarted,
 }: PrDetailHeaderProps) {
+  const t = useTranslations("prReview");
+  const router = useRouter();
+  const latestMulti = useLatestMultiAgentRunForPr(prId);
+  const multiAgentRunId = latestMulti.data?.id ?? null;
+
   const handleRunStart = useCallback(() => {
     onRunStart();
   }, [onRunStart]);
@@ -91,6 +100,16 @@ export function PrDetailHeader({
           >
             View on GitHub
           </Button>
+          {multiAgentRunId && (
+            <Button
+              kind="secondary"
+              size="sm"
+              icon="Users"
+              onClick={() => router.push(resultsHref(repoId, multiAgentRunId))}
+            >
+              {t("runReview.multiAgentView")}
+            </Button>
+          )}
           {prId && (
             <RunReviewDropdown
               prId={prId}

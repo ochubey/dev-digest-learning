@@ -10,6 +10,8 @@ const WS = '11111111-1111-4111-8111-111111111111';
 const OTHER_WS = '22222222-2222-4222-8222-222222222222';
 const REPO = '33333333-3333-4333-8333-333333333333';
 const OTHER_REPO = '33333333-3333-4333-8333-333333333334';
+const PR = '44444444-4444-4444-8444-444444444441';
+const PR_B = '44444444-4444-4444-8444-444444444442';
 const MA_OLD = '55555555-5555-4555-8555-555555555551';
 const MA_NEW = '55555555-5555-4555-8555-555555555552';
 const MA_FOREIGN = '55555555-5555-4555-8555-555555555553';
@@ -18,9 +20,9 @@ const fakeAuth = { currentUser: async () => ({ id: 'u1' }), currentWorkspace: as
 const config = loadConfig({ ...process.env, NODE_ENV: 'test', LOG_LEVEL: 'silent' } as NodeJS.ProcessEnv);
 
 const rows = [
-  { id: MA_OLD, workspaceId: WS, repoId: REPO, ranAt: new Date('2026-01-01T10:00:00Z') },
-  { id: MA_NEW, workspaceId: WS, repoId: REPO, ranAt: new Date('2026-01-02T10:00:00Z') },
-  { id: MA_FOREIGN, workspaceId: OTHER_WS, repoId: REPO, ranAt: new Date('2026-02-01T10:00:00Z') },
+  { id: MA_OLD, workspaceId: WS, repoId: REPO, prId: PR_B, ranAt: new Date('2026-01-01T10:00:00Z') },
+  { id: MA_NEW, workspaceId: WS, repoId: REPO, prId: PR, ranAt: new Date('2026-01-02T10:00:00Z') },
+  { id: MA_FOREIGN, workspaceId: OTHER_WS, repoId: REPO, prId: PR, ranAt: new Date('2026-02-01T10:00:00Z') },
 ];
 
 let closeApp: (() => Promise<void>) | null = null;
@@ -28,6 +30,10 @@ beforeEach(() => {
   vi.spyOn(MultiAgentRepository.prototype, 'latestForRepo').mockImplementation((async (ws: string, repoId: string) =>
     rows
       .filter((r) => r.workspaceId === ws && r.repoId === repoId)
+      .sort((a, b) => b.ranAt.getTime() - a.ranAt.getTime())[0]?.id ?? null) as never);
+  vi.spyOn(MultiAgentRepository.prototype, 'latestForPr').mockImplementation((async (ws: string, prId: string) =>
+    rows
+      .filter((r) => r.workspaceId === ws && r.prId === prId)
       .sort((a, b) => b.ranAt.getTime() - a.ranAt.getTime())[0]?.id ?? null) as never);
   const getParent = vi.spyOn(MultiAgentRepository.prototype, 'getParent').mockResolvedValue(undefined);
   void getParent;
@@ -57,6 +63,23 @@ describe('GET /multi-agent-runs/latest', () => {
     const res = await app.inject({ method: 'GET', url: `/multi-agent-runs/latest?repoId=${OTHER_REPO}` });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ id: null });
+  });
+
+  it('returns the newest run of the pull request, scoped to the workspace', async () => {
+    const app = await setup();
+    const res = await app.inject({ method: 'GET', url: `/multi-agent-runs/latest?prId=${PR}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ id: MA_NEW }); // MA_FOREIGN (newer, other workspace) is excluded
+    const other = await app.inject({ method: 'GET', url: `/multi-agent-runs/latest?prId=${PR_B}` });
+    expect(other.json()).toEqual({ id: MA_OLD });
+  });
+
+  it('returns { id: null } for a pull request without runs and 422 for a bad prId', async () => {
+    const app = await setup();
+    const none = await app.inject({ method: 'GET', url: `/multi-agent-runs/latest?prId=${OTHER_REPO}` });
+    expect(none.json()).toEqual({ id: null });
+    const bad = await app.inject({ method: 'GET', url: '/multi-agent-runs/latest?prId=nope' });
+    expect(bad.statusCode).toBe(422);
   });
 
   it('does not clash with /multi-agent-runs/:id and validates repoId', async () => {

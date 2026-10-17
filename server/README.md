@@ -153,6 +153,8 @@ body shapes). The response returns immediately; agents run **in parallel** (no c
 - `GET /multi-agent-runs/:id` returns a `MultiAgentRun`: one column per child run (ordered by
   agent name, then run id; a deleted agent shows as "Deleted agent" with `agent_id: null`),
   totals, `groups` and `conflicts`. `404` for an unknown or foreign-workspace id.
+- `GET /multi-agent-runs/latest?repoId=<uuid>&prId=<uuid>` returns `{ id: string | null }`: the newest run of the
+  pull request (`prId`) or of the repo (`repoId`), workspace-scoped. At least one is required (`422` otherwise).
 - `GET /multi-agent/estimates` returns an `AgentRunEstimate[]` (one per agent of the workspace):
   mean duration/cost over the agent's latest 10 `done` runs.
 

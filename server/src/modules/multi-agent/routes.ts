@@ -8,7 +8,7 @@ import { MultiAgentService } from './service.js';
 
 /**
  * multi-agent module (read-only; launching is POST /pulls/:id/review {agentIds}).
- *   GET /multi-agent-runs/latest?repoId= → {id|null} newest run of a repo
+ *   GET /multi-agent-runs/latest?repoId=|prId= → {id|null} newest run of a repo / of one PR
  *   GET /multi-agent-runs/:id   → MultiAgentRun (columns, groups, conflicts)
  *   GET /multi-agent/estimates  → AgentRunEstimate[] for the workspace's agents
  */
@@ -22,13 +22,15 @@ export default async function multiAgentRoutes(appBase: FastifyInstance) {
     '/multi-agent-runs/latest',
     {
       schema: {
-        querystring: z.object({ repoId: z.string().uuid() }),
+        querystring: z
+          .object({ repoId: z.string().uuid().optional(), prId: z.string().uuid().optional() })
+          .refine((q) => q.repoId || q.prId, { message: 'repoId or prId is required' }),
         response: { 200: LatestMultiAgentRun },
       },
     },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
-      return service.latest(workspaceId, req.query.repoId);
+      return service.latest(workspaceId, req.query);
     },
   );
 

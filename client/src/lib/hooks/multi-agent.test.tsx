@@ -19,7 +19,7 @@ vi.mock("../api", async () => {
 });
 
 import { ApiError } from "../api";
-import { useMultiAgentRun } from "./multi-agent";
+import { useMultiAgentRun, useLatestMultiAgentRunForPr, useLaunchMultiAgent } from "./multi-agent";
 
 let qc: QueryClient;
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -117,5 +117,33 @@ describe("useMultiAgentRun", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(get).toHaveBeenCalledTimes(1);
     expect((result.current.error as ApiError).status).toBe(404);
+  });
+});
+
+describe("useLatestMultiAgentRunForPr", () => {
+  it("requests the PR-scoped latest run", async () => {
+    get.mockResolvedValue({ id: "m9" });
+    const { result } = renderHook(() => useLatestMultiAgentRunForPr("pr 1"), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual({ id: "m9" }));
+    expect(get).toHaveBeenCalledWith("/multi-agent-runs/latest?prId=pr%201");
+  });
+
+  it("is disabled without a prId", () => {
+    renderHook(() => useLatestMultiAgentRunForPr(null), { wrapper });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("is invalidated by a successful launch", async () => {
+    post.mockResolvedValue({});
+    get.mockResolvedValue({ id: null });
+    const { result } = renderHook(
+      () => ({ latest: useLatestMultiAgentRunForPr("pr1"), launch: useLaunchMultiAgent() }),
+      { wrapper },
+    );
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await result.current.launch.mutateAsync({ prId: "pr1", agentIds: ["a1", "a2"] });
+    });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
   });
 });

@@ -24,9 +24,10 @@ export class MultiAgentService {
     return buildMultiAgentRun(parent, prNumber, children, reviews);
   }
 
-  /** Id of the repo's newest multi-agent run, or null when it has none. */
-  async latest(workspaceId: string, repoId: string): Promise<LatestMultiAgentRun> {
-    return { id: await this.repo.latestForRepo(workspaceId, repoId) };
+  /** Id of the newest multi-agent run of the PR (when `prId` is given) or of the repo; null when none. */
+  async latest(workspaceId: string, q: { repoId?: string; prId?: string }): Promise<LatestMultiAgentRun> {
+    if (q.prId) return { id: await this.repo.latestForPr(workspaceId, q.prId, q.repoId) };
+    return { id: q.repoId ? await this.repo.latestForRepo(workspaceId, q.repoId) : null };
   }
 
   /** Per-agent duration/cost estimate for every agent of the workspace. */

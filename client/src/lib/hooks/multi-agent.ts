@@ -26,6 +26,7 @@ export function useLaunchMultiAgent() {
       qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
       qc.invalidateQueries({ queryKey: ["pr-active-runs", prId] });
       qc.invalidateQueries({ queryKey: ["multi-agent-run-latest"] });
+      qc.invalidateQueries({ queryKey: ["multi-agent-run-latest-pr", prId] });
     },
   });
 }
@@ -49,6 +50,16 @@ export function useLatestMultiAgentRun(repoId: string | null | undefined) {
     queryKey: ["multi-agent-run-latest", repoId],
     queryFn: () => api.get<LatestMultiAgentRun>(`/multi-agent-runs/latest?repoId=${encodeURIComponent(repoId!)}`),
     enabled: !!repoId,
+    retry: false,
+  });
+}
+
+/** The newest multi-agent run of one pull request (`id: null` = none yet). */
+export function useLatestMultiAgentRunForPr(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["multi-agent-run-latest-pr", prId],
+    queryFn: () => api.get<LatestMultiAgentRun>(`/multi-agent-runs/latest?prId=${encodeURIComponent(prId!)}`),
+    enabled: !!prId,
     retry: false,
   });
 }
