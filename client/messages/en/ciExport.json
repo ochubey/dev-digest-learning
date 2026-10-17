@@ -21,7 +21,14 @@
     "noRepos": "Connect a repository first",
     "noReposLink": "Go to repository setup",
     "unsupportedProvider": "CI export supports OpenRouter agents only",
-    "checking": "Generating the preview…"
+    "checking": "Generating the preview…",
+    "circleci": "CircleCI",
+    "circleciDesc": "config.yml job",
+    "jenkins": "Jenkins",
+    "jenkinsDesc": "Pipeline stage",
+    "cli": "Generic CLI",
+    "cliDesc": "devdigest review --pr",
+    "comingSoon": "coming soon"
   },
   "preview": {
     "filesTitle": "Files to create",

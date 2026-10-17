@@ -6,6 +6,8 @@ Revision note: rev 1, first draft for worktree B of the L07 lab (branch `feat/ex
 
 ## Revision 2: many agents per repository
 
+Revision 2 addendum (target cards): the Target step also shows CircleCI, Jenkins and Generic CLI as disabled "coming soon" cards, as in the lecturer's design. They are not selectable and no generator exists for them; GitHub Actions stays the only working target. This replaces the "only GitHub Actions is shown" part of AC-3 and assumption A-1; the behaviour of choosing a target is otherwise unchanged.
+
 Supersedes the one-agent-per-repository rule. What changed:
 
 - **A-4 replaced.** Several agents may be exported to the same repository. The `ci_repo_taken` error is gone; an installation is unique per (repo, agent) (`ci_installations_repo_agent_uq`, replacing `ci_installations_repo_uq`). `ci_slug_changed` stays and is checked per agent. The "Several agents in one repository" non-goal and the "One agent per repository" risk below no longer apply.

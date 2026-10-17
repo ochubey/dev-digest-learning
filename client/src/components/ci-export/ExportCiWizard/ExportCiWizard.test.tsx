@@ -215,13 +215,18 @@ describe("ExportCiWizard shell", () => {
 });
 
 describe("ExportCiWizard Target", () => {
-  it('AC-3 only "GitHub Actions", preselected; no CircleCI/Jenkins/Generic CLI', async () => {
+  it('AC-3 "GitHub Actions" is preselected; CircleCI, Jenkins and Generic CLI are disabled "coming soon" cards', async () => {
     mount();
     const gha = within(dialog()).getByRole("button", { name: /GitHub Actions/ });
     expect(gha).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByText(/CircleCI/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Jenkins/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Generic CLI/)).not.toBeInTheDocument();
+    for (const name of [/CircleCI/, /Jenkins/, /Generic CLI/]) {
+      const card = within(dialog()).getByRole("button", { name });
+      expect(card).toBeDisabled();
+      expect(card).not.toHaveAttribute("aria-pressed");
+      expect(within(card).getByText("coming soon")).toBeInTheDocument();
+    }
+    fireEvent.click(within(dialog()).getByRole("button", { name: /Jenkins/ }));
+    expect(gha).toHaveAttribute("aria-pressed", "true");
     await screen.findByRole("radio", { name: "acme/api" });
   });
 
