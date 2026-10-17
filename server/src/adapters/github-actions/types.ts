@@ -19,6 +19,8 @@ export interface CiActionsSource {
   getRepoId(repo: string): Promise<number>;
   /** Newest completed runs of the workflow; `[]` when the workflow is not on the default branch yet (404). */
   listCompletedRuns(repo: string, workflowFile: string, limit: number): Promise<ActionsRun[]>;
+  /** Whether the Actions secret exists (name only; the value is never read). 'unknown' on any non-404 failure. */
+  secretExists(repo: string, name: string): Promise<'set' | 'not_set' | 'unknown'>;
   /**
    * Bytes of the run's non-expired `devdigest-result` artifact archive; null when there is none.
    * Throws `ArtifactTooLargeError` when it exceeds `maxBytes`, without downloading.

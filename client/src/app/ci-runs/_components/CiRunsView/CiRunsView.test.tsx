@@ -111,6 +111,25 @@ describe("CiRunsView", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Refresh/ })).toBeEnabled());
   });
 
+  it("two failing installations of the same repo (several agents) both render, no duplicate-key warning", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    post.mockResolvedValue(
+      syncOk({
+        failures: [
+          { repo: "acme/api", code: "github_error", message: "first agent down" },
+          { repo: "acme/api", code: "github_error", message: "second agent down" },
+        ],
+      }),
+    );
+    get.mockResolvedValue(list([]));
+    mount();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("acme/api: first agent down");
+    expect(alert).toHaveTextContent("acme/api: second agent down");
+    expect(err.mock.calls.flat().join(" ")).not.toMatch(/same key/);
+    err.mockRestore();
+  });
+
   it("AC-76 partial failure warning lists repos + messages; runs still shown", async () => {
     post.mockResolvedValue(
       syncOk({

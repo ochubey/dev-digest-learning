@@ -7,6 +7,8 @@ import {
   CI_WORKFLOW_VERSION,
   RESULT_FILE,
   RUNNER_PATH,
+  WORKFLOW_FILE,
+  jobIdFor,
 } from './constants.js';
 
 /** The job-level fork guard: the job runs only for PRs from the same repository (AC-23). */
@@ -18,10 +20,18 @@ export const SECRET_EXPR = '${{ secrets.OPENROUTER_API_KEY }}';
  * The generated GitHub Actions workflow (AC-19..AC-28, AC-33). A fixed template: only the
  * triggers (canonical order) and the post mode vary. No clock, no secrets.
  */
-export function generateWorkflow(opts: { triggers: CiTrigger[]; postAs: CiPostAs }): string {
+export function generateWorkflow(opts: {
+  triggers: CiTrigger[];
+  postAs: CiPostAs;
+  /** The agent slug the runner picks its manifest by (DEVDIGEST_AGENT). */
+  slug: string;
+  /** Workflow file name; decides the job id/name. Defaults to the legacy file. */
+  file?: string;
+}): string {
+  const job = jobIdFor(opts.file ?? WORKFLOW_FILE);
   const types = CI_TRIGGERS.filter((t) => opts.triggers.includes(t)).join(', ');
   return `# devdigest-workflow-version: ${CI_WORKFLOW_VERSION}
-name: DevDigest Review
+name: DevDigest Review (${opts.slug})
 on:
   pull_request:
     types: [${types}]
@@ -29,8 +39,8 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
-  devdigest-review:
-    name: devdigest-review
+  ${job}:
+    name: ${job}
     if: ${FORK_GUARD}
     runs-on: ubuntu-latest
     steps:
@@ -49,6 +59,7 @@ jobs:
           GITHUB_TOKEN: \${{ github.token }}
           PR_NUMBER: \${{ github.event.pull_request.number }}
           DEVDIGEST_POST_AS: ${opts.postAs}
+          DEVDIGEST_AGENT: ${opts.slug}
       - uses: ${ACTION_UPLOAD_ARTIFACT.ref} # ${ACTION_UPLOAD_ARTIFACT.tag}
         if: always()
         with:

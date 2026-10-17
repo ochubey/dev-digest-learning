@@ -72,6 +72,18 @@ describe('ci sync', () => {
     expect(Date.parse(res.synced_at)).not.toBeNaN();
   });
 
+  it('lists each installation by its own workflow file (null = legacy)', async () => {
+    const s = setup([]);
+    s.repo.syncInstallations = [
+      syncInstallation({ id: 'i-legacy', agentId: 'a1', workflowFile: null }),
+      syncInstallation({ id: 'i-new', agentId: 'a2', workflowFile: 'devdigest-review-perf-check.yml' }),
+    ];
+    await s.run();
+    expect(s.actions.listCompletedRuns).toHaveBeenCalledWith('acme/widgets', 'devdigest-review.yml', 30);
+    expect(s.actions.listCompletedRuns).toHaveBeenCalledWith('acme/widgets', 'devdigest-review-perf-check.yml', 30);
+    expect(s.actions.listCompletedRuns).toHaveBeenCalledTimes(2);
+  });
+
   it('a second sync of the same runs ingests nothing', async () => {
     const s = setup([mkRun(1)]);
     await s.run();

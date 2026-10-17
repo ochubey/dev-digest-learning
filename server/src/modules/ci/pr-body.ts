@@ -6,13 +6,20 @@ export function buildPrTitle(agentName: string): string {
 }
 
 /** The install PR body (AC-40): files, review checklist, secret setup, required-check note. */
-export function buildPrBody(files: CiFile[]): string {
+export function buildPrBody(
+  files: CiFile[],
+  opts: { checkName: string; updated?: { path: string; agentName: string }[]; agentName: string },
+): string {
   const list = files.map((f) => `- \`${f.path}\``).join('\n');
+  const updated = (opts.updated ?? [])
+    .map((u) => `- \`${u.path}\` (updated so it keeps running next to ${opts.agentName}; it now selects the ${u.agentName} agent)`)
+    .join('\n');
+  const updatedBlock = updated ? `\n\n## Updated files\n\n${updated}` : '';
   return `This PR adds a DevDigest review agent to this repository's GitHub Actions. It was opened from branch \`${CI_BRANCH}\`.
 
 ## Added files
 
-${list}
+${list}${updatedBlock}
 
 ## Review before merging
 
@@ -27,6 +34,6 @@ Add a repository secret named \`OPENROUTER_API_KEY\` under Settings -> Secrets a
 
 ## Blocking merges
 
-The check fails when the agent's "Fail CI on" gate triggers, but it blocks merges only if the \`devdigest-review\` check is marked required in the repository's branch protection or ruleset. DevDigest cannot do this for you.
+The check fails when the agent's "Fail CI on" gate triggers, but it blocks merges only if the \`${opts.checkName}\` check is marked required in the repository's branch protection or ruleset. DevDigest cannot do this for you.
 `;
 }

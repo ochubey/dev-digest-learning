@@ -101,20 +101,12 @@ describe('ci export: validation (no write before every check passes)', () => {
     }
   });
 
-  it('AC-8 second agent -> 409 ci_repo_taken with message', async () => {
+  it('AC-8 (revision 2) many agents per repo: a second agent on a repo is allowed (no ci_repo_taken)', async () => {
     const s = setup();
-    s.repo.installation = { ...installationRow({ agentId: OTHER_AGENT_ID }), agentName: 'Other Bot' };
-    for (const call of [
-      () => s.service.preview(WS, AGENT, input()),
-      () => s.service.export(WS, AGENT, input()),
-    ]) {
-      const e = await codeOf(call());
-      expect(e.code).toBe('ci_repo_taken');
-      expect(e.statusCode).toBe(409);
-      expect(e.message).toBe('acme/widgets already runs agent Other Bot in CI; one agent per repository is supported');
-    }
-    expect(s.github.committed).toHaveLength(0);
-    expect(s.repo.upserts).toHaveLength(0);
+    s.repo.installation = { ...installationRow({ agentId: OTHER_AGENT_ID, workflowFile: 'devdigest-review-other-bot.yml', slug: 'other-bot' }), agentName: 'Other Bot' };
+    await expect(s.service.preview(WS, AGENT, input())).resolves.toBeTruthy();
+    await expect(s.service.export(WS, AGENT, input())).resolves.toBeTruthy();
+    expect(s.repo.upserts).toHaveLength(1);
   });
 
   it('AC-17 missing runner -> 400, no upsert', async () => {
@@ -192,7 +184,7 @@ describe('ci export: open_pr', () => {
     for (const c of s.github.committed) expect(c.branch).toBe('devdigest/ci');
     for (const pr of s.github.openedPrs) expect(pr.head).toBe('devdigest/ci');
     expect(s.github.committed.flatMap((c) => c.files.map((f) => f.path))).toContain(
-      '.github/workflows/devdigest-review.yml',
+      '.github/workflows/devdigest-review-secret-gate.yml',
     );
   });
 
@@ -224,18 +216,18 @@ describe('ci export: open_pr', () => {
 
   it('AC-30 edited node-version committed verbatim', async () => {
     const s = setup();
-    const edited = generateWorkflow({ triggers: ['opened', 'synchronize'], postAs: 'github_review' }).replace(
+    const edited = generateWorkflow({ triggers: ['opened', 'synchronize'], postAs: 'github_review', slug: 'secret-gate', file: 'devdigest-review-secret-gate.yml' }).replace(
       'node-version: 22',
       'node-version: 20',
     );
     await s.service.export(WS, AGENT, input({ workflow: edited }));
-    const wf = s.github.committed[0]!.files.find((f) => f.path === '.github/workflows/devdigest-review.yml')!;
+    const wf = s.github.committed[0]!.files.find((f) => f.path === '.github/workflows/devdigest-review-secret-gate.yml')!;
     expect(wf.contents).toBe(edited);
   });
 
   it('AC-29 unsafe edited workflow -> 400 ci_workflow_unsafe with details.rule, nothing written', async () => {
     const s = setup();
-    const edited = generateWorkflow({ triggers: ['opened'], postAs: 'none' }).replace('pull_request:', 'pull_request_target:');
+    const edited = generateWorkflow({ triggers: ['opened'], postAs: 'none', slug: 'secret-gate', file: 'devdigest-review-secret-gate.yml' }).replace('pull_request:', 'pull_request_target:');
     const e = await codeOf(s.service.export(WS, AGENT, input({ workflow: edited })));
     expect(e.code).toBe('ci_workflow_unsafe');
     expect(e.statusCode).toBe(400);
@@ -265,7 +257,7 @@ describe('ci export: open_pr', () => {
       '.devdigest/agents/secret-gate.yaml',
       '.devdigest/memory.jsonl',
       '.devdigest/runner/index.js',
-      '.github/workflows/devdigest-review.yml',
+      '.github/workflows/devdigest-review-secret-gate.yml',
     ]);
   });
 
@@ -273,13 +265,7 @@ describe('ci export: open_pr', () => {
     const s = setup({ getRepoId: async () => { throw new Error('403'); } });
     await s.service.export(WS, AGENT, input());
     expect(s.repo.upserts[0]!.githubRepoId).toBeNull();
-  });
-
-  it('losing the one-agent-per-repo race -> 409 ci_repo_taken', async () => {
-    const s = setup();
-    s.repo.upsertResult = null;
-    expect((await codeOf(s.service.export(WS, AGENT, input()))).code).toBe('ci_repo_taken');
-  });
+});
 });
 
 describe('ci export: GitHub error mapping', () => {
@@ -369,6 +355,7 @@ describe('ci export: zip', () => {
       runner: RUNNER,
       triggers: ['opened', 'synchronize'],
       postAs: 'github_review',
+      workflowFile: 'devdigest-review-secret-gate.yml',
     });
     // adm-zip lists entries in its own order; the set of names is what AC-46 pins.
     expect(zip.getEntries().map((e) => e.entryName).sort()).toEqual(expected.map((f) => f.path).sort());
@@ -424,8 +411,9 @@ describe('ci export: PR body and logging', () => {
       runner: 'r',
       triggers: ['opened'],
       postAs: 'none',
+      workflowFile: 'devdigest-review-secret-gate.yml',
     });
-    const body = buildPrBody(files);
+    const body = buildPrBody(files, { agentName: 'Secret Gate', checkName: 'devdigest-review-secret-gate' });
     for (const f of files) expect(body).toContain(f.path);
     expect(body).toMatch(/- \[ \] \*\*Permissions/);
     expect(body).toMatch(/- \[ \] \*\*Triggers/);
@@ -435,6 +423,7 @@ describe('ci export: PR body and logging', () => {
     expect(body).toContain('Settings -> Secrets and variables -> Actions');
     expect(body).toMatch(/required/i);
     expect(body).toContain('branch protection');
+    expect(body).toContain('`devdigest-review-secret-gate` check');
     expect(buildPrTitle('Secret Gate')).toBe('Add DevDigest CI review (Secret Gate)');
   });
 
@@ -447,5 +436,118 @@ describe('ci export: PR body and logging', () => {
     await codeOf(f.service.export(WS, AGENT, input()));
     expect(f.log.info).toHaveBeenCalledTimes(1);
     expect(f.log.info.mock.calls[0]![0]).toContain('outcome=error code=ci_runner_missing');
+  });
+});
+
+describe('ci export: many agents per repository (revision 2)', () => {
+  const LEGACY_PATH = '.github/workflows/devdigest-review.yml';
+  const other = (over: Record<string, unknown> = {}) => ({
+    ...installationRow({
+      id: 'inst-other',
+      agentId: OTHER_AGENT_ID,
+      slug: 'other-bot',
+      triggers: ['reopened'],
+      postAs: 'pr_comment',
+      ...over,
+    } as never),
+    agentName: 'Other Bot',
+  });
+  const paths = (s: ReturnType<typeof setup>) => s.github.committed[0]!.files.map((f) => f.path);
+
+  it('two agents exported into the same repo get different workflow and manifest paths and both installations exist', async () => {
+    const repo = new FakeCiRepo();
+    // The fake keeps no state across upserts: replay the first agent's saved row for the second export.
+    const first = setup({ repo });
+    await first.service.export(WS, AGENT, input());
+    const saved = repo.upserts[0]!;
+    expect(saved.workflowFile).toBe('devdigest-review-secret-gate.yml');
+    repo.installation = { ...installationRow(saved as never), agentName: 'Secret Gate' };
+
+    repo.agent = agentRow({ id: OTHER_AGENT_ID, name: 'Other Bot' });
+    const second = setup({ repo });
+    await second.service.export(WS, OTHER_AGENT_ID, input());
+    const a = first.github.committed[0]!.files.map((f) => f.path);
+    const b = second.github.committed[0]!.files.map((f) => f.path);
+    expect(a).toContain('.github/workflows/devdigest-review-secret-gate.yml');
+    expect(a).toContain('.devdigest/agents/secret-gate.yaml');
+    expect(b).toContain('.github/workflows/devdigest-review-other-bot.yml');
+    expect(b).toContain('.devdigest/agents/other-bot.yaml');
+    expect(b).not.toContain('.github/workflows/devdigest-review-secret-gate.yml');
+    expect(repo.upserts.map((u) => [u.agentId, u.slug, u.workflowFile])).toEqual([
+      [AGENT, 'secret-gate', 'devdigest-review-secret-gate.yml'],
+      [OTHER_AGENT_ID, 'other-bot', 'devdigest-review-other-bot.yml'],
+    ]);
+    const wf = second.github.committed[0]!.files.find((f) => f.path.endsWith('other-bot.yml'))!.contents;
+    expect(wf).toContain('name: DevDigest Review (other-bot)');
+    expect(wf).toContain('devdigest-review-other-bot:');
+    expect(wf).toContain('DEVDIGEST_AGENT: other-bot');
+    // no legacy installation on the repo: nothing else is touched
+    expect(b).not.toContain(LEGACY_PATH);
+  });
+
+  it('a new agent next to a LEGACY installation of another agent regenerates the legacy workflow with DEVDIGEST_AGENT', async () => {
+    const s = setup();
+    s.repo.agent = agentRow({ id: AGENT, name: 'Perf Check' });
+    s.repo.installation = other();
+    const preview = await s.service.preview(WS, AGENT, input());
+    expect(preview.files.map((f) => f.path)).toContain(LEGACY_PATH);
+    const out = await s.service.export(WS, AGENT, input());
+    expect(out.files.map((f) => f.path)).toContain(LEGACY_PATH);
+    expect(paths(s)).toEqual(
+      expect.arrayContaining([LEGACY_PATH, '.github/workflows/devdigest-review-perf-check.yml']),
+    );
+    const legacy = s.github.committed[0]!.files.find((f) => f.path === LEGACY_PATH)!.contents;
+    expect(legacy).toContain('DEVDIGEST_AGENT: other-bot');
+    expect(legacy).toContain('DEVDIGEST_POST_AS: pr_comment');
+    expect(legacy).toContain('types: [reopened]');
+    expect(legacy).toContain('  devdigest-review:\n    name: devdigest-review\n'); // legacy job id/name kept
+    // the new installation lists only its own files and gets the per-agent file
+    expect(s.repo.upserts[0]!.workflowFile).toBe('devdigest-review-perf-check.yml');
+    expect(s.repo.upserts[0]!.files).not.toContain(LEGACY_PATH);
+    // PR body notes the update
+    const body = s.github.openedPrs[0]!.body;
+    expect(body).toContain('## Updated files');
+    expect(body).toContain(`\`${LEGACY_PATH}\` (updated so it keeps running next to Perf Check`);
+    expect(body).toContain('`devdigest-review-perf-check` check');
+  });
+
+  it('the regenerated legacy workflow is not user-editable and is in the zip too', async () => {
+    const s = setup();
+    s.repo.agent = agentRow({ id: AGENT, name: 'Perf Check' });
+    s.repo.installation = other();
+    const edited = generateWorkflow({ triggers: ['opened'], postAs: 'none', slug: 'perf-check', file: 'devdigest-review-perf-check.yml' }).replace('node-version: 22', 'node-version: 20');
+    const out = await s.service.export(WS, AGENT, input({ action: 'files', workflow: edited }));
+    const zip = new AdmZip(Buffer.from(out.zip_base64!, 'base64'));
+    expect(zip.readAsText('.github/workflows/devdigest-review-perf-check.yml')).toBe(edited);
+    expect(zip.readAsText(LEGACY_PATH)).toContain('DEVDIGEST_AGENT: other-bot');
+    expect(zip.readAsText(LEGACY_PATH)).not.toContain('node-version: 20');
+  });
+
+  it('a non-legacy installation of another agent is not rewritten', async () => {
+    const s = setup();
+    s.repo.installation = other({ workflowFile: 'devdigest-review-other-bot.yml' });
+    await s.service.export(WS, AGENT, input());
+    expect(paths(s)).not.toContain(LEGACY_PATH);
+  });
+
+  it('re-exporting a LEGACY installation keeps the legacy path and job, now with DEVDIGEST_AGENT', async () => {
+    const s = setup();
+    s.repo.installation = { ...installationRow({ slug: 'secret-gate', workflowFile: null }), agentName: 'Secret Gate' };
+    await s.service.export(WS, AGENT, input());
+    expect(paths(s)).toContain(LEGACY_PATH);
+    expect(paths(s)).not.toContain('.github/workflows/devdigest-review-secret-gate.yml');
+    const wf = s.github.committed[0]!.files.find((f) => f.path === LEGACY_PATH)!.contents;
+    expect(wf).toContain('DEVDIGEST_AGENT: secret-gate');
+    expect(wf).toContain('  devdigest-review:\n    name: devdigest-review\n');
+    expect(s.repo.upserts[0]!.workflowFile).toBeNull();
+    expect(s.github.openedPrs[0]!.body).toContain('`devdigest-review` check');
+  });
+
+  it('ci_slug_changed stays per agent: another agent with a different slug does not matter', async () => {
+    const s = setup();
+    s.repo.installations = [other({ slug: 'old-name' }), { ...installationRow({ slug: 'secret-gate' }), agentName: 'Secret Gate' }];
+    await expect(s.service.export(WS, AGENT, input())).resolves.toBeTruthy();
+    s.repo.installations = [other(), { ...installationRow({ slug: 'old-name' }), agentName: 'Secret Gate' }];
+    expect((await codeOf(s.service.export(WS, AGENT, input()))).code).toBe('ci_slug_changed');
   });
 });

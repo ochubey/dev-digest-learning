@@ -125,6 +125,14 @@ export class ReviewRepository {
     return reviewRepo.setFindingDismissed(this.db, findingId, at);
   }
 
+  findLearnedMemoryId(workspaceId: string, findingId: string): Promise<string | undefined> {
+    return reviewRepo.findLearnedMemoryId(this.db, workspaceId, findingId);
+  }
+
+  insertLearnedMemory(values: Parameters<typeof reviewRepo.insertLearnedMemory>[1]): Promise<string> {
+    return reviewRepo.insertLearnedMemory(this.db, values);
+  }
+
   // ---- observability: agent_runs + run_traces ----------------------------
 
   /** Create the parent row of a multi-agent launch; returns its id. */

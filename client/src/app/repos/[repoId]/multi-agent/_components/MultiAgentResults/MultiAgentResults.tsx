@@ -10,6 +10,7 @@ import { Button, EmptyState, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import { ApiError } from "@/lib/api";
 import { usePulls } from "@/lib/hooks/core";
 import { useMultiAgentRun } from "@/lib/hooks/multi-agent";
+import { usePrReviews } from "@/lib/hooks/reviews";
 import { useActiveRepo } from "@/lib/repo-context";
 import RunTraceDrawer from "../../../pulls/[number]/_components/RunTraceDrawer";
 import { configureRunHref } from "../ConfigureRun/helpers";
@@ -35,7 +36,17 @@ export function MultiAgentResults({ repoId, id }: { repoId: string; id: string }
   const { activeRepo } = useActiveRepo();
   const run = useMultiAgentRun(id);
   const pulls = usePulls(repoId);
+  const reviews = usePrReviews(run.data?.pr_id ?? "");
   const [trace, setTrace] = React.useState<TraceTarget | null>(null);
+
+  // The PR's reviews are what the trace drawer lists as the run's findings. They are fetched
+  // once, but a column finishes later (the run is polled), so refetch whenever another column
+  // reaches a final state; otherwise a run that completed after the page loaded shows 0 findings.
+  const finishedColumns = run.data?.columns.filter((c) => c.status !== "running").length ?? 0;
+  const refetchReviews = reviews.refetch;
+  React.useEffect(() => {
+    if (finishedColumns > 0) void refetchReviews?.();
+  }, [finishedColumns, refetchReviews]);
 
   const setView = (next: ResultsView) => {
     const sp = new URLSearchParams(searchParams.toString());
@@ -149,6 +160,7 @@ export function MultiAgentResults({ repoId, id }: { repoId: string; id: string }
           agentName={trace.agentName}
           prNumber={prNumber}
           running={trace.running}
+          findings={(reviews.data ?? []).find((r) => r.run_id === trace.runId)?.findings ?? []}
           onClose={() => setTrace(null)}
         />
       )}

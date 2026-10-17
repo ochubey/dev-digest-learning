@@ -1,6 +1,87 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for RunReviewDropdown. This component renders only library
-   primitives (Button/Dropdown) and has no inline styles; the map is kept for
-   convention parity and future use. */
-export const s = {} satisfies Record<string, CSSProperties>;
+/** Co-located styles for RunReviewDropdown (popover mirrors the shared Dropdown look). */
+export const s = {
+  root: { position: "relative", display: "inline-block" } satisfies CSSProperties,
+  panel: {
+    position: "absolute",
+    top: "calc(100% + 6px)",
+    right: 0,
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 9,
+    boxShadow: "var(--shadow-modal)",
+    padding: 6,
+    zIndex: 40,
+  } satisfies CSSProperties,
+  divider: { height: 1, background: "var(--border)", margin: "6px 0" } satisfies CSSProperties,
+  item: (muted: boolean): CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 6,
+    border: "none",
+    background: "transparent",
+    color: muted ? "var(--text-secondary)" : "var(--text-primary)",
+    fontSize: 14,
+    fontWeight: 500,
+    textAlign: "left",
+    cursor: "pointer",
+  }),
+  itemIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  // Name on one line (ellipsis), the optional model/hint underneath, so a long model id never
+  // collides with the name.
+  itemLabel: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 } satisfies CSSProperties,
+  itemName: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
+  itemSub: {
+    fontSize: 12,
+    fontWeight: 400,
+    color: "var(--text-muted)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  itemHint: { fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap", flexShrink: 0 } satisfies CSSProperties,
+  pickHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "4px 10px",
+  } satisfies CSSProperties,
+  pickTitle: {
+    fontSize: 11,
+    fontWeight: 650,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  link: {
+    border: "none",
+    background: "transparent",
+    color: "var(--accent-text)",
+    fontSize: 12.5,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+  pickRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "6px 10px",
+    fontSize: 14,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+  pickRun: { padding: "8px 10px 4px", display: "flex", flexDirection: "column" } satisfies CSSProperties,
+  footerLink: {
+    display: "block",
+    width: "100%",
+    padding: "8px 10px 4px",
+    border: "none",
+    background: "transparent",
+    color: "var(--accent-text)",
+    fontSize: 12.5,
+    textAlign: "center",
+    cursor: "pointer",
+  } satisfies CSSProperties,
+};

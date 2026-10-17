@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { AgentRunEstimate } from "@devdigest/shared";
+import { AGENT_ACCENTS } from "./constants";
 import {
+  agentAccent,
   agentEstimateLabel,
   configureRunHref,
   defaultSelection,
@@ -75,5 +77,15 @@ describe("ConfigureRun helpers", () => {
     expect(runButtonState(0)).toBe("select");
     expect(runButtonState(1)).toBe("one");
     expect(runButtonState(4)).toBe("many");
+  });
+});
+
+describe("agentAccent", () => {
+  it("is deterministic and stays inside the palette", () => {
+    const a = agentAccent("agent-1");
+    expect(agentAccent("agent-1")).toEqual(a);
+    expect(AGENT_ACCENTS).toContainEqual(a);
+    const used = new Set(["a", "b", "c", "d", "e", "f", "g", "h"].map((k) => agentAccent(k).color));
+    expect(used.size).toBeGreaterThan(1);
   });
 });

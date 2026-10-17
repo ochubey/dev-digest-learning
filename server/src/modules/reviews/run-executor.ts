@@ -16,6 +16,7 @@ import { resolveFeatureModel } from '../settings/feature-models.js';
 import { effectiveDocs } from '../project-context/effective.js';
 import { resolveProjectContext, type ResolvedProjectContext } from '../project-context/resolver.js';
 import { projectContextSummaryLine, projectContextSkipLine } from '../project-context/log-lines.js';
+import { DEFAULT_REVIEW_RUN_TIMEOUT_MS } from '../../platform/config.js';
 import { randomUUID } from 'node:crypto';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -23,6 +24,14 @@ export class RunCancelledError extends Error {
   constructor() {
     super('Run cancelled');
     this.name = 'RunCancelledError';
+  }
+}
+
+/** Thrown when a run exceeds the per-run deadline (REVIEW_RUN_TIMEOUT_MS). */
+export class RunTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Run timed out after ${Math.round(timeoutMs / 1000)}s (no response from the model)`);
+    this.name = 'RunTimeoutError';
   }
 }
 
@@ -436,107 +445,115 @@ export class ReviewRunExecutor {
     try {
       // (container.llm throws if the provider key is missing — caught below and
       // persisted as a failed run.)
-      const llm = await this.resolveProvider(agent, runLog);
-      const { callersDigest, repoMap, rankNote } = await this.gatherRepoContext(agent, pull, diff, runLog);
-      const task = taskLine(pull) + rankNote;
+      const guard = { timedOut: false };
+      const work = async (): Promise<RunOutcome> => {
+        const llm = await this.resolveProvider(agent, runLog);
+        const { callersDigest, repoMap, rankNote } = await this.gatherRepoContext(agent, pull, diff, runLog);
+        const task = taskLine(pull) + rankNote;
 
-      // Skills — agent's linked, enabled skills, sorted by agent_skills.order
-      // (linkedSkills already sorts ascending). Only enabled skills are
-      // injected; a disabled link stays linked but contributes nothing to the
-      // prompt (spec §1/§4).
-      const linkedSkills = await this.agents.linkedSkills(agent.id);
-      const enabledSkills = linkedSkills.filter((l) => l.skill.enabled);
-      const skillsMeta = enabledSkills.map((l) => ({
-        skill_id: l.skill.id,
-        name: l.skill.name,
-        tokens: this.container.tokenizer.count(l.skill.body),
-      }));
+        // Skills — agent's linked, enabled skills, sorted by agent_skills.order
+        // (linkedSkills already sorts ascending). Only enabled skills are
+        // injected; a disabled link stays linked but contributes nothing to the
+        // prompt (spec §1/§4).
+        const linkedSkills = await this.agents.linkedSkills(agent.id);
+        const enabledSkills = linkedSkills.filter((l) => l.skill.enabled);
+        const skillsMeta = enabledSkills.map((l) => ({
+          skill_id: l.skill.id,
+          name: l.skill.name,
+          tokens: this.container.tokenizer.count(l.skill.body),
+        }));
 
-      // Project context (SPEC-02): enabled skills' docs (skill order) then the agent's own.
-      // Nothing effective -> no source call and no trace/prompt change (AC-47).
-      const docs = effectiveDocs(
-        enabledSkills.map((l) => ({ id: l.skill.id, name: l.skill.name, contextPaths: l.skill.contextPaths ?? [] })),
-        agent.contextPaths ?? [],
-      );
-      if (docs.length > 0) {
-        pc = await resolveProjectContext({
-          // A missing token degrades to read_error entries inside the resolver (AC-49/AC-50).
-          source: () => this.container.projectDocs(),
-          repo: { owner: repo.owner, name: repo.name },
-          branch: repo.defaultBranch,
-          effective: docs,
-          tokenizer: this.container.tokenizer,
-        });
-        const skipped = pc.entries.filter((e) => e.status === 'skipped');
-        runLog.info(
-          projectContextSummaryLine({
-            injected: pc.injected.length,
-            tokens: pc.injectedTokens,
-            skipped: skipped.length,
-          }),
+        // Project context (SPEC-02): enabled skills' docs (skill order) then the agent's own.
+        // Nothing effective -> no source call and no trace/prompt change (AC-47).
+        const docs = effectiveDocs(
+          enabledSkills.map((l) => ({ id: l.skill.id, name: l.skill.name, contextPaths: l.skill.contextPaths ?? [] })),
+          agent.contextPaths ?? [],
         );
-        for (const e of skipped) runLog.info(projectContextSkipLine(e.path, e.reason ?? 'unknown'));
-      }
+        if (docs.length > 0) {
+          pc = await resolveProjectContext({
+            // A missing token degrades to read_error entries inside the resolver (AC-49/AC-50).
+            source: () => this.container.projectDocs(),
+            repo: { owner: repo.owner, name: repo.name },
+            branch: repo.defaultBranch,
+            effective: docs,
+            tokenizer: this.container.tokenizer,
+          });
+          const skipped = pc.entries.filter((e) => e.status === 'skipped');
+          runLog.info(
+            projectContextSummaryLine({
+              injected: pc.injected.length,
+              tokens: pc.injectedTokens,
+              skipped: skipped.length,
+            }),
+          );
+          for (const e of skipped) runLog.info(projectContextSkipLine(e.path, e.reason ?? 'unknown'));
+        }
 
-      // ---- Engine: assemble → single-pass → grounding -----------------------
-      // The pure review pipeline lives in @devdigest/reviewer-core (shared with
-      // the CI runner). The service owns only I/O: repo-intel context resolution
-      // above, and persistence + observability below.
-      const reviewStartTime = Date.now();
-      const outcome = await reviewPullRequest({
-        systemPrompt: agent.systemPrompt,
-        model: agent.model,
-        diff,
-        llm,
-        // Per-agent review strategy (configured in the Agent editor); falls back
-        // to the studio default. single-pass = whole diff in one call.
-        strategy: agent.strategy ?? REVIEW_STRATEGY,
-        // T1.3 — pass the callers digest only when we built one. assemblePrompt
-        // omits the section when this is empty/undefined.
-        ...(callersDigest ? { callers: callersDigest } : {}),
-        // T3 — repo skeleton, same omit-when-empty contract.
-        ...(repoMap ? { repoMap } : {}),
-        // Skills feature — enabled, ordered skill bodies (empty array omits the
-        // section entirely inside assemblePrompt).
-        ...(enabledSkills.length > 0 ? { skills: enabledSkills.map((l) => l.skill.body) } : {}),
-        // Project context docs (untrusted; wrapped by reviewer-core). Omitted when none injected.
-        ...(pc && pc.injected.length > 0
-          ? { projectContext: pc.injected.map((d) => ({ path: d.path, content: d.content })) }
-          : {}),
-        // PR author's description/body — untrusted; assemblePrompt wraps +
-        // truncates it. Omitted when the PR has no body.
-        ...(pull.body ? { prDescription: pull.body } : {}),
-        // Structured intent (summary + in/out scope): reviewer-core renders the
-        // prompt section and applies the code-owned scope policy. Omitted when
-        // not available (fail-open, no scope filtering).
-        // Confidence 0 (no description/files/sources): omitted, so no Intent section and no
-        // scope instructions. Low confidence: passed, rendered as a weak hint; the scope
-        // filter stays inactive below MIN_INTENT_CONFIDENCE (applyScopePolicy).
-        ...(reviewIntentPolicy(intent.intent).include ? { intentObj: intent.intent } : {}),
-        task,
-        sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
-        onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
-        checkCancelled: () => {
-          if (this.container.runBus.isCancelled(runId)) throw new RunCancelledError();
-        },
-        // Pass injected logger and correlation ID for structured prompt logging
-        logger: logger,
-        correlationId,
-      });
+        // ---- Engine: assemble → single-pass → grounding -----------------------
+        // The pure review pipeline lives in @devdigest/reviewer-core (shared with
+        // the CI runner). The service owns only I/O: repo-intel context resolution
+        // above, and persistence + observability below.
+        const reviewStartTime = Date.now();
+        const outcome = await reviewPullRequest({
+          systemPrompt: agent.systemPrompt,
+          model: agent.model,
+          diff,
+          llm,
+          // Per-agent review strategy (configured in the Agent editor); falls back
+          // to the studio default. single-pass = whole diff in one call.
+          strategy: agent.strategy ?? REVIEW_STRATEGY,
+          // T1.3 — pass the callers digest only when we built one. assemblePrompt
+          // omits the section when this is empty/undefined.
+          ...(callersDigest ? { callers: callersDigest } : {}),
+          // T3 — repo skeleton, same omit-when-empty contract.
+          ...(repoMap ? { repoMap } : {}),
+          // Skills feature — enabled, ordered skill bodies (empty array omits the
+          // section entirely inside assemblePrompt).
+          ...(enabledSkills.length > 0 ? { skills: enabledSkills.map((l) => l.skill.body) } : {}),
+          // Project context docs (untrusted; wrapped by reviewer-core). Omitted when none injected.
+          ...(pc && pc.injected.length > 0
+            ? { projectContext: pc.injected.map((d) => ({ path: d.path, content: d.content })) }
+            : {}),
+          // PR author's description/body — untrusted; assemblePrompt wraps +
+          // truncates it. Omitted when the PR has no body.
+          ...(pull.body ? { prDescription: pull.body } : {}),
+          // Structured intent (summary + in/out scope): reviewer-core renders the
+          // prompt section and applies the code-owned scope policy. Omitted when
+          // not available (fail-open, no scope filtering).
+          // Confidence 0 (no description/files/sources): omitted, so no Intent section and no
+          // scope instructions. Low confidence: passed, rendered as a weak hint; the scope
+          // filter stays inactive below MIN_INTENT_CONFIDENCE (applyScopePolicy).
+          ...(reviewIntentPolicy(intent.intent).include ? { intentObj: intent.intent } : {}),
+          task,
+          sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
+          onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
+          checkCancelled: () => {
+            if (this.container.runBus.isCancelled(runId)) throw new RunCancelledError();
+            // Deadline hit: stop a multi-call strategy early (the port has no abort signal).
+            if (guard.timedOut) throw new RunTimeoutError(0);
+          },
+          // Pass injected logger and correlation ID for structured prompt logging
+          logger: logger,
+          correlationId,
+        });
 
-      logRunMetrics(runLog, logger, {
-        runId,
-        model: agent.model,
-        outcome,
-        reviewDurationMs: Date.now() - reviewStartTime,
-        intent,
-        correlationId,
-      });
+        logRunMetrics(runLog, logger, {
+          runId,
+          model: agent.model,
+          outcome,
+          reviewDurationMs: Date.now() - reviewStartTime,
+          intent,
+          correlationId,
+        });
 
-      const { review, findingRows } = await this.persistReview(workspaceId, pull, agent, runId, outcome, runLog);
-      await this.finishRun(runId, pull, agent, outcome, start, runLog, skillsMeta, pc);
+        // The deadline already failed + completed this run: a late result is dropped, never persisted.
+        if (guard.timedOut) throw new RunTimeoutError(0);
+        const { review, findingRows } = await this.persistReview(workspaceId, pull, agent, runId, outcome, runLog);
+        await this.finishRun(runId, pull, agent, outcome, start, runLog, skillsMeta, pc);
 
-      return { review, findings: findingRows, grounding: outcome.grounding, raw: outcome.review };
+        return { review, findings: findingRows, grounding: outcome.grounding, raw: outcome.review };
+      };
+      return await this.withDeadline(work(), guard, runLog);
     } catch (err) {
       // Failure/cancel: persist status + the error text + the log-so-far so the
       // run (and WHY it failed) is visible on the UI after a reload.
@@ -560,6 +577,30 @@ export class ReviewRunExecutor {
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
+    }
+  }
+
+  /**
+   * Race the agent work against the per-run deadline. On timeout `guard.timedOut` is set
+   * (so the still-running work never persists) and the race rejects with RunTimeoutError,
+   * which runOneAgent's catch persists as a normal failure. A late rejection of `work` is
+   * swallowed here.
+   */
+  private async withDeadline<T>(work: Promise<T>, guard: { timedOut: boolean }, runLog: RunLogger): Promise<T> {
+    const timeoutMs = this.container.config?.reviewRunTimeoutMs ?? DEFAULT_REVIEW_RUN_TIMEOUT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        guard.timedOut = true;
+        runLog.error(`Run exceeded the ${Math.round(timeoutMs / 1000)}s deadline`);
+        reject(new RunTimeoutError(timeoutMs));
+      }, timeoutMs);
+    });
+    work.catch(() => undefined);
+    try {
+      return await Promise.race([work, deadline]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 

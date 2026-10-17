@@ -8,6 +8,7 @@ import {
   CiExportInput,
   CiPreview,
   CiRunsList,
+  CiSecretStatus,
   CiSyncResult,
 } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
@@ -22,6 +23,7 @@ import { CiService } from './service.js';
  *   POST /agents/:id/export-ci           open a PR, or return a zip
  *   GET  /agents/:id/ci                  installations + recent runs
  *   GET  /ci/runs                        newest runs of the workspace
+ *   GET  /ci/secret-status?repoId=  whether OPENROUTER_API_KEY is set on the repo
  *   POST /ci/sync                        pull + ingest new Actions runs (no body)
  * No route accepts an artifact body: results enter only through `sync`, which reads GitHub.
  */
@@ -73,6 +75,20 @@ export default async function ciRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(container, req);
     return serviceFor(req).listRuns(workspaceId);
   });
+
+  app.get(
+    '/ci/secret-status',
+    {
+      schema: {
+        querystring: z.object({ repoId: z.string().uuid() }),
+        response: { 200: CiSecretStatus },
+      },
+    },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return serviceFor(req).secretStatus(workspaceId, req.query.repoId);
+    },
+  );
 
   // AC-57: no payload is accepted; any body answers 422.
   app.post(

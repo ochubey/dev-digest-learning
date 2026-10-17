@@ -22,7 +22,8 @@ vi.mock("@/lib/api", async () => {
 import { ApiError } from "@/lib/api";
 import { ExportCiWizard } from "./ExportCiWizard";
 
-const WORKFLOW_PATH = ".github/workflows/devdigest-review.yml";
+const WORKFLOW_PATH = ".github/workflows/devdigest-review-security-reviewer.yml";
+const LEGACY_PATH = ".github/workflows/devdigest-review.yml";
 
 const AGENT: Agent = {
   id: "ag1",
@@ -214,13 +215,18 @@ describe("ExportCiWizard shell", () => {
 });
 
 describe("ExportCiWizard Target", () => {
-  it('AC-3 only "GitHub Actions", preselected; no CircleCI/Jenkins/Generic CLI', async () => {
+  it('AC-3 "GitHub Actions" is preselected; CircleCI, Jenkins and Generic CLI are disabled "coming soon" cards', async () => {
     mount();
     const gha = within(dialog()).getByRole("button", { name: /GitHub Actions/ });
     expect(gha).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByText(/CircleCI/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Jenkins/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Generic CLI/)).not.toBeInTheDocument();
+    for (const name of [/CircleCI/, /Jenkins/, /Generic CLI/]) {
+      const card = within(dialog()).getByRole("button", { name });
+      expect(card).toBeDisabled();
+      expect(card).not.toHaveAttribute("aria-pressed");
+      expect(within(card).getByText("coming soon")).toBeInTheDocument();
+    }
+    fireEvent.click(within(dialog()).getByRole("button", { name: /Jenkins/ }));
+    expect(gha).toHaveAttribute("aria-pressed", "true");
     await screen.findByRole("radio", { name: "acme/api" });
   });
 
@@ -260,18 +266,30 @@ describe("ExportCiWizard Target", () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it("AC-8 ci_repo_taken message rendered on Target", async () => {
-    previewImpl = () =>
-      Promise.reject(new ApiError("acme/api is already used by another agent", 409, "ci_repo_taken"));
+  it("AC-8 (revision 2) a repo that already runs another agent is accepted: no error, goes to Preview", async () => {
     mount();
-    await pickRepo();
-    click("Continue");
-    expect(await screen.findByText("acme/api is already used by another agent")).toBeInTheDocument();
-    expect(stepText()).toBe("Step 1 of 4: Target");
+    await toPreview();
+    expect(stepText()).toBe("Step 2 of 4: Preview");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
 describe("ExportCiWizard Preview", () => {
+  it("shows the per-agent workflow file names; a regenerated legacy workflow of another agent is read-only", async () => {
+    previewImpl = async () => {
+      const p = mkPreview();
+      return { ...p, files: [...p.files, { path: LEGACY_PATH, contents: "name: legacy\n", editable: false }] };
+    };
+    mount();
+    await toPreview();
+    const list = screen.getByRole("listbox", { name: "Files to create" });
+    expect(within(list).getAllByRole("option").map((o) => o.textContent)).toContain(LEGACY_PATH);
+    expect(screen.getByRole("textbox", { name: `Edit ${WORKFLOW_PATH}` })).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("option", { name: LEGACY_PATH }));
+    expect(screen.queryByRole("textbox", { name: `Edit ${LEGACY_PATH}` })).not.toBeInTheDocument();
+    expect(screen.getByText("name: legacy", { exact: false })).toBeInTheDocument();
+  });
+
   it("AC-11 file list renders", async () => {
     mount();
     await toPreview();
@@ -387,7 +405,7 @@ describe("ExportCiWizard Configure", () => {
     await toConfigure();
     expect(screen.getByText("Warning and above")).toBeInTheDocument();
     expect(
-      screen.getByText(/make the `devdigest-review` check required in the repository's branch protection or ruleset/),
+      screen.getByText(/make the DevDigest check required in the repository's branch protection or ruleset/),
     ).toBeInTheDocument();
   });
 

@@ -6,7 +6,6 @@ export {
   CI_RESULT_ARTIFACT_NAME,
   CI_RUNNER_VERSION,
   CI_TRIGGERS,
-  CI_WORKFLOW_PATH,
   CI_WORKFLOW_VERSION,
 } from '@devdigest/shared';
 
@@ -21,8 +20,15 @@ export const SKILLS_DIR = '.devdigest/skills';
 export const MEMORY_PATH = '.devdigest/memory.jsonl';
 export const RUNNER_PATH = '.devdigest/runner/index.js';
 
-/** Workflow file name as the GitHub Actions API addresses it. */
+/** The LEGACY workflow file (one agent per repo, `workflow_file` null). Its job id and name are `devdigest-review`. */
 export const WORKFLOW_FILE = 'devdigest-review.yml';
+export const WORKFLOW_DIR = '.github/workflows';
+
+/** Per-agent workflow file name (as the GitHub Actions API addresses it). The slug is already [a-z0-9-]. */
+export const agentWorkflowFile = (slug: string) => `devdigest-review-${slug}.yml`;
+export const workflowPath = (file: string) => `${WORKFLOW_DIR}/${file}`;
+/** Job id and name (= the status check name): the legacy file keeps `devdigest-review`, others `devdigest-review-<slug>`. */
+export const jobIdFor = (file: string) => (file === WORKFLOW_FILE ? 'devdigest-review' : file.replace(/\.yml$/, ''));
 /** The file the runner writes and the artifact contains. */
 export const RESULT_FILE = 'devdigest-result.json';
 

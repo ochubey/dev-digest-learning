@@ -22,6 +22,8 @@ hallucinated line refs) → findings persisted.
 
 Root: `./scripts/dev.sh` (Postgres up, env files, deps, migrate, seed, launch both). Flags: `--no-seed` `--no-client` `--db-only`.
 
+Root: `./scripts/migrate.sh` or `pnpm db:migrate` (Postgres up, then apply migrations only; run it after pulling a branch that added a migration; `migrate.ps1` on Windows).
+
 `server/`: `pnpm dev` (tsx watch :3001) · `pnpm build` · `pnpm typecheck` · `pnpm test`
 (vitest; split `pnpm exec vitest run --exclude '**/*.it.test.ts'` unit vs `.it.test` DB-integration)
 · `pnpm db:generate` (drizzle-kit) · `pnpm db:migrate` · `pnpm db:seed`

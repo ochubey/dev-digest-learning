@@ -1,5 +1,5 @@
 import type { CiPostAs, CiRunStatus, CiTrigger } from "@devdigest/shared";
-import { CI_TRIGGERS, CI_WORKFLOW_PATH, GITHUB_PREFIX, POST_AS_VALUES, RUN_STATUSES } from "./constants";
+import { CI_TRIGGERS, GITHUB_PREFIX, POST_AS_VALUES, RUN_STATUSES } from "./constants";
 
 const NONE = "—";
 
@@ -19,8 +19,11 @@ export function secretsSettingsUrl(fullName: string): string {
   return `${GITHUB_PREFIX}${fullName}/settings/secrets/actions`;
 }
 
+const WORKFLOW_PATH_RE = /^\.github\/workflows\/devdigest-review(-[a-z0-9-]+)?\.yml$/;
+
+/** A DevDigest workflow file: the legacy `devdigest-review.yml` or a per-agent `devdigest-review-<slug>.yml`. */
 export function isWorkflowPath(path: string): boolean {
-  return path === CI_WORKFLOW_PATH;
+  return WORKFLOW_PATH_RE.test(path);
 }
 
 /** Trigger a browser download of a base64-encoded zip (AC-46). */

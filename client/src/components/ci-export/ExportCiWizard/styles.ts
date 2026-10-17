@@ -26,6 +26,8 @@ export const s = {
     font: "inherit",
   } satisfies CSSProperties,
   cardActive: { border: "1.5px solid var(--accent)", background: "var(--accent-bg)" } satisfies CSSProperties,
+  cardDisabled: { opacity: 0.55, cursor: "not-allowed" } satisfies CSSProperties,
+  cardGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 } satisfies CSSProperties,
   cardTitle: { display: "flex", alignItems: "center", gap: 10, fontSize: 14, fontWeight: 600 } satisfies CSSProperties,
   option: { display: "flex", alignItems: "center", gap: 9, fontSize: 13, color: "var(--text-secondary)", cursor: "pointer" } satisfies CSSProperties,
   group: { display: "flex", flexDirection: "column", gap: 7, border: "none", margin: 0, padding: 0 } satisfies CSSProperties,

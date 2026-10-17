@@ -111,4 +111,17 @@ export const s = {
     gap: 10,
   } satisfies CSSProperties,
   composerActions: { display: "flex", gap: 8 } satisfies CSSProperties,
+  replyBox: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12 } satisfies CSSProperties,
+  replyTextarea: {
+    width: "100%",
+    resize: "vertical",
+    padding: "10px 12px",
+    borderRadius: 7,
+    border: "1px solid var(--border-strong)",
+    background: "var(--bg-elevated)",
+    color: "var(--text-primary)",
+    fontSize: 14,
+    lineHeight: 1.55,
+  } satisfies CSSProperties,
+  replyActions: { display: "flex", gap: 8 } satisfies CSSProperties,
 } as const;

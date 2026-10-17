@@ -22,6 +22,15 @@ export const s = {
   rowHead: { padding: "10px 14px", borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
   loc: { fontSize: 12 } satisfies CSSProperties,
   rowTitle: { fontSize: 13, fontWeight: 600, marginLeft: 6 } satisfies CSSProperties,
+  badge: (conflict: boolean): CSSProperties => ({
+    marginLeft: 8,
+    padding: "1px 7px",
+    borderRadius: 99,
+    fontSize: 10.5,
+    fontWeight: 600,
+    color: conflict ? "var(--warn)" : "var(--ok)",
+    border: `1px solid ${conflict ? "var(--warn)" : "var(--ok)"}`,
+  }),
   takes: (n: number): CSSProperties => ({
     display: "grid",
     gridTemplateColumns: `repeat(${Math.max(n, 1)}, 1fr)`,

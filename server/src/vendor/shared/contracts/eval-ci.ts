@@ -133,6 +133,7 @@ export type ComposeReviewPreview = z.infer<typeof ComposeReviewPreview>;
 export const CI_WORKFLOW_VERSION = 1;
 export const CI_RUNNER_VERSION = '2';
 export const CI_BRANCH = 'devdigest/ci';
+/** The LEGACY single-agent workflow path (installations created before one workflow per agent). New ones use `.github/workflows/devdigest-review-<slug>.yml`. */
 export const CI_WORKFLOW_PATH = '.github/workflows/devdigest-review.yml';
 export const CI_RESULT_ARTIFACT_NAME = 'devdigest-result';
 export const CI_TRIGGERS = ['opened', 'synchronize', 'reopened'] as const;
@@ -148,7 +149,6 @@ export type CiVerdict = z.infer<typeof CiVerdict>;
 
 export const CiErrorCode = z.enum([
   'ci_provider_unsupported',
-  'ci_repo_taken',
   'ci_repo_not_connected',
   'ci_runner_missing',
   'ci_workflow_unsafe',
@@ -369,6 +369,13 @@ export const CiResultArtifact = z.object({
   blockers: z.number().int().nullish(),
 });
 export type CiResultArtifact = z.infer<typeof CiResultArtifact>;
+/** Whether the OpenRouter secret exists in the repo's Actions secrets (the value is never read). */
+export const CiSecretState = z.enum(['set', 'not_set', 'unknown']);
+export type CiSecretState = z.infer<typeof CiSecretState>;
+
+export const CiSecretStatus = z.object({ OPENROUTER_API_KEY: CiSecretState });
+export type CiSecretStatus = z.infer<typeof CiSecretStatus>;
+
 // ==== SPEC-05 export to CI: end ====
 
 // ===========================================================================

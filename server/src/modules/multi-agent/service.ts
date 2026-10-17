@@ -1,4 +1,4 @@
-import type { AgentRunEstimate, MultiAgentRun } from '@devdigest/shared';
+import type { AgentRunEstimate, LatestMultiAgentRun, MultiAgentRun } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { ESTIMATE_SAMPLE } from './constants.js';
@@ -22,6 +22,12 @@ export class MultiAgentService {
       this.repo.pullNumber(parent.prId),
     ]);
     return buildMultiAgentRun(parent, prNumber, children, reviews);
+  }
+
+  /** Id of the newest multi-agent run of the PR (when `prId` is given) or of the repo; null when none. */
+  async latest(workspaceId: string, q: { repoId?: string; prId?: string }): Promise<LatestMultiAgentRun> {
+    if (q.prId) return { id: await this.repo.latestForPr(workspaceId, q.prId, q.repoId) };
+    return { id: q.repoId ? await this.repo.latestForRepo(workspaceId, q.repoId) : null };
   }
 
   /** Per-agent duration/cost estimate for every agent of the workspace. */

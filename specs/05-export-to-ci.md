@@ -4,6 +4,18 @@ Status: approved (assumptions A-1..A-18 accepted by default, per the user's "pic
 
 Revision note: rev 1, first draft for worktree B of the L07 lab (branch `feat/export-to-ci`, worktree `dev-digest-wt-export-ci`). The user asked for the simplest viable option everywhere: every unknown was resolved with a default, recorded as `A-n` under "Open questions". The lab text names the file `specs/export-to-ci.md`; this repository numbers specs (`specs/README.md`), so it lives at `specs/05-export-to-ci.md` (see OQ-1). Worktree A (Multi-Agent Review) has its own spec and is merged first.
 
+## Revision 2: many agents per repository
+
+Revision 2 addendum (target cards): the Target step also shows CircleCI, Jenkins and Generic CLI as disabled "coming soon" cards, as in the lecturer's design. They are not selectable and no generator exists for them; GitHub Actions stays the only working target. This replaces the "only GitHub Actions is shown" part of AC-3 and assumption A-1; the behaviour of choosing a target is otherwise unchanged.
+
+Supersedes the one-agent-per-repository rule. What changed:
+
+- **A-4 replaced.** Several agents may be exported to the same repository. The `ci_repo_taken` error is gone; an installation is unique per (repo, agent) (`ci_installations_repo_agent_uq`, replacing `ci_installations_repo_uq`). `ci_slug_changed` stays and is checked per agent. The "Several agents in one repository" non-goal and the "One agent per repository" risk below no longer apply.
+- **AC-8 replaced by "many agents per repo".** ЯКЩО the selected repository already has an installation of a different agent, ТОДІ the system (shall) allow the export and give the new agent its own files. *Verify:* service test: two agents exported into one repo get different workflow and manifest paths and two installations exist; wizard test: Continue moves to Preview with no error.
+- **Workflow path per agent.** `.github/workflows/devdigest-review-<slug>.yml`, workflow `name: DevDigest Review (<slug>)`, job id and name `devdigest-review-<slug>` (each agent has its own check that can be required), and `DEVDIGEST_AGENT: <slug>` in the runner step env so the runner picks its manifest. Everything else (permissions, trigger, base-SHA checkout, fork guard, pinned SHAs, secret handling) is unchanged. The runner bundle and `memory.jsonl` stay shared; manifests and skills are per agent. The new column `ci_installations.workflow_file` stores the file name; sync lists runs of `workflow_file`.
+- **Legacy handling.** An installation with `workflow_file` null was created before this revision: its file is `devdigest-review.yml` (job `devdigest-review`). Re-exporting that agent keeps the legacy path (no second workflow) and now also writes `DEVDIGEST_AGENT`. When another agent is exported into a repo that has a legacy installation, the same commit also regenerates the legacy workflow from its stored slug, triggers and post mode (otherwise it would fail once a second manifest exists); the preview file list and the PR body list it with the note "updated so it keeps running next to <agent>".
+- **Known limit.** All exports share the branch `devdigest/ci` and one open PR; exporting a second agent before the first PR is merged overwrites the branch with the second agent's files.
+
 ## Problem and user
 
 A DevDigest agent that a team has tuned in the studio (system prompt, model, skills, gate policy) only runs on one developer's machine, against PRs that someone imports and reviews by hand. The team cannot rely on it for every PR: nothing runs it automatically, nothing blocks a merge, and the result of a run is not visible to anyone else.

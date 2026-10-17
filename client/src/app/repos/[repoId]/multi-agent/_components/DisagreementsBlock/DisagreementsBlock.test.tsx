@@ -98,4 +98,10 @@ describe("DisagreementsBlock", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Unbounded query")).not.toBeInTheDocument();
   });
+
+  it("badges: Conflict for conflicting groups, All agree otherwise", () => {
+    renderBlock(groups, cols("done", "done"));
+    expect(screen.getAllByText("Conflict")).toHaveLength(1);
+    expect(screen.getAllByText("All agree")).toHaveLength(1);
+  });
 });

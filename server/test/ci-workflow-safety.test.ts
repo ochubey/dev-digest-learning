@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { generateWorkflow } from '../src/modules/ci/workflow.js';
 import { checkWorkflow } from '../src/modules/ci/workflow-safety.js';
 
-const base = () => generateWorkflow({ triggers: ['opened', 'synchronize'], postAs: 'github_review' });
+const legacyBase = () => generateWorkflow({ triggers: ['opened', 'synchronize'], postAs: 'github_review', slug: 'secret-gate' });
+const perAgentBase = () =>
+  generateWorkflow({ triggers: ['opened', 'synchronize'], postAs: 'github_review', slug: 'secret-gate', file: 'devdigest-review-secret-gate.yml' });
+let base = legacyBase;
 const rule = (text: string) => {
   const r = checkWorkflow(text);
   return r.ok ? 'ok' : r.rule;
@@ -10,6 +13,10 @@ const rule = (text: string) => {
 const SHA = 'a'.repeat(40);
 
 describe('checkWorkflow', () => {
+  beforeEach(() => {
+    base = legacyBase;
+  });
+
   it('the unmodified generated workflow is ok', () => {
     expect(checkWorkflow(base())).toEqual({ ok: true });
   });
@@ -41,7 +48,11 @@ describe('checkWorkflow', () => {
     ['other secret used', (t) => t.replace('PR_NUMBER:', 'EXTRA: ${{ secrets.GH_PAT }}\n          PR_NUMBER:'), 'secret_misassigned'],
   ];
 
-  it('AC-29: one case per rule (invalid YAML, extra permission, write-all, job-level permissions, pull_request_target, fork guard removed, base checkout removed, tag-pinned action, ${{ in run, OPENROUTER_API_KEY assigned a literal / other expression / passed under another name) -> rule name', () => {
+  it.each([
+    ['legacy', legacyBase],
+    ['per-agent', perAgentBase],
+  ])('AC-29 (%s workflow): one case per rule (invalid YAML, extra permission, write-all, job-level permissions, pull_request_target, fork guard removed, base checkout removed, tag-pinned action, ${{ in run, OPENROUTER_API_KEY assigned a literal / other expression / passed under another name) -> rule name', (_name, make) => {
+    base = make;
     for (const [label, mutate, expected] of cases) {
       const text = mutate(base());
       expect(text === base() ? `${label}: mutation had no effect` : rule(text), label).toBe(expected);
@@ -97,5 +108,19 @@ describe('checkWorkflow', () => {
 
   it('AC-30: a comment-only edit passes', () => {
     expect(checkWorkflow(base() + '# team note\n')).toEqual({ ok: true });
+  });
+
+  it('a per-agent job name and file are accepted, and the DEVDIGEST_AGENT env entry is plain env', () => {
+    base = perAgentBase;
+    expect(base()).toContain('devdigest-review-secret-gate:');
+    expect(base()).toContain('DEVDIGEST_AGENT: secret-gate');
+    expect(checkWorkflow(base())).toEqual({ ok: true });
+    expect(rule(base().replace('DEVDIGEST_AGENT: secret-gate', 'DEVDIGEST_AGENT: other'))).toBe('ok');
+  });
+
+  it('a hostile edit of a per-agent workflow still fails the secret rule on the exact entry', () => {
+    base = perAgentBase;
+    expect(rule(base().replace('DEVDIGEST_AGENT: secret-gate', 'DEVDIGEST_AGENT: ${{ secrets.OPENROUTER_API_KEY }}'))).toBe('secret_misassigned');
+    expect(rule(base().replace('OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}', 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}x'))).toBe('secret_misassigned');
   });
 });

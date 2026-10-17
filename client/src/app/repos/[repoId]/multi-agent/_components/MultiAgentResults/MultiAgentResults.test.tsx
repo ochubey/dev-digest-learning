@@ -8,8 +8,10 @@ import prReview from "../../../../../../../messages/en/prReview.json";
 const h = vi.hoisted(() => ({
   replace: vi.fn(),
   refetch: vi.fn(),
+  reviewsRefetch: vi.fn(),
   search: new URLSearchParams(),
   run: {} as Record<string, unknown>,
+  reviews: [] as unknown[],
 }));
 
 vi.mock("next/navigation", () => ({
@@ -22,13 +24,13 @@ vi.mock("@/lib/hooks/core", () => ({
   usePulls: () => ({ data: [{ id: "pr1", number: 482, title: "Fix token check", head_sha: "abc" }] }),
 }));
 vi.mock("@/lib/hooks/reviews", () => ({
-  usePrReviews: () => ({ data: [] }),
+  usePrReviews: () => ({ data: h.reviews, refetch: h.reviewsRefetch }),
   useFindingAction: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/lib/repo-context", () => ({ useActiveRepo: () => ({ activeRepo: { full_name: "o/r" } }) }));
 vi.mock("../../../pulls/[number]/_components/RunTraceDrawer", () => ({
-  default: (p: { runId: string; running: boolean }) => (
-    <div data-testid="trace-drawer">{`${p.runId}:${p.running}`}</div>
+  default: (p: { runId: string; running: boolean; findings?: { id: string }[] }) => (
+    <div data-testid="trace-drawer" data-findings={(p.findings ?? []).map((f) => f.id).join(",")}>{`${p.runId}:${p.running}`}</div>
   ),
 }));
 
@@ -39,7 +41,9 @@ afterEach(cleanup);
 beforeEach(() => {
   h.replace.mockReset();
   h.refetch.mockReset();
+  h.reviewsRefetch.mockReset();
   h.search = new URLSearchParams();
+  h.reviews = [];
 });
 
 const col = (runId: string, name: string, status: AgentColumn["status"] = "done"): AgentColumn => ({
@@ -152,5 +156,43 @@ describe("MultiAgentResults", () => {
     renderResults();
     fireEvent.click(screen.getAllByText("View trace")[1]!);
     expect(screen.getByTestId("trace-drawer")).toHaveTextContent("r2:true");
+  });
+
+  it("View trace passes the findings of that run to the drawer", () => {
+    h.reviews = [
+      { run_id: "r1", findings: [{ id: "f1" }] },
+      { run_id: "r2", findings: [{ id: "f2" }, { id: "f3" }] },
+    ];
+    setRun({ data: data([col("r1", "Security"), col("r2", "Perf")]) });
+    renderResults();
+    fireEvent.click(screen.getAllByText("View trace")[1]!);
+    expect(screen.getByTestId("trace-drawer")).toHaveAttribute("data-findings", "f2,f3");
+  });
+
+  it("refetches the PR reviews each time another column reaches a final state", () => {
+    setRun({ data: data([col("r1", "Security", "done"), col("r2", "Perf", "running"), col("r3", "Style", "running")]) });
+    const view = renderResults();
+    expect(h.reviewsRefetch).toHaveBeenCalledTimes(1);
+
+    setRun({ data: data([col("r1", "Security", "done"), col("r2", "Perf", "done"), col("r3", "Style", "running")]) });
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={{ multiAgent, prReview }}>
+        <MultiAgentResults repoId="r1" id="m1" />
+      </NextIntlClientProvider>,
+    );
+    expect(h.reviewsRefetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refetch the PR reviews while every column is still running", () => {
+    setRun({ data: data([col("r1", "Security", "running"), col("r2", "Perf", "running")]) });
+    renderResults();
+    expect(h.reviewsRefetch).not.toHaveBeenCalled();
+  });
+
+  it("View trace passes an empty list when reviews are not loaded", () => {
+    setRun({ data: data([col("r1", "Security")]) });
+    renderResults();
+    fireEvent.click(screen.getByText("View trace"));
+    expect(screen.getByTestId("trace-drawer")).toHaveAttribute("data-findings", "");
   });
 });

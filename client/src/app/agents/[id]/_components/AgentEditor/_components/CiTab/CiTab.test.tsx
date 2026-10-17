@@ -164,6 +164,21 @@ describe("CiTab", () => {
     expect(b).toHaveTextContent("No runs yet");
   });
 
+  it("lists several installations with the same repo-prefixed data without key collisions (many agents per repo)", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    view = {
+      installations: [
+        mkInst({ id: "i1", repo: "acme/api" }),
+        mkInst({ id: "i2", repo: "acme/api", pr_url: null }),
+      ],
+      runs: [],
+    };
+    mount();
+    expect(await screen.findAllByRole("listitem")).toHaveLength(2);
+    expect(err.mock.calls.flat().join(" ")).not.toMatch(/same key/);
+    err.mockRestore();
+  });
+
   it("AC-83 changing Fail CI on sends PUT /agents/:id {ci_fail_on}", async () => {
     mount();
     await screen.findByText("Not in CI yet");

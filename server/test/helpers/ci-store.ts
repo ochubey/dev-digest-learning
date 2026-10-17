@@ -61,6 +61,7 @@ export const installationRow = (over: Partial<InstallationRow> = {}): Installati
     triggers: ['opened', 'synchronize'],
     files: [],
     prUrl: null,
+    workflowFile: null,
     updatedAt: new Date('2026-02-01T00:00:00Z'),
     ...over,
   }) as InstallationRow;
@@ -74,9 +75,17 @@ export class FakeCiRepo {
   repo: RepoRow | undefined = repoRow();
   skills: SkillRow[] = [];
   memory: (MemoryRow | { id: string; kind: string; scope: string; content: string; createdAt: Date })[] = [];
-  installation: (InstallationRow & { agentName: string }) | undefined;
+  /** Every installation on the repo (one per agent). */
+  installations: (InstallationRow & { agentName: string })[] = [];
+  /** Single-installation shorthand: reads the first, assigning replaces them all. */
+  get installation(): (InstallationRow & { agentName: string }) | undefined {
+    return this.installations[0];
+  }
+  set installation(v: (InstallationRow & { agentName: string }) | undefined) {
+    this.installations = v ? [v] : [];
+  }
   syncInstallations: SyncInstallation[] = [];
-  upsertResult: InstallationRow | null | 'echo' = 'echo';
+  upsertResult: InstallationRow | 'echo' = 'echo';
   knownRunIds = new Set<number>();
   importedPr: string | null = null;
   lastRuns: RunRow[] = [];
@@ -90,6 +99,9 @@ export class FakeCiRepo {
   async findAgent() {
     return this.agent;
   }
+  async findRepoById(_ws: string, id: string) {
+    return this.repo && this.repo.id === id && this.repo.workspaceId === _ws ? this.repo : undefined;
+  }
   async findRepoByFullName(_ws: string, fullName: string) {
     return this.repo && this.repo.fullName === fullName ? this.repo : undefined;
   }
@@ -99,8 +111,8 @@ export class FakeCiRepo {
   async repoMemory() {
     return this.memory;
   }
-  async installationByRepo() {
-    return this.installation;
+  async installationsByRepo() {
+    return this.installations;
   }
   async upsertInstallation(values: Record<string, unknown>) {
     this.upserts.push(values);
@@ -114,7 +126,7 @@ export class FakeCiRepo {
     return this.upsertResult;
   }
   async installationsForAgent() {
-    return this.installation ? [this.installation] : [];
+    return this.installations;
   }
   async installationsForSync() {
     return this.syncInstallations;

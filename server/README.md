@@ -99,6 +99,7 @@ flowchart TB
 | `GITHUB_TOKEN` | — | optional; PAT with repo scope (`GITHUB_PAT` accepted as a fallback) |
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `PROJECT_DOCS_SOURCE` | `github` | project-context document source: `github` (default branch via Octokit) or `fixture` (deterministic docs from `src/db/fixtures/project-docs.ts`; used by the e2e stack). Discovery lists every `.md` file on the default branch (max 500) except dot-folders, `node_modules`, `vendor`, `dist`, `build`, `out`, `coverage` and `CHANGELOG.md` |
+| `REVIEW_RUN_TIMEOUT_MS` | `300000` | per-agent review-run deadline (positive integer, ms). A run with no result by then is marked `failed` with `Run timed out after <N>s (no response from the model)`; a late model response is ignored and never persisted. Other agents of the run are unaffected |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
@@ -152,6 +153,8 @@ body shapes). The response returns immediately; agents run **in parallel** (no c
 - `GET /multi-agent-runs/:id` returns a `MultiAgentRun`: one column per child run (ordered by
   agent name, then run id; a deleted agent shows as "Deleted agent" with `agent_id: null`),
   totals, `groups` and `conflicts`. `404` for an unknown or foreign-workspace id.
+- `GET /multi-agent-runs/latest?repoId=<uuid>&prId=<uuid>` returns `{ id: string | null }`: the newest run of the
+  pull request (`prId`) or of the repo (`repoId`), workspace-scoped. At least one is required (`422` otherwise).
 - `GET /multi-agent/estimates` returns an `AgentRunEstimate[]` (one per agent of the workspace):
   mean duration/cost over the agent's latest 10 `done` runs.
 
@@ -380,9 +383,11 @@ Exports a tuned agent to a repository's GitHub Actions and pulls the results bac
 | `GET /ci/runs` | The 100 newest CI runs of the workspace |
 | `POST /ci/sync` | Pulls and ingests new Actions runs; takes no body (any payload is 422) |
 
-No route accepts an artifact body. Results enter only through `sync`, which lists runs of `devdigest-review.yml` with the studio token, downloads each `devdigest-result` artifact and checks the archive (1 MB, one entry named `devdigest-result.json`, 64 KB JSON), the schema, the run's commit SHA, the repository id and the PR number. A rejected or missing result is stored as a `failed` run with a reason. A sync reads at most 30 runs per installation.
+**Many agents per repository (revision 2).** One installation per (repo, agent) (unique index `ci_installations_repo_agent_uq`). Each agent gets its own workflow `.github/workflows/devdigest-review-<slug>.yml` (workflow `DevDigest Review (<slug>)`, job id and name `devdigest-review-<slug>` = its own required check, env `DEVDIGEST_AGENT: <slug>` so the runner picks `.devdigest/agents/<slug>.yaml`) and its own manifest and skills; the runner bundle and `memory.jsonl` are shared files. The file name is stored in `ci_installations.workflow_file`; `null` marks a LEGACY installation (workflow `devdigest-review.yml`, job `devdigest-review`), which keeps writing the legacy path on re-export. When an export targets a repo that has a legacy installation of a different agent, the same commit also regenerates that legacy workflow (with its `DEVDIGEST_AGENT`) and the preview and PR body list it as updated.
 
-Error codes: `ci_provider_unsupported`, `ci_repo_not_connected`, `ci_triggers_invalid`, `ci_runner_missing` (400/404); `ci_repo_taken`, `ci_slug_changed` (409); `ci_workflow_unsafe` (400, `details.rule`); `github_workflow_scope_missing`, `github_write_denied` (403); `github_error` (502). Sync reports `github_actions_read_denied` per repository.
+No route accepts an artifact body. Results enter only through `sync`, which lists runs of each installation's own workflow file (`workflow_file`, or `devdigest-review.yml` for a legacy installation) with the studio token, downloads each `devdigest-result` artifact and checks the archive (1 MB, one entry named `devdigest-result.json`, 64 KB JSON), the schema, the run's commit SHA, the repository id and the PR number. A rejected or missing result is stored as a `failed` run with a reason. A sync reads at most 30 runs per installation.
+
+Error codes: `ci_provider_unsupported`, `ci_repo_not_connected`, `ci_triggers_invalid`, `ci_runner_missing` (400/404); `ci_slug_changed` (409, per agent); `ci_workflow_unsafe` (400, `details.rule`); `github_workflow_scope_missing`, `github_write_denied` (403); `github_error` (502). Sync reports `github_actions_read_denied` per repository.
 
 Studio token (`GITHUB_TOKEN`): Contents write, Pull requests write and Workflows write (`workflow` scope on a classic token) to open the PR; Actions read (or `repo` on a classic token) to sync. The zip path needs no GitHub access.
 

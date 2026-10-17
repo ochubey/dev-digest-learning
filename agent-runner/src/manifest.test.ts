@@ -66,7 +66,7 @@ ci_fail_on: "sometimes"
   it('fails clearly when more than one manifest file exists', () => {
     writeFileSync(path.join(dir, 'agents', 'a.yaml'), VALID_MANIFEST_YAML);
     writeFileSync(path.join(dir, 'agents', 'b.yaml'), VALID_MANIFEST_YAML);
-    expect(() => findManifestPath(dir)).toThrow(/exactly one/i);
+    expect(() => findManifestPath(dir)).toThrow(/DEVDIGEST_AGENT.*a, b/);
   });
 
   it('fails clearly on malformed YAML', () => {
@@ -93,5 +93,53 @@ describe('server-generated manifest fixture (AC-14)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('DEVDIGEST_AGENT manifest selection', () => {
+  let dir: string;
+  const named = (name: string) => VALID_MANIFEST_YAML.replace('Security Reviewer', name);
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'devdigest-runner-agent-'));
+    mkdirSync(path.join(dir, 'agents'), { recursive: true });
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function two() {
+    writeFileSync(path.join(dir, 'agents', 'alpha.yaml'), named('Alpha'));
+    writeFileSync(path.join(dir, 'agents', 'beta-2.yaml'), named('Beta'));
+  }
+
+  it('picks the manifest named by agent among two', () => {
+    two();
+    expect(loadManifest(dir, { agent: 'beta-2' }).name).toBe('Beta');
+    expect(loadManifest(dir, { agent: 'alpha' }).name).toBe('Alpha');
+  });
+
+  it('errors naming the slug and listing existing manifests when the file is missing', () => {
+    two();
+    const act = () => findManifestPath(dir, { agent: 'gamma' });
+    expect(act).toThrow(RunnerError);
+    expect(act).toThrow(/"gamma".*available: alpha, beta-2/);
+  });
+
+  it.each(['../x', 'Alpha', 'a/b', 'a.b'])('rejects invalid slug %s', (agent) => {
+    two();
+    expect(() => findManifestPath(dir, { agent })).toThrow(/must be a slug/);
+  });
+
+  it('unset agent with one manifest still works', () => {
+    writeFileSync(path.join(dir, 'agents', 'only.yaml'), named('Only'));
+    expect(loadManifest(dir).name).toBe('Only');
+    expect(loadManifest(dir, { agent: '' }).name).toBe('Only');
+  });
+
+  it('unset agent with two manifests errors listing the slugs', () => {
+    two();
+    expect(() => loadManifest(dir)).toThrow(RunnerError);
+    expect(() => loadManifest(dir)).toThrow(/DEVDIGEST_AGENT.*alpha, beta-2/);
   });
 });

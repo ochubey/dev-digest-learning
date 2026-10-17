@@ -1,7 +1,7 @@
 import { stringify } from 'yaml';
 import { AgentManifest, type CiFile, type CiPostAs, type CiTrigger } from '@devdigest/shared';
 import { AppError } from '../../platform/errors.js';
-import { AGENTS_DIR, CI_WORKFLOW_PATH, MEMORY_PATH, RUNNER_PATH, SKILLS_DIR } from './constants.js';
+import { AGENTS_DIR, MEMORY_PATH, RUNNER_PATH, SKILLS_DIR, workflowPath } from './constants.js';
 import { generateWorkflow } from './workflow.js';
 
 export interface BundleAgent {
@@ -76,6 +76,8 @@ export interface BundleInput {
   runner: string;
   triggers: CiTrigger[];
   postAs: CiPostAs;
+  /** The agent's workflow file name under .github/workflows/. */
+  workflowFile: string;
 }
 
 /** All files in a fixed order: manifest, skills, memory, runner, workflow. Deterministic (AC-18). */
@@ -86,7 +88,11 @@ export function buildBundle(input: BundleInput): CiFile[] {
     ...input.skills.map((s) => file(`${SKILLS_DIR}/${s.slug}.md`, s.body)),
     file(MEMORY_PATH, buildMemoryJsonl(input.memory)),
     file(RUNNER_PATH, input.runner),
-    file(CI_WORKFLOW_PATH, generateWorkflow({ triggers: input.triggers, postAs: input.postAs }), true),
+    file(
+      workflowPath(input.workflowFile),
+      generateWorkflow({ triggers: input.triggers, postAs: input.postAs, slug: input.agentSlug, file: input.workflowFile }),
+      true,
+    ),
   ];
 }
 

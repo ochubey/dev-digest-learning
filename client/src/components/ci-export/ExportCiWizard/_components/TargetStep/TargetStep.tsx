@@ -18,7 +18,14 @@ export interface TargetStepProps {
   error: string | null;
 }
 
-/** Step 1: GitHub Actions is the only target; pick one connected repository (AC-3..AC-8). */
+/** Other CI targets from the design: shown disabled until a generator exists (GitHub Actions is the only real one). */
+const COMING_SOON = [
+  { key: "circleci", icon: "RefreshCw", title: "circleci", desc: "circleciDesc" },
+  { key: "jenkins", icon: "Settings", title: "jenkins", desc: "jenkinsDesc" },
+  { key: "cli", icon: "Command", title: "cli", desc: "cliDesc" },
+] as const;
+
+/** Step 1: GitHub Actions is the only working target (the others are disabled placeholders); pick one connected repository (AC-3..AC-8). */
 export function TargetStep({ repos, repo, onRepo, unsupportedProvider, checking, error }: TargetStepProps) {
   const t = useTranslations("ciExport.target");
   return (
@@ -34,6 +41,24 @@ export function TargetStep({ repos, repo, onRepo, unsupportedProvider, checking,
         </span>
         <p style={{ ...s.hint, marginTop: 8 }}>{t("ghaDesc")}</p>
       </button>
+
+      <div style={s.cardGrid}>
+        {COMING_SOON.map((c) => {
+          const I = Icon[c.icon];
+          return (
+            <button key={c.key} type="button" disabled aria-disabled="true" style={{ ...s.card, ...s.cardDisabled }}>
+              <span style={s.cardTitle}>
+                <I size={16} />
+                {t(c.title)}
+              </span>
+              <p style={{ ...s.hint, marginTop: 6 }}>{t(c.desc)}</p>
+              <Badge color="var(--text-muted)" bg="var(--bg-elevated)" style={{ marginTop: 6 }}>
+                {t("comingSoon")}
+              </Badge>
+            </button>
+          );
+        })}
+      </div>
 
       {unsupportedProvider && (
         <p style={s.error} role="alert">

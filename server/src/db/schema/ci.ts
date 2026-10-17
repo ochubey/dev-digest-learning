@@ -35,9 +35,11 @@ export const ciInstallations = pgTable(
     triggers: jsonb('triggers').$type<string[]>().default([]),
     files: jsonb('files').$type<string[]>().default([]),
     prUrl: text('pr_url'),
+    /** Workflow file name under .github/workflows/; null = legacy installation (`devdigest-review.yml`). */
+    workflowFile: text('workflow_file'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
-  (t) => [uniqueIndex('ci_installations_repo_uq').on(t.repo)],
+  (t) => [uniqueIndex('ci_installations_repo_agent_uq').on(t.repo, t.agentId)],
 );
 
 export const ciRuns = pgTable(

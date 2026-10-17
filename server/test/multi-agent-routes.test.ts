@@ -171,7 +171,7 @@ describe('GET /multi-agent-runs/:id', () => {
 
     // The multi-agent repository exposes reads only.
     const methods = Object.getOwnPropertyNames(MultiAgentRepository.prototype).filter((m) => m !== 'constructor');
-    expect(methods.sort()).toEqual(['childRuns', 'getParent', 'lastDoneRuns', 'pullNumber', 'reviewsForRuns']);
+    expect(methods.sort()).toEqual(['childRuns', 'getParent', 'lastDoneRuns', 'latestForPr', 'latestForRepo', 'pullNumber', 'reviewsForRuns']);
   });
 
   it("returned findings' attribution equals their reviews rows", async () => {

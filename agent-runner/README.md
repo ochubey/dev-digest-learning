@@ -12,7 +12,9 @@ executed by the target repo's workflow as `node .devdigest/runner/index.js`.
 
 1. **Loads + validates** the checked-in manifest `.devdigest/agents/<slug>.yaml`
    and skill bodies `.devdigest/skills/*.md` from the target repo's working tree
-   (validated against `AgentManifest` before use).
+   (validated against `AgentManifest` before use). Several agents may live in
+   one repo; `DEVDIGEST_AGENT` (a slug) picks which manifest this run uses, and
+   may be omitted only when exactly one manifest exists.
 2. **Resolves the PR context** (owner / repo / number / title / body / fork flag)
    from CI env vars + the `pull_request` event payload.
 3. **Fetches the PR diff** via the GitHub REST API (native `fetch`, no octokit)
@@ -95,6 +97,7 @@ there is no `SecretsProvider` / DI graph to inject from (see `CLAUDE.md`).
 | `GITHUB_REPOSITORY_ID` | auto (GHA) | numeric repo id, written to the artifact (`repository_id`) so the studio can verify it |
 | `GITHUB_EVENT_PATH` | auto (GHA) | `pull_request` event payload (title/body/fork) |
 | `DEVDIGEST_DIR` | no | override the `.devdigest` dir (default: `cwd/.devdigest`) |
+| `DEVDIGEST_AGENT` | when >1 manifest | slug of `.devdigest/agents/<slug>.yaml` to run (`[a-z0-9-]+`); optional with a single manifest |
 | `DEVDIGEST_RESULT_PATH` | no | override artifact path (default: `cwd/devdigest-result.json`) |
 | `DEVDIGEST_POST_AS` | no | `github_review` (default) \| `pr_comment` \| `none` |
 

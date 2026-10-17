@@ -1,6 +1,6 @@
 /** Pure helpers for ConfigureRun (also used by the dropdown and the results page). */
 import type { Agent, AgentRunEstimate, PrMeta } from "@devdigest/shared";
-import { MAX_AGENTS } from "./constants";
+import { AGENT_ACCENTS, MAX_AGENTS } from "./constants";
 
 export type RunButtonState = "select" | "one" | "many";
 
@@ -84,4 +84,11 @@ export function configureRunHref(
 /** Results page URL of one multi-agent run. */
 export function resultsHref(repoId: string, id: string, view?: "columns" | "tabs"): string {
   return `/repos/${repoId}/multi-agent/${id}${view ? `?view=${view}` : ""}`;
+}
+
+/** Stable accent for an agent: hash of its id (or name) into the palette. */
+export function agentAccent(key: string): { color: string; bg: string } {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return AGENT_ACCENTS[h % AGENT_ACCENTS.length]!;
 }

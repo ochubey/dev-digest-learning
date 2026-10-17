@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from 'yaml';
 import { CI_TRIGGERS, type CiPostAs, type CiTrigger } from '@devdigest/shared';
+import { agentWorkflowFile } from '../src/modules/ci/constants.js';
 import { generateWorkflow } from '../src/modules/ci/workflow.js';
 import { checkWorkflow } from '../src/modules/ci/workflow-safety.js';
 
 const gen = (triggers: CiTrigger[] = ['opened', 'synchronize'], postAs: CiPostAs = 'github_review') =>
-  generateWorkflow({ triggers, postAs });
+  generateWorkflow({ triggers, postAs, slug: 'secret-gate' });
 const doc = (text = gen()) => parse(text, { version: '1.2' }) as any;
 
 const subsets = (): CiTrigger[][] => {
@@ -111,6 +112,43 @@ describe('generated workflow', () => {
     for (const subset of subsets()) {
       for (const mode of ['github_review', 'pr_comment', 'none'] as const) {
         expect(checkWorkflow(gen(subset, mode))).toEqual({ ok: true });
+      }
+    }
+  });
+});
+
+describe('per-agent workflow', () => {
+  const file = agentWorkflowFile('secret-gate');
+  const per = () => generateWorkflow({ triggers: ['opened', 'synchronize'], postAs: 'github_review', slug: 'secret-gate', file });
+
+  it('file name, workflow name, job id/name and DEVDIGEST_AGENT carry the slug', () => {
+    expect(file).toBe('devdigest-review-secret-gate.yml');
+    const d = doc(per());
+    expect(d.name).toBe('DevDigest Review (secret-gate)');
+    expect(Object.keys(d.jobs)).toEqual(['devdigest-review-secret-gate']);
+    const job = d.jobs['devdigest-review-secret-gate'];
+    expect(job.name).toBe('devdigest-review-secret-gate');
+    const env = job.steps.find((s: any) => s.env).env;
+    expect(env.DEVDIGEST_AGENT).toBe('secret-gate');
+    expect(env.OPENROUTER_API_KEY).toBe('${{ secrets.OPENROUTER_API_KEY }}');
+  });
+
+  it('only the names differ from the legacy workflow of the same agent', () => {
+    const legacy = gen();
+    expect(per().replaceAll('devdigest-review-secret-gate', 'devdigest-review')).toBe(legacy);
+  });
+
+  it('the legacy file keeps the legacy job id/name and also gets DEVDIGEST_AGENT', () => {
+    const d = doc(gen());
+    expect(Object.keys(d.jobs)).toEqual(['devdigest-review']);
+    expect(d.jobs['devdigest-review'].name).toBe('devdigest-review');
+    expect(d.jobs['devdigest-review'].steps.find((s: any) => s.env).env.DEVDIGEST_AGENT).toBe('secret-gate');
+  });
+
+  it('passes the safety check for every trigger subset and post mode', () => {
+    for (const triggers of subsets()) {
+      for (const postAs of ['github_review', 'pr_comment', 'none'] as const) {
+        expect(checkWorkflow(generateWorkflow({ triggers, postAs, slug: 'a-b', file: agentWorkflowFile('a-b') }))).toEqual({ ok: true });
       }
     }
   });

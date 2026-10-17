@@ -21,7 +21,14 @@
     "noRepos": "Connect a repository first",
     "noReposLink": "Go to repository setup",
     "unsupportedProvider": "CI export supports OpenRouter agents only",
-    "checking": "Generating the preview…"
+    "checking": "Generating the preview…",
+    "circleci": "CircleCI",
+    "circleciDesc": "config.yml job",
+    "jenkins": "Jenkins",
+    "jenkinsDesc": "Pipeline stage",
+    "cli": "Generic CLI",
+    "cliDesc": "devdigest review --pr",
+    "comingSoon": "coming soon"
   },
   "preview": {
     "filesTitle": "Files to create",
@@ -49,7 +56,19 @@
       "none": "None (exit code only)"
     },
     "failOn": "Fail CI on",
-    "blockNote": "To block merges, make the `devdigest-review` check required in the repository's branch protection or ruleset. DevDigest cannot do this for you."
+    "secrets": {
+      "title": "Secrets expected",
+      "openrouterDesc": "Your OpenRouter key",
+      "githubDesc": "Auto-provided by Actions",
+      "footer": "Add these to your repo's Actions secrets before the workflow runs.",
+      "ready": "ready",
+      "set": "set",
+      "notSet": "not set",
+      "unknown": "could not check",
+      "checking": "checking…",
+      "addLink": "Add it in Actions secrets"
+    },
+    "blockNote": "To block merges, make the DevDigest check required in the repository's branch protection or ruleset. DevDigest cannot do this for you."
   },
   "install": {
     "heading": "How do you want to install it?",

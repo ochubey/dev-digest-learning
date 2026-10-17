@@ -2,6 +2,7 @@
   "name": "devdigest-root",
   "private": true,
   "scripts": {
-    "verify:l06": "bash scripts/verify-l06.sh"
+    "verify:l06": "bash scripts/verify-l06.sh",
+    "db:migrate": "bash scripts/migrate.sh"
   }
 }

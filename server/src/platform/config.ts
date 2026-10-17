@@ -12,6 +12,9 @@ import { join, isAbsolute, resolve } from 'node:path';
  * that reads process.env directly (see adapters/secrets/local.ts). Listing them
  * here would be dead config that never reaches AppConfig.
  */
+/** Default per-run deadline for a review run (5 minutes). */
+export const DEFAULT_REVIEW_RUN_TIMEOUT_MS = 300_000;
+
 const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
@@ -31,6 +34,8 @@ const EnvSchema = z.object({
   PROJECT_DOCS_SOURCE: z.enum(['github', 'fixture']).default('github'),
   // Global per-IP request cap per minute. The hermetic e2e suite (one browser, one IP) raises it.
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  // Per-agent-run deadline: a run with no result after this long is marked failed.
+  REVIEW_RUN_TIMEOUT_MS: z.coerce.number().int().positive().default(DEFAULT_REVIEW_RUN_TIMEOUT_MS),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -68,6 +73,8 @@ export type AppConfig = {
   projectDocsSource: 'github' | 'fixture';
   /** Global rate limit: requests per minute per IP. */
   rateLimitMax: number;
+  /** Per-agent-run deadline in ms (REVIEW_RUN_TIMEOUT_MS, default 300000). */
+  reviewRunTimeoutMs: number;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -88,5 +95,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
     projectDocsSource: parsed.PROJECT_DOCS_SOURCE,
     rateLimitMax: parsed.RATE_LIMIT_MAX,
+    reviewRunTimeoutMs: parsed.REVIEW_RUN_TIMEOUT_MS,
   };
 }

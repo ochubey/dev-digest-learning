@@ -39,6 +39,7 @@ const input = (over: Partial<Parameters<typeof buildBundle>[0]> = {}) => ({
   runner: 'console.log("runner")',
   triggers: ['opened', 'synchronize'] as ('opened' | 'synchronize' | 'reopened')[],
   postAs: 'github_review' as const,
+  workflowFile: 'devdigest-review-secret-gate.yml',
   ...over,
 });
 
@@ -70,11 +71,25 @@ describe('ci bundle', () => {
       '.devdigest/skills/secret-gate-2.md',
       '.devdigest/memory.jsonl',
       '.devdigest/runner/index.js',
-      '.github/workflows/devdigest-review.yml',
+      '.github/workflows/devdigest-review-secret-gate.yml',
     ]);
     expect(files.filter((f) => f.editable).map((f) => f.path)).toEqual([
-      '.github/workflows/devdigest-review.yml',
+      '.github/workflows/devdigest-review-secret-gate.yml',
     ]);
+  });
+
+  it('two agents get disjoint manifest and workflow paths; runner and memory stay shared and identical', () => {
+    const a = buildBundle(input());
+    const b = buildBundle(
+      input({ agent: { ...agent, name: 'Perf Check' }, agentSlug: 'perf-check', skills: [], workflowFile: 'devdigest-review-perf-check.yml' }),
+    );
+    const pa = a.map((f) => f.path);
+    const pb = b.map((f) => f.path);
+    const shared = pa.filter((p) => pb.includes(p));
+    expect(shared).toEqual(['.devdigest/memory.jsonl', '.devdigest/runner/index.js']);
+    for (const p of shared) expect(a.find((f) => f.path === p)!.contents).toBe(b.find((f) => f.path === p)!.contents);
+    expect(pb).toContain('.devdigest/agents/perf-check.yaml');
+    expect(b.find((f) => f.editable)!.contents).toContain('DEVDIGEST_AGENT: perf-check');
   });
 
   it('AC-13: AgentManifest.safeParse(parseYaml(manifest)) equals the agent fixture fields incl. version', () => {

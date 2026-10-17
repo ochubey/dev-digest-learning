@@ -36,28 +36,51 @@ describe('groupFindings', () => {
 
   it('4 lines apart -> separate; 3 apart -> grouped', () => {
     const base = fi({ start_line: 10, end_line: 10 });
-    const far = fi({ start_line: 14, end_line: 14 });
-    const near = fi({ start_line: 13, end_line: 13 });
+    const far = fi({ start_line: 14, end_line: 14, run_id: 'run2' });
+    const near = fi({ start_line: 13, end_line: 13, run_id: 'run2' });
     expect(groupFindings([base, far])).toHaveLength(2);
     expect(groupFindings([base, near])).toHaveLength(1);
   });
 
   it('different category, title Jaccard >= 0.5 -> grouped', () => {
     const a = fi({ category: 'bug', title: 'Missing null check on user input' });
-    const b = fi({ category: 'security', title: 'Missing null check on input' });
+    const b = fi({ category: 'security', title: 'Missing null check on input', run_id: 'run2' });
     expect(groupFindings([a, b])).toHaveLength(1);
-    const c = fi({ category: 'security', title: 'Totally unrelated wording' });
+    const c = fi({ category: 'security', title: 'Totally unrelated wording', run_id: 'run2' });
     expect(groupFindings([a, c])).toHaveLength(2);
   });
 
   it('transitive A-B-C -> one group', () => {
     const a = fi({ start_line: 10, end_line: 10 });
-    const b = fi({ start_line: 13, end_line: 13 });
-    const c = fi({ start_line: 16, end_line: 16 }); // 6 from A, 3 from B
+    const b = fi({ start_line: 13, end_line: 13, run_id: 'run2' });
+    const c = fi({ start_line: 16, end_line: 16, run_id: 'run3' }); // 6 from A, 3 from B
     expect(groupFindings([a, c])).toHaveLength(2);
     const groups = groupFindings([a, b, c]);
     expect(groups).toHaveLength(1);
     expect(groups[0]!.members).toHaveLength(3);
+  });
+
+  it('same-agent adjacent findings stay separate but group with other agents', () => {
+    const a1 = fi({ start_line: 3, end_line: 3, title: 'Hardcoded database password', run_id: 'run1' });
+    const a2 = fi({ start_line: 4, end_line: 4, title: 'Hardcoded Stripe secret key', run_id: 'run1' });
+    const b1 = fi({ start_line: 3, end_line: 3, title: 'Hardcoded database password', agent_name: 'Beta', run_id: 'run2' });
+    const b2 = fi({ start_line: 4, end_line: 4, title: 'Hardcoded Stripe secret key', agent_name: 'Beta', run_id: 'run2' });
+    const input = [a1, a2, b1, b2];
+    const groups = groupFindings(input);
+    expect(groups).toHaveLength(2);
+    for (const g of groups) expect(new Set(g.members.map((m) => m.run_id)).size).toBe(g.members.length);
+    const expected = JSON.stringify(groups);
+    expect(JSON.stringify(groupFindings([...input].reverse()))).toBe(expected);
+    expect(JSON.stringify(groupFindings([b2, a1, b1, a2]))).toBe(expected);
+  });
+
+  it('two same-run findings never share a group even via a third agent', () => {
+    const a1 = fi({ start_line: 10, end_line: 10, run_id: 'run1' });
+    const a2 = fi({ start_line: 12, end_line: 12, run_id: 'run1' });
+    const b = fi({ start_line: 11, end_line: 11, agent_name: 'Beta', run_id: 'run2' });
+    const groups = groupFindings([a1, a2, b]);
+    expect(groups).toHaveLength(2);
+    expect(groups.some((g) => g.members.length === 2)).toBe(true);
   });
 
   it('shuffled input -> identical output', () => {
@@ -163,13 +186,12 @@ describe('applyTakes', () => {
     expect(conflictsOf(groups)).toEqual([]);
   });
 
-  it('same agent twice on same lines -> both members, take uses most severe', () => {
+  it('same agent twice on same lines -> separate groups (Revision 2), each with its own take', () => {
     const low = fi({ run_id: 'r1', agent_name: 'Alpha', severity: 'SUGGESTION', title: 'low' });
     const high = fi({ run_id: 'r1', agent_name: 'Alpha', severity: 'CRITICAL', title: 'high' });
-    const [g] = applyTakes(groupFindings([low, high]), [alpha, beta]);
-    expect(g!.members).toHaveLength(2);
-    const t = g!.takes.find((x) => x.run_id === 'r1')!;
-    expect(t.verdict).toBe('CRITICAL');
-    expect(t.note).toBe('high');
+    const groups = applyTakes(groupFindings([low, high]), [alpha, beta]);
+    expect(groups).toHaveLength(2);
+    const verdicts = groups.map((g) => g.takes.find((x) => x.run_id === 'r1')!.verdict).sort();
+    expect(verdicts).toEqual(['CRITICAL', 'SUGGESTION']);
   });
 });

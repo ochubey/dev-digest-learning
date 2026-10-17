@@ -8,8 +8,8 @@ import { EvalDialog } from "@/components/evals";
 import { ApiError } from "@/lib/api";
 import { useRepos } from "@/lib/hooks/core";
 import { useCiExport, useCiPreview } from "@/lib/hooks/ci";
-import { CI_CODE, CI_WORKFLOW_PATH, DEFAULT_POST_AS, DEFAULT_TRIGGERS, WIZARD_STEPS } from "../constants";
-import { downloadBase64Zip } from "../helpers";
+import { CI_CODE, DEFAULT_POST_AS, DEFAULT_TRIGGERS, WIZARD_STEPS } from "../constants";
+import { downloadBase64Zip, isWorkflowPath } from "../helpers";
 import { sameConfig, sortTriggers } from "./helpers";
 import { ConfigureStep } from "./_components/ConfigureStep";
 import { InstallStep, type InstallAction } from "./_components/InstallStep";
@@ -51,7 +51,7 @@ export function ExportCiWizard({ agent, initial, onClose, returnFocusRef }: Expo
   const [preview, setPreview] = React.useState<CiPreview | null>(null);
   const [previewRepo, setPreviewRepo] = React.useState("");
   const [previewCfg, setPreviewCfg] = React.useState<Config | null>(null);
-  const [selectedPath, setSelectedPath] = React.useState(CI_WORKFLOW_PATH);
+  const [selectedPath, setSelectedPath] = React.useState("");
   const [workflowEdit, setWorkflowEdit] = React.useState<string | null>(null);
   const [askRegenerate, setAskRegenerate] = React.useState(false);
   const [result, setResult] = React.useState<CiExport | null>(null);
@@ -103,6 +103,12 @@ export function ExportCiWizard({ agent, initial, onClose, returnFocusRef }: Expo
     previewMut.mutate(body(cfg), {
       onSuccess: (p) => {
         setPreview(p);
+        // Keep the open file when it is still there, otherwise select the agent's own (editable) workflow.
+        setSelectedPath((cur) =>
+          p.files.some((f) => f.path === cur)
+            ? cur
+            : (p.files.find((f) => f.editable && isWorkflowPath(f.path))?.path ?? p.files[0]?.path ?? ""),
+        );
         setPreviewRepo(repo);
         setPreviewCfg(cfg);
         setError(null);
@@ -118,7 +124,7 @@ export function ExportCiWizard({ agent, initial, onClose, returnFocusRef }: Expo
       return;
     }
     setWorkflowEdit(null);
-    setSelectedPath(CI_WORKFLOW_PATH);
+    setSelectedPath("");
     loadPreview({ triggers, postAs }, () => go(1));
   };
 
@@ -216,6 +222,8 @@ export function ExportCiWizard({ agent, initial, onClose, returnFocusRef }: Expo
             postAs={postAs}
             onPostAs={setPostAs}
             failOn={agent.ci_fail_on}
+            repoId={repos.data?.find((r) => r.full_name === repo)?.id ?? null}
+            repo={repo}
           />
         )}
         {step === 3 && (

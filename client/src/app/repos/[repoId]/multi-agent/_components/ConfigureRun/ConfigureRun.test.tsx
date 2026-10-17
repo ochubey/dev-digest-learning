@@ -200,4 +200,15 @@ describe("ConfigureRun", () => {
     setup("pr=482&agents=a2,a6");
     expect(boxes().map((c) => c.checked)).toEqual([false, true, false, false, false, true, false]);
   });
+
+  it("cards show the description, a coloured icon tile, and a coloured border + background only when selected", () => {
+    const withDesc = { ...agent("a1"), description: "Finds injection bugs" } as Agent;
+    setup("pr=482&agents=a1", { agents: [withDesc, agent("a2")] });
+    expect(screen.getByText("Finds injection bugs")).toBeInTheDocument();
+    expect(screen.getAllByTestId("agent-icon")).toHaveLength(2);
+    const [first, second] = boxes().map((b) => b.closest("label") as HTMLElement) as [HTMLElement, HTMLElement];
+    expect(first.style.background).not.toBe(second.style.background);
+    expect(first.style.border).not.toContain("var(--border)");
+    expect(second.style.border).toContain("var(--border)");
+  });
 });

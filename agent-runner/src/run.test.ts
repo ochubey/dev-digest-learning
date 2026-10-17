@@ -210,6 +210,22 @@ describe('runCi (T8 agent-runner orchestrator)', () => {
     expect(existsSync(resultPath)).toBe(false);
   });
 
+  it('DEVDIGEST_AGENT selects the manifest among several; unset with several fails', async () => {
+    writeFileSync(
+      path.join(dir, 'agents', 'other.yaml'),
+      VALID_MANIFEST_YAML.replace(/name: .*/, 'name: "Other Agent"'),
+    );
+    const picked = await runCi(
+      baseDeps({ env: { ...baseDeps().env, PR_NUMBER: '42', DEVDIGEST_AGENT: 'other' } }),
+    );
+    expect(picked.error).toBeUndefined();
+    expect(picked.artifact?.agent).toBe('Other Agent');
+
+    const ambiguous = await runCi(baseDeps());
+    expect(ambiguous.exitCode).toBe(1);
+    expect(ambiguous.error).toMatch(/DEVDIGEST_AGENT/);
+  });
+
   it('AC-21: the assembled prompt fences the diff and PR body as <untrusted> and carries the injection guard', async () => {
     const stub = makeStubLlm(GROUNDED_PLUS_HALLUCINATED_REVIEW);
     const result = await runCi(

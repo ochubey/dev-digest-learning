@@ -114,6 +114,23 @@ export function useCreatePrComment(prId: string | null | undefined) {
   });
 }
 
+export interface ReplyToFindingInput {
+  prId: string;
+  file: string;
+  line: number;
+  body: string;
+}
+
+/** Reply to a finding's author: posts `body` as a review comment on the finding's file/line. */
+export function useReplyToFinding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ prId, file, line, body }: ReplyToFindingInput) =>
+      api.post<PrReviewComment>(`/pulls/${prId}/comments`, { path: file, line, side: "RIGHT", body }),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["pr-comments", v.prId] }),
+  });
+}
+
 // ---- Run a review (all enabled agents or a specific agent) ----
 export interface RunReviewInput {
   prId: string;
