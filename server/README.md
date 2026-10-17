@@ -99,6 +99,7 @@ flowchart TB
 | `GITHUB_TOKEN` | — | optional; PAT with repo scope (`GITHUB_PAT` accepted as a fallback) |
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `PROJECT_DOCS_SOURCE` | `github` | project-context document source: `github` (default branch via Octokit) or `fixture` (deterministic docs from `src/db/fixtures/project-docs.ts`; used by the e2e stack). Discovery lists every `.md` file on the default branch (max 500) except dot-folders, `node_modules`, `vendor`, `dist`, `build`, `out`, `coverage` and `CHANGELOG.md` |
+| `REVIEW_RUN_TIMEOUT_MS` | `300000` | per-agent review-run deadline (positive integer, ms). A run with no result by then is marked `failed` with `Run timed out after <N>s (no response from the model)`; a late model response is ignored and never persisted. Other agents of the run are unaffected |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
