@@ -179,3 +179,11 @@ export const CuratorResult = z.object({
   dry_run: z.boolean(),
 });
 export type CuratorResult = z.infer<typeof CuratorResult>;
+
+// ---------------------------------------------------------------------------
+// Latest multi-agent run of a repo
+// ---------------------------------------------------------------------------
+
+/** `GET /multi-agent-runs/latest?repoId=` — newest multi-agent run id, or null. */
+export const LatestMultiAgentRun = z.object({ id: z.string().nullable() });
+export type LatestMultiAgentRun = z.infer<typeof LatestMultiAgentRun>;

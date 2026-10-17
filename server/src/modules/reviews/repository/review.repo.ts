@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { Finding } from '@devdigest/shared';
@@ -144,4 +144,42 @@ export async function setFindingDismissed(
     .where(eq(t.findings.id, findingId))
     .returning();
   return row;
+}
+
+/** Id of the memory row learned from this finding (sources contain its finding_id), if any. */
+export async function findLearnedMemoryId(
+  db: Db,
+  workspaceId: string,
+  findingId: string,
+): Promise<string | undefined> {
+  const [row] = await db
+    .select({ id: t.memory.id })
+    .from(t.memory)
+    .where(
+      and(
+        eq(t.memory.workspaceId, workspaceId),
+        eq(t.memory.kind, 'learning'),
+        sql`${t.memory.sources} @> ${JSON.stringify([{ finding_id: findingId }])}::jsonb`,
+      ),
+    )
+    .limit(1);
+  return row?.id;
+}
+
+/** Insert a repo-scoped learning (no embedding); returns the new id. */
+export async function insertLearnedMemory(
+  db: Db,
+  values: {
+    workspaceId: string;
+    repoId: string;
+    content: string;
+    confidence: number;
+    sources: { finding_id: string; review_id: string; pr_id: string }[];
+  },
+): Promise<string> {
+  const [row] = await db
+    .insert(t.memory)
+    .values({ ...values, scope: 'repo', kind: 'learning' })
+    .returning({ id: t.memory.id });
+  return row!.id;
 }

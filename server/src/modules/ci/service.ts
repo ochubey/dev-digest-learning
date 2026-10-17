@@ -6,6 +6,7 @@ import {
   type CiFile,
   type CiPreview,
   type CiRunsList,
+  type CiSecretStatus,
   type CiSyncResult,
   type CiTrigger,
   type GitHubClient,
@@ -118,6 +119,15 @@ export class CiService {
       repo.countInstallations(workspaceId),
     ]);
     return { runs: runs.map(toCiRun), installations_count: count };
+  }
+
+  /** Whether the runner's OpenRouter secret exists on the repo (value never read). */
+  async secretStatus(workspaceId: string, repoId: string): Promise<CiSecretStatus> {
+    const repoRow = await this.deps.repo.findRepoById(workspaceId, repoId);
+    if (!repoRow) throw new NotFoundError('Repository not found');
+    const actions = await this.deps.actions();
+    const state = await actions.secretExists(repoRow.fullName, 'OPENROUTER_API_KEY').catch(() => 'unknown' as const);
+    return { OPENROUTER_API_KEY: state };
   }
 
   async sync(workspaceId: string): Promise<CiSyncResult> {

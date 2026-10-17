@@ -29,6 +29,15 @@ export class OctokitActionsSource implements CiActionsSource {
     return res.data.id;
   }
 
+  async secretExists(repo: string, name: string): Promise<'set' | 'not_set' | 'unknown'> {
+    try {
+      await withTimeout(this.octokit.rest.actions.getRepoSecret({ ...split(repo), secret_name: name }), TIMEOUT);
+      return 'set';
+    } catch (err) {
+      return (err as { status?: number }).status === 404 ? 'not_set' : 'unknown';
+    }
+  }
+
   async listCompletedRuns(repo: string, workflowFile: string, limit: number): Promise<ActionsRun[]> {
     let res;
     try {

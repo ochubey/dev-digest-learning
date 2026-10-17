@@ -61,6 +61,18 @@ export class MultiAgentRepository {
     }));
   }
 
+  /** Newest multi-agent run (by ran_at) whose pull request belongs to the repo. */
+  async latestForRepo(workspaceId: string, repoId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: t.multiAgentRuns.id })
+      .from(t.multiAgentRuns)
+      .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.multiAgentRuns.prId))
+      .where(and(eq(t.multiAgentRuns.workspaceId, workspaceId), eq(t.pullRequests.repoId, repoId)))
+      .orderBy(desc(t.multiAgentRuns.ranAt))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
   async pullNumber(prId: string): Promise<number | null> {
     const [row] = await this.db
       .select({ number: t.pullRequests.number })

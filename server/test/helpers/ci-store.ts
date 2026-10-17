@@ -90,6 +90,9 @@ export class FakeCiRepo {
   async findAgent() {
     return this.agent;
   }
+  async findRepoById(_ws: string, id: string) {
+    return this.repo && this.repo.id === id && this.repo.workspaceId === _ws ? this.repo : undefined;
+  }
   async findRepoByFullName(_ws: string, fullName: string) {
     return this.repo && this.repo.fullName === fullName ? this.repo : undefined;
   }

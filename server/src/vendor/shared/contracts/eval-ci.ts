@@ -369,6 +369,13 @@ export const CiResultArtifact = z.object({
   blockers: z.number().int().nullish(),
 });
 export type CiResultArtifact = z.infer<typeof CiResultArtifact>;
+/** Whether the OpenRouter secret exists in the repo's Actions secrets (the value is never read). */
+export const CiSecretState = z.enum(['set', 'not_set', 'unknown']);
+export type CiSecretState = z.infer<typeof CiSecretState>;
+
+export const CiSecretStatus = z.object({ OPENROUTER_API_KEY: CiSecretState });
+export type CiSecretStatus = z.infer<typeof CiSecretStatus>;
+
 // ==== SPEC-05 export to CI: end ====
 
 // ===========================================================================

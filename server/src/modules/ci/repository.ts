@@ -37,6 +37,14 @@ export class CiRepository {
     return row;
   }
 
+  async findRepoById(workspaceId: string, id: string): Promise<RepoRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(t.repos)
+      .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, id)));
+    return row;
+  }
+
   /** Enabled linked skills; ties on `order` broken by skill id so the order is deterministic. */
   async enabledLinkedSkills(agentId: string): Promise<SkillRow[]> {
     const rows = await this.db
