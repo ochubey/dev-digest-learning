@@ -41,6 +41,9 @@ export function DisagreementsBlock({ groups, columns }: DisagreementsBlockProps)
               <div style={s.rowHead}>
                 <span className="mono" style={s.loc}>{g.file}:{g.start_line}</span>
                 <span style={s.rowTitle}>{g.title}</span>
+                <span style={s.badge(g.is_conflict)}>
+                  {g.is_conflict ? t("disagreements.conflict") : t("disagreements.allAgree")}
+                </span>
               </div>
               <div style={s.takes(g.takes.length)}>
                 {g.takes.map((take) => {

@@ -63,10 +63,21 @@ export function groupFindings(findings: AttributedFinding[]): FindingGroup[] {
     }
     return i;
   };
+  // Run ids per component root: two findings of one run are different issues,
+  // so a union never joins components that share a run.
+  const runs = sorted.map((f) => new Set([f.run_id]));
   for (let i = 0; i < sorted.length; i++) {
     for (let j = i + 1; j < sorted.length; j++) {
       if (sorted[i]!.file !== sorted[j]!.file) break; // sorted by file first
-      if (linked(sorted[i]!, sorted[j]!)) parent[find(j)] = find(i);
+      if (!linked(sorted[i]!, sorted[j]!)) continue;
+      const ri = find(i);
+      const rj = find(j);
+      if (ri === rj) continue;
+      const a = runs[ri]!;
+      const b = runs[rj]!;
+      if ([...b].some((r) => a.has(r))) continue;
+      parent[rj] = ri;
+      for (const r of b) a.add(r);
     }
   }
 

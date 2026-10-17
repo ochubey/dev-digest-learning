@@ -44,6 +44,8 @@
   "disagreements": {
     "title": "Where agents disagree",
     "onlyConflicts": "Show only conflicts",
+    "allAgree": "All agree",
+    "conflict": "Conflict",
     "didNotFlag": "did not flag",
     "noConflicts": "No disagreements: all finished agents agree.",
     "needTwo": "Disagreements appear when at least two agents have finished."
