@@ -10,6 +10,7 @@ import type {
   CiExportInputBody,
   CiPreview,
   CiRunsList,
+  CiSecretStatus,
   CiSyncResult,
 } from "@devdigest/shared";
 import { api } from "../api";
@@ -18,6 +19,7 @@ export const ciKeys = {
   all: ["ci"] as const,
   agent: (agentId: string | null | undefined) => ["ci", "agent", agentId] as const,
   runs: ["ci", "runs"] as const,
+  secretStatus: (repoId: string | null | undefined) => ["ci", "secret-status", repoId] as const,
 };
 
 /** `GET /agents/:id/ci` — installations plus the agent's 20 latest CI runs. */
@@ -34,6 +36,17 @@ export function useCiRuns() {
   return useQuery({
     queryKey: ciKeys.runs,
     queryFn: () => api.get<CiRunsList>("/ci/runs"),
+  });
+}
+
+/** `GET /ci/secret-status?repoId=` — whether the repo has the OPENROUTER_API_KEY Actions secret.
+    State only, never a value. Enabled once a repo is chosen. */
+export function useCiSecretStatus(repoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ciKeys.secretStatus(repoId),
+    queryFn: () => api.get<CiSecretStatus>(`/ci/secret-status?repoId=${encodeURIComponent(repoId ?? "")}`),
+    enabled: !!repoId,
+    retry: false,
   });
 }
 

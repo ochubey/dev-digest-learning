@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
-import type { AgentRunEstimate, MultiAgentRun, ReviewRunResponse } from "@devdigest/shared";
+import type { AgentRunEstimate, LatestMultiAgentRun, MultiAgentRun, ReviewRunResponse } from "@devdigest/shared";
 
 /** Per-agent duration/cost estimates from past runs (GET /multi-agent/estimates). */
 export function useMultiAgentEstimates() {
@@ -25,6 +25,7 @@ export function useLaunchMultiAgent() {
       qc.invalidateQueries({ queryKey: ["reviews", prId] });
       qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
       qc.invalidateQueries({ queryKey: ["pr-active-runs", prId] });
+      qc.invalidateQueries({ queryKey: ["multi-agent-run-latest"] });
     },
   });
 }
@@ -39,5 +40,15 @@ export function useMultiAgentRun(id: string | null | undefined) {
       query.state.data?.columns.some((c) => c.status === "running") ? 4000 : false,
     // 404 = unknown run: a normal empty state, not worth retrying.
     retry: (failureCount, err) => !(err instanceof ApiError && err.status === 404) && failureCount < 1,
+  });
+}
+
+/** The newest multi-agent run of a repo (`id: null` = none yet). */
+export function useLatestMultiAgentRun(repoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["multi-agent-run-latest", repoId],
+    queryFn: () => api.get<LatestMultiAgentRun>(`/multi-agent-runs/latest?repoId=${encodeURIComponent(repoId!)}`),
+    enabled: !!repoId,
+    retry: false,
   });
 }

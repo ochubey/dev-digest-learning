@@ -216,6 +216,8 @@ export function ExportCiWizard({ agent, initial, onClose, returnFocusRef }: Expo
             postAs={postAs}
             onPostAs={setPostAs}
             failOn={agent.ci_fail_on}
+            repoId={repos.data?.find((r) => r.full_name === repo)?.id ?? null}
+            repo={repo}
           />
         )}
         {step === 3 && (

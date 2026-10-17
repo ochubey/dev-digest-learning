@@ -18,11 +18,18 @@ import {
   type Category,
 } from "@devdigest/ui";
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
+import { notify } from "@/lib/toast";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
 import { EvalCaseDialog } from "../EvalCaseDialog";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
+
+/** Per-call outcome callbacks the card passes to the owner's mutation (used by Learn). */
+export interface FindingActionCallbacks {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+}
 
 export function FindingCard({
   f,
@@ -39,7 +46,7 @@ export function FindingCard({
   /** Force the muted look (revealed out-of-scope findings). */
   muted?: boolean;
   defaultExpanded?: boolean;
-  onAction?: (action: FindingActionKind, reply?: string) => void;
+  onAction?: (action: FindingActionKind, reply?: string, opts?: FindingActionCallbacks) => void;
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
@@ -47,6 +54,8 @@ export function FindingCard({
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
   const [evalOpen, setEvalOpen] = React.useState(false);
+  // The server has no "learned" marker, so the confirmed state lives here for the card's lifetime.
+  const [learned, setLearned] = React.useState(false);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
   const fileHref =
     repoFullName && headSha
@@ -59,6 +68,15 @@ export function FindingCard({
   const muted = accepted || dismissed || !!mutedProp;
   const isSignal = f.scope === "signal";
   const isOut = f.scope === "out";
+
+  const learn = () =>
+    onAction?.("learn", undefined, {
+      onSuccess: () => {
+        setLearned(true);
+        notify.success(t("finding.learnSuccess"));
+      },
+      onError: (e) => notify.error(t("finding.learnError", { message: e.message })),
+    });
 
   return (
     <div data-finding-id={f.id} data-scope={f.scope ?? undefined} style={s.card(!!focused, sevColor, muted)}>
@@ -125,6 +143,17 @@ export function FindingCard({
               onClick={() => onAction?.("dismiss")}
             >
               {t("finding.dismiss")}
+            </Button>
+            <Button
+              kind="ghost"
+              size="sm"
+              icon="Brain"
+              disabled={pending || learned}
+              active={learned}
+              title={learned ? t("finding.learnedTitle") : t("finding.learnTitle")}
+              onClick={learn}
+            >
+              {learned ? t("finding.learned") : t("finding.learn")}
             </Button>
             {/* Capture as an eval case (SPEC-03): only once the finding is accepted or dismissed. */}
             <Button

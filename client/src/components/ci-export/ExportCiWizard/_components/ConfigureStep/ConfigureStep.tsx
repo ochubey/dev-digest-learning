@@ -6,6 +6,7 @@ import { Icon } from "@devdigest/ui";
 import type { CiFailOn, CiPostAs, CiTrigger } from "@devdigest/shared";
 import { CI_TRIGGERS, POST_AS_VALUES } from "../../../constants";
 import { s } from "../../styles";
+import { SecretsExpected } from "./SecretsExpected";
 
 export interface ConfigureStepProps {
   triggers: CiTrigger[];
@@ -14,10 +15,13 @@ export interface ConfigureStepProps {
   onPostAs: (next: CiPostAs) => void;
   /** The agent's current CI gate policy (read-only here; edited in the CI tab). */
   failOn: CiFailOn;
+  /** Selected repository (id for the secret-status lookup, owner/name for the settings link). */
+  repoId: string | null;
+  repo: string;
 }
 
 /** Step 3: triggers, how results are posted, and the Fail CI on reminder (AC-31..AC-34). */
-export function ConfigureStep({ triggers, onTriggers, postAs, onPostAs, failOn }: ConfigureStepProps) {
+export function ConfigureStep({ triggers, onTriggers, postAs, onPostAs, failOn, repoId, repo }: ConfigureStepProps) {
   const t = useTranslations("ciExport.configure");
   const tTab = useTranslations("ciExport.tab");
   const toggle = (tr: CiTrigger) =>
@@ -38,6 +42,8 @@ export function ConfigureStep({ triggers, onTriggers, postAs, onPostAs, failOn }
           </p>
         )}
       </fieldset>
+
+      <SecretsExpected repoId={repoId} repo={repo} />
 
       <fieldset style={s.group}>
         <legend style={s.legend}>{t("postAs")}</legend>

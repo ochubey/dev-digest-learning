@@ -49,6 +49,18 @@
       "none": "None (exit code only)"
     },
     "failOn": "Fail CI on",
+    "secrets": {
+      "title": "Secrets expected",
+      "openrouterDesc": "Your OpenRouter key",
+      "githubDesc": "Auto-provided by Actions",
+      "footer": "Add these to your repo's Actions secrets before the workflow runs.",
+      "ready": "ready",
+      "set": "set",
+      "notSet": "not set",
+      "unknown": "could not check",
+      "checking": "checking…",
+      "addLink": "Add it in Actions secrets"
+    },
     "blockNote": "To block merges, make the `devdigest-review` check required in the repository's branch protection or ruleset. DevDigest cannot do this for you."
   },
   "install": {
