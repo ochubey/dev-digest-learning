@@ -31,8 +31,19 @@ export const s = {
     cursor: "pointer",
   }),
   itemIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
-  itemLabel: { flex: 1, minWidth: 0 } satisfies CSSProperties,
-  itemHint: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+  // Name on one line (ellipsis), the optional model/hint underneath, so a long model id never
+  // collides with the name.
+  itemLabel: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 } satisfies CSSProperties,
+  itemName: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
+  itemSub: {
+    fontSize: 12,
+    fontWeight: 400,
+    color: "var(--text-muted)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  itemHint: { fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap", flexShrink: 0 } satisfies CSSProperties,
   pickHead: {
     display: "flex",
     alignItems: "center",

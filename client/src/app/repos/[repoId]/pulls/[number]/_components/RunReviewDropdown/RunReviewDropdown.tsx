@@ -166,8 +166,10 @@ export function RunReviewDropdown({
                 }}
               >
                 {I && <I size={14} style={s.itemIcon} />}
-                <span style={s.itemLabel}>{it.label}</span>
-                {it.hint && <span style={s.itemHint}>{it.hint}</span>}
+                <span style={s.itemLabel}>
+                  <span style={s.itemName}>{it.label}</span>
+                  {it.hint && <span style={s.itemSub}>{it.hint}</span>}
+                </span>
               </button>
             );
           })}
@@ -194,7 +196,9 @@ export function RunReviewDropdown({
                       onChange={(e) => toggle(a.id, e.target.checked)}
                     />
                     <Icon.Cpu size={14} style={s.itemIcon} />
-                    <span style={s.itemLabel}>{a.name}</span>
+                    <span style={s.itemLabel}>
+                      <span style={s.itemName}>{a.name}</span>
+                    </span>
                     {est && <span style={s.itemHint}>{est}</span>}
                   </label>
                 );
