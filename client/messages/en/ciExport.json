@@ -61,7 +61,7 @@
       "checking": "checking…",
       "addLink": "Add it in Actions secrets"
     },
-    "blockNote": "To block merges, make the `devdigest-review` check required in the repository's branch protection or ruleset. DevDigest cannot do this for you."
+    "blockNote": "To block merges, make the DevDigest check required in the repository's branch protection or ruleset. DevDigest cannot do this for you."
   },
   "install": {
     "heading": "How do you want to install it?",

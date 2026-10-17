@@ -8,6 +8,7 @@ import {
   formatTime,
   knownTriggers,
   knownRunStatus,
+  isWorkflowPath,
 } from "./helpers";
 
 describe("safeGithubUrl", () => {
@@ -57,5 +58,15 @@ describe("knownRunStatus", () => {
     expect(knownRunStatus("no_findings")).toBe("no_findings");
     expect(knownRunStatus("weird")).toBeUndefined();
     expect(knownRunStatus(null)).toBeUndefined();
+  });
+});
+
+describe("isWorkflowPath", () => {
+  it("accepts the legacy and per-agent DevDigest workflow files only", () => {
+    expect(isWorkflowPath(".github/workflows/devdigest-review.yml")).toBe(true);
+    expect(isWorkflowPath(".github/workflows/devdigest-review-secret-gate.yml")).toBe(true);
+    expect(isWorkflowPath(".github/workflows/ci.yml")).toBe(false);
+    expect(isWorkflowPath(".github/workflows/devdigest-review-x/../y.yml")).toBe(false);
+    expect(isWorkflowPath(".devdigest/agents/a.yaml")).toBe(false);
   });
 });

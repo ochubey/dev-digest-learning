@@ -32,7 +32,7 @@ const METHODS = [
   'findRepoByFullName',
   'enabledLinkedSkills',
   'repoMemory',
-  'installationByRepo',
+  'installationsByRepo',
   'upsertInstallation',
   'installationsForAgent',
   'installationsForSync',
@@ -96,17 +96,12 @@ describe('ci routes', () => {
     expect(github.committed).toHaveLength(0);
   });
 
-  it('preview 409 ci_repo_taken body shape', async () => {
+  it('preview next to another agent on the same repo -> 200 (many agents per repo)', async () => {
     const app = await setup();
-    store.installation = { ...installationRow({ agentId: '99999999-9999-4999-8999-999999999999' }), agentName: 'Other' };
+    store.installation = { ...installationRow({ agentId: '99999999-9999-4999-8999-999999999999', workflowFile: 'devdigest-review-other.yml' }), agentName: 'Other' };
     const res = await app.inject({ method: 'POST', url: `/agents/${AGENT_ID}/export-ci/preview`, payload: body() });
-    expect(res.statusCode).toBe(409);
-    expect(res.json()).toEqual({
-      error: {
-        code: 'ci_repo_taken',
-        message: 'acme/widgets already runs agent Other in CI; one agent per repository is supported',
-      },
-    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().files.map((f: { path: string }) => f.path)).toContain('.github/workflows/devdigest-review-secret-gate.yml');
   });
 
   it('export open_pr -> 200 with pr_url and a recorded commit', async () => {

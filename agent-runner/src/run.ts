@@ -95,7 +95,11 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
 
   try {
     // 1. Load + validate the manifest BEFORE it is used for anything (AC-20).
-    const manifest = loadManifest(deps.devdigestDir, { readFile, readDir });
+    const manifest = loadManifest(deps.devdigestDir, {
+      readFile,
+      readDir,
+      agent: deps.env.DEVDIGEST_AGENT,
+    });
     const skills = loadSkillBodies(deps.devdigestDir, manifest.skills, readFile);
 
     // 2. Resolve CI context (PR number/title/body/repo) from env + event payload.

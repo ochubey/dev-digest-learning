@@ -63,35 +63,33 @@ export class CiRepository {
       .where(and(eq(t.memory.workspaceId, workspaceId), eq(t.memory.repoId, repoId)));
   }
 
-  async installationByRepo(
+  /** Every installation on a repository (one per agent), oldest first. */
+  async installationsByRepo(
     workspaceId: string,
     fullName: string,
-  ): Promise<(InstallationRow & { agentName: string }) | undefined> {
-    const [row] = await this.db
+  ): Promise<(InstallationRow & { agentName: string })[]> {
+    const rows = await this.db
       .select({ inst: t.ciInstallations, agentName: t.agents.name })
       .from(t.ciInstallations)
       .innerJoin(t.agents, eq(t.ciInstallations.agentId, t.agents.id))
-      .where(and(eq(t.ciInstallations.repo, fullName), eq(t.agents.workspaceId, workspaceId)));
-    return row ? { ...row.inst, agentName: row.agentName } : undefined;
+      .where(and(eq(t.ciInstallations.repo, fullName), eq(t.agents.workspaceId, workspaceId)))
+      .orderBy(asc(t.ciInstallations.installedAt), asc(t.ciInstallations.id));
+    return rows.map((r) => ({ ...r.inst, agentName: r.agentName }));
   }
 
-  /**
-   * One installation per repository: insert, or update when the same agent owns it.
-   * `null` means another agent owns the repository.
-   */
-  async upsertInstallation(values: InstallationValues): Promise<InstallationRow | null> {
+  /** One installation per (repository, agent): insert, or update the agent's existing one. */
+  async upsertInstallation(values: InstallationValues): Promise<InstallationRow> {
     // An existing GitHub repository id is never overwritten by null.
     const { githubRepoId, ...rest } = values;
     const [row] = await this.db
       .insert(t.ciInstallations)
       .values(values)
       .onConflictDoUpdate({
-        target: t.ciInstallations.repo,
+        target: [t.ciInstallations.repo, t.ciInstallations.agentId],
         set: { ...rest, ...(githubRepoId != null ? { githubRepoId } : {}), updatedAt: new Date() },
-        setWhere: eq(t.ciInstallations.agentId, values.agentId),
       })
       .returning();
-    return row ?? null;
+    return row!;
   }
 
   async installationsForAgent(workspaceId: string, agentId: string): Promise<InstallationRow[]> {

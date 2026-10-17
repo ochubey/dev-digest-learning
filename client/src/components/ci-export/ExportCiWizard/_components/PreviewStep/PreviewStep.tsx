@@ -27,7 +27,8 @@ export interface PreviewStepProps {
 export function PreviewStep(p: PreviewStepProps) {
   const t = useTranslations("ciExport.preview");
   const file = p.files.find((f) => f.path === p.selectedPath) ?? p.files[0];
-  const editable = !!file && isWorkflowPath(file.path);
+  // Only the agent's own workflow is editable; a legacy workflow regenerated for another agent is read-only.
+  const editable = !!file && file.editable && isWorkflowPath(file.path);
   const isRunner = !!file && file.size_bytes != null && file.contents === "";
 
   return (

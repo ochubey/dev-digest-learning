@@ -84,10 +84,11 @@ d('export to CI (DB)', () => {
       triggers: ['opened'],
       prUrl: out.pr_url,
     });
-    expect(row!.files).toContain('.github/workflows/devdigest-review.yml');
+    expect(row!.files).toContain('.github/workflows/devdigest-review-secret-gate.yml');
+    expect(row!.workflowFile).toBe('devdigest-review-secret-gate.yml');
     expect(github.committed[0]!.base).toBe('develop');
 
-    // re-export: same row (one per repository), PR reused
+    // re-export: same row (one per repository and agent), PR reused
     await service(github).export(ws, agentId, input({ triggers: ['opened', 'reopened'] }));
     const rows = await installations();
     expect(rows).toHaveLength(1);
@@ -101,10 +102,46 @@ d('export to CI (DB)', () => {
     expect(zipRow!.githubRepoId).toBe(999);
   });
 
-  it('AC-8 another agent cannot take the repository (409 ci_repo_taken), no row change', async () => {
-    const e = await service().export(ws, otherAgentId, input()).catch((x) => x);
-    expect(e.code).toBe('ci_repo_taken');
-    expect((await installations()).filter((r) => r.agentId === otherAgentId)).toHaveLength(0);
+  it('AC-8 (revision 2) many agents per repo: a second agent gets its own row, workflow and manifest', async () => {
+    const github = new MockGitHubClient();
+    await service(github).export(ws, otherAgentId, input());
+    const rows = await installations();
+    expect(rows.filter((r) => r.repo === 'acme/widgets').map((r) => r.agentId).sort()).toEqual([agentId, otherAgentId].sort());
+    const other = rows.find((r) => r.agentId === otherAgentId)!;
+    expect(other.workflowFile).toBe('devdigest-review-other-bot.yml');
+    expect(other.files).toContain('.devdigest/agents/other-bot.yaml');
+    // re-export updates the same row, no second one
+    await service(github).export(ws, otherAgentId, input({ triggers: ['reopened'] }));
+    const again = (await installations()).filter((r) => r.agentId === otherAgentId);
+    expect(again).toHaveLength(1);
+    expect(again[0]!.triggers).toEqual(['reopened']);
+  });
+
+  it('unique (repo, agent_id): a duplicate row for the same repo and agent is rejected', async () => {
+    await expect(
+      db.insert(t.ciInstallations).values({ agentId: otherAgentId, repo: 'acme/widgets', targetType: 'gha' }),
+    ).rejects.toThrow();
+  });
+
+  it('a LEGACY installation (workflow_file null) of another agent is regenerated in the same commit; re-export keeps the legacy path', async () => {
+    await db.update(t.ciInstallations).set({ workflowFile: null }).where(eq(t.ciInstallations.agentId, agentId));
+    await db.delete(t.ciInstallations).where(eq(t.ciInstallations.agentId, otherAgentId));
+    const github = new MockGitHubClient();
+    await service(github).export(ws, otherAgentId, input());
+    const paths = github.committed[0]!.files.map((f) => f.path);
+    expect(paths).toEqual(expect.arrayContaining(['.github/workflows/devdigest-review.yml', '.github/workflows/devdigest-review-other-bot.yml']));
+    expect(github.committed[0]!.files.find((f) => f.path === '.github/workflows/devdigest-review.yml')!.contents).toContain('DEVDIGEST_AGENT: secret-gate');
+
+    // the legacy agent re-exports: still the legacy path, still a null workflow_file
+    const g2 = new MockGitHubClient();
+    await service(g2).export(ws, agentId, input());
+    expect(g2.committed[0]!.files.map((f) => f.path)).toContain('.github/workflows/devdigest-review.yml');
+    const legacy = (await installations()).find((r) => r.agentId === agentId)!;
+    expect(legacy.workflowFile).toBeNull();
+
+    // restore the shared fixture for the sync tests: one per-agent installation
+    await db.delete(t.ciInstallations).where(eq(t.ciInstallations.agentId, otherAgentId));
+    await db.update(t.ciInstallations).set({ workflowFile: 'devdigest-review-secret-gate.yml' }).where(eq(t.ciInstallations.agentId, agentId));
   });
 
   describe('sync and ingest', () => {

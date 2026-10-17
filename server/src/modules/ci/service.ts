@@ -1,5 +1,6 @@
 import {
   CI_TRIGGERS,
+  CiPostAs,
   type CiAgentView,
   type CiExport,
   type CiExportInput,
@@ -12,15 +13,19 @@ import {
   type GitHubClient,
 } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
+import { generateWorkflow } from './workflow.js';
 import { buildBundle, readRunner, toPreviewFiles } from './bundle.js';
 import {
   AGENT_CI_RUNS,
   CI_BRANCH,
   CI_RUNNER_VERSION,
   CI_RUNS_PAGE,
-  CI_WORKFLOW_PATH,
   CI_WORKFLOW_VERSION,
   COMMIT_MESSAGE,
+  WORKFLOW_FILE,
+  agentWorkflowFile,
+  jobIdFor,
+  workflowPath,
 } from './constants.js';
 import { mapWriteError } from './github-errors.js';
 import { exportLine } from './log-lines.js';
@@ -49,6 +54,12 @@ interface Prepared {
   slug: string;
   triggers: CiTrigger[];
   files: CiFile[];
+  /** The agent's workflow file name (under .github/workflows/). */
+  workflowFile: string;
+  /** What `ci_installations.workflow_file` gets: null keeps an installation legacy. */
+  storedWorkflowFile: string | null;
+  /** Legacy workflows of OTHER agents regenerated in the same commit (they need DEVDIGEST_AGENT). */
+  legacyUpdates: { file: CiFile; agentName: string }[];
 }
 
 function validateTriggers(input: string[]): CiTrigger[] {
@@ -74,7 +85,7 @@ export class CiService {
   async preview(workspaceId: string, agentId: string, input: CiExportInput): Promise<CiPreview> {
     const p = await this.prepare(workspaceId, agentId, input);
     return {
-      files: toPreviewFiles(p.files),
+      files: toPreviewFiles([...p.files, ...p.legacyUpdates.map((u) => u.file)]),
       slug: p.slug,
       workflow_version: CI_WORKFLOW_VERSION,
       runner_version: CI_RUNNER_VERSION,
@@ -154,14 +165,8 @@ export class CiService {
     const triggers = validateTriggers(input.triggers);
     const slug = toSlug(agent.name, 'agent');
 
-    const existing = await repo.installationByRepo(workspaceId, repoRow.fullName);
-    if (existing && existing.agentId !== agent.id) {
-      throw new AppError(
-        'ci_repo_taken',
-        `${repoRow.fullName} already runs agent ${existing.agentName} in CI; one agent per repository is supported`,
-        409,
-      );
-    }
+    const onRepo = await repo.installationsByRepo(workspaceId, repoRow.fullName);
+    const existing = onRepo.find((i) => i.agentId === agent.id);
     if (existing?.slug && existing.slug !== slug) {
       throw new AppError(
         'ci_slug_changed',
@@ -169,6 +174,8 @@ export class CiService {
         409,
       );
     }
+    // A re-export keeps the installation's own file (legacy ones keep the legacy path).
+    const workflowFile = existing ? (existing.workflowFile ?? WORKFLOW_FILE) : agentWorkflowFile(slug);
 
     const [skills, memory] = await Promise.all([
       repo.enabledLinkedSkills(agent.id),
@@ -184,6 +191,7 @@ export class CiService {
       runner,
       triggers,
       postAs: input.post_as,
+      workflowFile,
     });
 
     if (input.workflow != null) {
@@ -192,22 +200,39 @@ export class CiService {
         throw new AppError('ci_workflow_unsafe', check.message, 400, { rule: check.rule });
       }
       // AC-30: the user's exact text replaces the generated workflow.
-      const wf = files.find((f) => f.path === CI_WORKFLOW_PATH);
+      const wf = files.find((f) => f.path === workflowPath(workflowFile));
       if (wf) wf.contents = input.workflow;
     }
-    return { agent, repoRow, slug, triggers, files };
+
+    // Another agent's LEGACY workflow has no DEVDIGEST_AGENT: with a second manifest in the repo it
+    // would fail, so the same commit regenerates it (from its stored slug, triggers and post mode).
+    const legacyUpdates = onRepo
+      .filter((i) => i.agentId !== agent.id && i.workflowFile == null)
+      .map((i) => {
+        const otherTriggers = CI_TRIGGERS.filter((t) => (i.triggers ?? []).includes(t));
+        const postAs = CiPostAs.safeParse(i.postAs);
+        const contents = generateWorkflow({
+          triggers: otherTriggers.length ? otherTriggers : triggers,
+          postAs: postAs.success ? postAs.data : 'github_review',
+          slug: i.slug ?? toSlug(i.agentName, 'agent'),
+          file: WORKFLOW_FILE,
+        });
+        return { file: { path: workflowPath(WORKFLOW_FILE), contents, editable: false }, agentName: i.agentName };
+      });
+    return { agent, repoRow, slug, triggers, files, workflowFile, storedWorkflowFile: existing ? existing.workflowFile : workflowFile, legacyUpdates };
   }
 
   private async doExport(workspaceId: string, agentId: string, input: CiExportInput): Promise<CiExport> {
     const p = await this.prepare(workspaceId, agentId, input);
     const { agent, repoRow, files } = p;
+    const all = [...files, ...p.legacyUpdates.map((u) => u.file)];
 
     if (input.action === 'files') {
-      const zip = buildZip(files);
+      const zip = buildZip(all);
       const installation = await this.saveInstallation(p, input, null, null);
       return {
         installation: toCiInstallation(installation),
-        files: toPreviewFiles(files),
+        files: toPreviewFiles(all),
         pr_url: null,
         zip_base64: zip.toString('base64'),
         zip_filename: `devdigest-ci-${repoRow.name}.zip`,
@@ -222,7 +247,7 @@ export class CiService {
         branch: CI_BRANCH,
         base: repoRow.defaultBranch,
         message: COMMIT_MESSAGE,
-        files: files.map((f) => ({ path: f.path, contents: f.contents })),
+        files: all.map((f) => ({ path: f.path, contents: f.contents })),
       });
       const open = await github.findOpenPr(ref, CI_BRANCH);
       prUrl =
@@ -232,7 +257,11 @@ export class CiService {
             head: CI_BRANCH,
             base: repoRow.defaultBranch,
             title: buildPrTitle(agent.name),
-            body: buildPrBody(files),
+            body: buildPrBody(files, {
+              agentName: agent.name,
+              checkName: jobIdFor(p.workflowFile),
+              updated: p.legacyUpdates.map((u) => ({ path: u.file.path, agentName: u.agentName })),
+            }),
           })
         ).url;
     } catch (err) {
@@ -244,7 +273,7 @@ export class CiService {
       .then((a) => a.getRepoId(repoRow.fullName))
       .catch(() => null);
     const installation = await this.saveInstallation(p, input, prUrl, githubRepoId);
-    return { installation: toCiInstallation(installation), files: toPreviewFiles(files), pr_url: prUrl };
+    return { installation: toCiInstallation(installation), files: toPreviewFiles(all), pr_url: prUrl };
   }
 
   private async saveInstallation(
@@ -267,11 +296,8 @@ export class CiService {
       triggers: p.triggers,
       files: p.files.map((f) => f.path),
       prUrl,
+      workflowFile: p.storedWorkflowFile,
     });
-    if (!row) {
-      // Lost a race with another agent's export of the same repository.
-      throw new AppError('ci_repo_taken', `${p.repoRow.fullName} already runs another agent in CI; one agent per repository is supported`, 409);
-    }
     return row;
   }
 }

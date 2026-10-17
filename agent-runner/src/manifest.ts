@@ -19,9 +19,16 @@ export type { AgentManifest } from '@devdigest/shared';
 export interface FsDeps {
   readFile?: typeof readFileSync;
   readDir?: typeof readdirSync;
+  /** Agent slug (`DEVDIGEST_AGENT`) selecting `agents/<slug>.yaml`; unset = the single manifest. */
+  agent?: string;
 }
 
-/** Find the single agent manifest file under `<devdigestDir>/agents/`. */
+const AGENT_SLUG = /^[a-z0-9-]+$/;
+
+/**
+ * Find the agent manifest under `<devdigestDir>/agents/`: the one named by
+ * `deps.agent` (`DEVDIGEST_AGENT`) when set, otherwise the single manifest.
+ */
 export function findManifestPath(devdigestDir: string, deps: FsDeps = {}): string {
   const readDir = deps.readDir ?? readdirSync;
   const agentsDir = path.join(devdigestDir, 'agents');
@@ -34,12 +41,28 @@ export function findManifestPath(devdigestDir: string, deps: FsDeps = {}): strin
     );
   }
   const yamlFiles = entries.filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
+  const agent = deps.agent?.trim() ? deps.agent.trim() : undefined;
+  if (agent !== undefined) {
+    if (!AGENT_SLUG.test(agent)) {
+      throw new RunnerError(
+        `DEVDIGEST_AGENT must be a slug matching ${AGENT_SLUG} (got: ${JSON.stringify(agent)})`,
+      );
+    }
+    const file = `${agent}.yaml`;
+    if (!yamlFiles.includes(file)) {
+      const available = yamlFiles.map((f) => f.replace(/\.ya?ml$/, ''));
+      throw new RunnerError(
+        `No agent manifest for DEVDIGEST_AGENT="${agent}" in ${agentsDir}; available: ${available.length ? available.join(', ') : '(none)'}`,
+      );
+    }
+    return path.join(agentsDir, file);
+  }
   if (yamlFiles.length === 0) {
     throw new RunnerError(`No agent manifest (*.yaml) found in ${agentsDir}`);
   }
   if (yamlFiles.length > 1) {
     throw new RunnerError(
-      `Expected exactly one agent manifest in ${agentsDir}, found ${yamlFiles.length}: ${yamlFiles.join(', ')}`,
+      `Found ${yamlFiles.length} agent manifests in ${agentsDir}; set DEVDIGEST_AGENT to one of these slugs: ${yamlFiles.map((f) => f.replace(/\.ya?ml$/, '')).join(', ')}`,
     );
   }
   return path.join(agentsDir, yamlFiles[0]!);

@@ -50,8 +50,8 @@ export function CiRunsView() {
           <div style={s.warning} role="alert">
             <p style={s.warningTitle}>{t("failuresTitle")}</p>
             <ul style={s.warningList}>
-              {failures.map((f) => (
-                <li key={f.repo}>{t("failureItem", { repo: f.repo, message: f.message })}</li>
+              {failures.map((f, i) => (
+                <li key={`${f.repo}-${i}`}>{t("failureItem", { repo: f.repo, message: f.message })}</li>
               ))}
             </ul>
           </div>

@@ -47,7 +47,7 @@ async function syncInstallation(deps: SyncDeps, inst: SyncInstallation): Promise
     githubRepoId = await actions.getRepoId(inst.repo);
     await repo.setGithubRepoId(inst.id, githubRepoId);
   }
-  const runs = await actions.listCompletedRuns(inst.repo, WORKFLOW_FILE, MAX_RUNS_PER_SYNC);
+  const runs = await actions.listCompletedRuns(inst.repo, inst.workflowFile ?? WORKFLOW_FILE, MAX_RUNS_PER_SYNC);
   const known = await repo.existingRunIds(runs.map((r) => r.id));
   const fresh = runs.filter((r) => !known.has(r.id));
 

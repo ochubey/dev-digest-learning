@@ -11,6 +11,7 @@ export const RUN_STATUSES: readonly CiRunStatus[] = ["succeeded", "failed", "no_
 export const FAIL_ON_VALUES: readonly CiFailOn[] = ["never", "critical", "warning", "any"];
 
 export const CI_BRANCH = "devdigest/ci";
+/** The LEGACY single-agent workflow path; new installations use `devdigest-review-<slug>.yml`. */
 export const CI_WORKFLOW_PATH = ".github/workflows/devdigest-review.yml";
 
 /** The only links the UI follows for GitHub-provided URLs. */
