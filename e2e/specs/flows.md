@@ -56,8 +56,15 @@ JSON file: what must stay true about how they run **together**, per
    opens the dialog, picks the agent and closes it with Escape: it never clicks
    Save, so nothing is stored and no model call happens. Without
    `PROJECT_DOCS_SOURCE=fixture` the finding is undecided and the button is disabled.
-10. **The suite needs a raised API rate limit.** The server's global limit is 120
-   requests/minute per IP; one browser running flows 01-14 exceeds it (the Evals
+10. **Flow 15 (SPEC-06) compares values, not counts.** The seed has one `done`
+   Security Reviewer run (cost null), created at seed time, so it is inside the
+   dashboard's default 30 days. The flow reads that row's Runs, Avg cost and Avg
+   duration texts from the dashboard (kept in `sessionStorage`), follows View and
+   asserts the Stats tab shows the same texts for the same window; it then opens a
+   2001 custom range and expects the empty state. It sends only GET requests and
+   never starts a run.
+11. **The suite needs a raised API rate limit.** The server's global limit is 120
+   requests/minute per IP; one browser running flows 01-15 exceeds it (the Evals
    pages fan out several requests each), and the API answers 429 mid-suite.
    `scripts/e2e.sh` exports `RATE_LIMIT_MAX=5000`; `e2e-web.yml` must set the same
    `env:` on the API step.

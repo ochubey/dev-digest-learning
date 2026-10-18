@@ -30,12 +30,15 @@ flowchart TD
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config)"]
   SETTINGS["/settings/:section<br/>API keys · models"]
   CIRUNS["/ci-runs<br/>CI runs"]
+  PERF["/agent-performance<br/>dashboard"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/brief<br/>POST /pulls/:id/brief · POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   AGENTS -->|"/agents · /agents/:id"| API
   SETTINGS -->|"/settings · /providers"| API
   CIRUNS -->|"GET /ci/runs · POST /ci/sync"| API
+  PERF -->|"GET /agent-performance"| API
+  AGENT -->|"?tab=stats: GET /agents/:id/stats"| API
 ```
 
 The PR detail Overview tab renders the PR Brief card (`_components/PrBriefCard`);
@@ -75,6 +78,17 @@ Test ids used by the e2e flows (`e2e/specs/12-agent-evals-tab.flow.json`,
 `eval-dashboard-link`, `eval-agent-row`, `eval-run-select`, `eval-compare-button`,
 `eval-compare-dialog`, `eval-compare-delta`, `eval-prompt-del`, `eval-prompt-ins`,
 `eval-dashboard-compare`.
+
+## Agent performance
+
+Agent Performance dashboard and the agent Stats tab (SPEC-06). Data comes from `src/lib/hooks/agent-performance.ts` (GET only: `GET /agent-performance`, `GET /agents/:id/stats`); shared pieces and pure helpers (period, format, sort, breakdown) live in `src/components/agent-performance`. The sidebar item is in the "SKILLS LAB" group (no shortcut).
+
+| Where | What |
+|---|---|
+| `/agent-performance?range=1d\|30d\|custom&start=YYYY-MM-DD&end=YYYY-MM-DD` | Dashboard (`AgentPerformanceView`): applied period, four cards, per-agent table, cost breakdowns; an unknown period falls back to 30 days. Custom dates are UTC days. |
+| `/agents/[id]?tab=stats&from=<iso>&to=<iso>` | Stats tab (`StatsTab`) for the exact window; the dashboard's View link carries the instants of its response, so both pages show the same numbers. Without `from`/`to` it shows the last 30 days. |
+
+Costs are always labelled "Estimate"; a copy-scan test (`src/test/agent-performance-copy.test.ts`) keeps "billed", "actual", "invoiced" and "reconciled" out of the labels. Message namespaces: `agentPerformance` and `runs.stats`.
 
 ## Testing
 

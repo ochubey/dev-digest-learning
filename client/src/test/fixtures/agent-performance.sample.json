@@ -1,0 +1,203 @@
+{
+  "period": {
+    "from": "2026-09-18T12:00:00.000Z",
+    "to": "2026-10-18T12:00:00.000Z"
+  },
+  "cost_basis": "estimate",
+  "totals": {
+    "runs": 9,
+    "runs_excluded": 2,
+    "deleted_agent_runs": 1,
+    "total_cost_usd": 0.0144,
+    "runs_with_cost": 8,
+    "runs_without_cost": 1,
+    "accepted": 7,
+    "dismissed": 4,
+    "decisions": 11,
+    "accept_rate": 0.6363636363636364,
+    "low_sample": false
+  },
+  "most_active": {
+    "agent_id": "00000000-0000-4000-8000-000000000001",
+    "agent_name": "Security Reviewer",
+    "runs": 6
+  },
+  "agents": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000001",
+      "agent_name": "Security Reviewer",
+      "runs": 6,
+      "findings_total": 12,
+      "accepted": 6,
+      "dismissed": 4,
+      "pending": 2,
+      "accept_rate": 0.6,
+      "dismiss_rate": 0.4,
+      "avg_findings_per_run": 2,
+      "total_cost_usd": 0.0123,
+      "avg_cost_usd": 0.00246,
+      "avg_latency_ms": 14200,
+      "findings_by_severity": {
+        "CRITICAL": 2,
+        "WARNING": 7,
+        "SUGGESTION": 3
+      },
+      "trend": [
+        {
+          "label": "2026-10-16",
+          "value": 1
+        },
+        {
+          "label": "2026-10-17",
+          "value": 2
+        },
+        {
+          "label": "2026-10-18",
+          "value": 3
+        }
+      ],
+      "period_from": "2026-09-18T12:00:00.000Z",
+      "period_to": "2026-10-18T12:00:00.000Z",
+      "runs_excluded": 2,
+      "runs_with_cost": 5,
+      "runs_without_cost": 1,
+      "decisions": 10,
+      "low_sample": false,
+      "last_run_at": "2026-10-18T09:30:00.000Z",
+      "last_run_at_all_time": "2026-10-18T09:30:00.000Z",
+      "cost_basis": "estimate"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000002",
+      "agent_name": "Perf Bot",
+      "runs": 3,
+      "findings_total": 1,
+      "accepted": 1,
+      "dismissed": 0,
+      "pending": 0,
+      "accept_rate": 1,
+      "dismiss_rate": 0,
+      "avg_findings_per_run": 0.3333333333333333,
+      "total_cost_usd": 0.0021,
+      "avg_cost_usd": 0.0007,
+      "avg_latency_ms": 65000,
+      "findings_by_severity": {
+        "CRITICAL": 0,
+        "WARNING": 1,
+        "SUGGESTION": 0
+      },
+      "trend": [
+        {
+          "label": "2026-10-16",
+          "value": 1
+        },
+        {
+          "label": "2026-10-17",
+          "value": 1
+        },
+        {
+          "label": "2026-10-18",
+          "value": 1
+        }
+      ],
+      "period_from": "2026-09-18T12:00:00.000Z",
+      "period_to": "2026-10-18T12:00:00.000Z",
+      "runs_excluded": 0,
+      "runs_with_cost": 3,
+      "runs_without_cost": 0,
+      "decisions": 1,
+      "low_sample": true,
+      "last_run_at": "2026-10-17T15:00:00.000Z",
+      "last_run_at_all_time": "2026-10-17T15:00:00.000Z",
+      "cost_basis": "estimate"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000003",
+      "agent_name": "Docs Agent",
+      "runs": 0,
+      "findings_total": 0,
+      "accepted": 0,
+      "dismissed": 0,
+      "pending": 0,
+      "accept_rate": null,
+      "dismiss_rate": null,
+      "avg_findings_per_run": null,
+      "total_cost_usd": null,
+      "avg_cost_usd": null,
+      "avg_latency_ms": null,
+      "findings_by_severity": {
+        "CRITICAL": 0,
+        "WARNING": 0,
+        "SUGGESTION": 0
+      },
+      "trend": [],
+      "period_from": "2026-09-18T12:00:00.000Z",
+      "period_to": "2026-10-18T12:00:00.000Z",
+      "runs_excluded": 0,
+      "runs_with_cost": 0,
+      "runs_without_cost": 0,
+      "decisions": 0,
+      "low_sample": true,
+      "last_run_at": null,
+      "last_run_at_all_time": "2026-08-01T08:00:00.000Z",
+      "cost_basis": "estimate"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000004",
+      "agent_name": "Never Run",
+      "runs": 0,
+      "findings_total": 0,
+      "accepted": 0,
+      "dismissed": 0,
+      "pending": 0,
+      "accept_rate": null,
+      "dismiss_rate": null,
+      "avg_findings_per_run": null,
+      "total_cost_usd": null,
+      "avg_cost_usd": null,
+      "avg_latency_ms": null,
+      "findings_by_severity": {
+        "CRITICAL": 0,
+        "WARNING": 0,
+        "SUGGESTION": 0
+      },
+      "trend": [],
+      "period_from": "2026-09-18T12:00:00.000Z",
+      "period_to": "2026-10-18T12:00:00.000Z",
+      "runs_excluded": 0,
+      "runs_with_cost": 0,
+      "runs_without_cost": 0,
+      "decisions": 0,
+      "low_sample": true,
+      "last_run_at": null,
+      "last_run_at_all_time": null,
+      "cost_basis": "estimate"
+    }
+  ],
+  "cost_by_agent": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000001",
+      "agent_name": "Security Reviewer",
+      "cost_usd": 0.0123,
+      "runs_with_cost": 5
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000002",
+      "agent_name": "Perf Bot",
+      "cost_usd": 0.0021,
+      "runs_with_cost": 3
+    }
+  ],
+  "cost_by_model": [
+    {
+      "model": "deepseek/deepseek-v4-flash",
+      "cost_usd": 0.01,
+      "runs_with_cost": 6
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "cost_usd": 0.0044,
+      "runs_with_cost": 2
+    }
+  ]
+}

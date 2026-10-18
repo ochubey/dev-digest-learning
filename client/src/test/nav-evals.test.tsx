@@ -8,7 +8,7 @@ describe("nav: Eval Dashboard (AC-58)", () => {
   it('SKILLS LAB has "Eval Dashboard" after Conventions, href /evals, icon Gauge', () => {
     const keys = lab.items.map((i) => i.key);
     expect(keys.indexOf("eval")).toBe(keys.indexOf("conventions") + 1);
-    expect(keys[keys.length - 1]).toBe("eval");
+    expect(keys.slice(-2)).toEqual(["eval", "agent-performance"]);
     expect(lab.items.find((i) => i.key === "eval")).toMatchObject({
       label: "Eval Dashboard",
       icon: "Gauge",

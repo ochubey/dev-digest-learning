@@ -369,6 +369,19 @@ finished runs with fixed ids and fixed case results: v1 recall 3/5, precision 3/
 recall 4/5, precision 4/6; one case regressed and two fixed, so compare shows every group.
 No model is called to produce them.
 
+## Agent performance
+
+Read-only aggregation of stored runs and findings (SPEC-06). Module: `src/modules/agent-performance/`; no model, embedder, GitHub or executor call.
+
+| Route | Result |
+|---|---|
+| `GET /agent-performance` | `200 AgentPerformance`: `period`, `totals`, `most_active`, one `AgentStats` per agent of the workspace (also those with no runs), `cost_by_agent`, `cost_by_model` |
+| `GET /agents/:id/stats` | `200 AgentStats` for one agent (404 for an unknown or other-workspace agent); equals that agent's entry of the dashboard for the same period |
+
+Query (both routes): `from` and `to`, ISO-8601 instants with `Z` or an offset, given together or not at all; `from` must be before `to` and the range at most 366 days. Both omitted means the 30 days ending now. Anything else is 422 `validation_error`. The period is half-open (`from <= ran_at < to`) and echoed in UTC.
+
+Counting: only `agent_runs` with `status = 'done'` and a non-null `agent_id` count (local and CI); other runs in the period are only reported as `runs_excluded`, runs of deleted agents as `deleted_agent_runs`. Findings are tied to the run through `reviews.run_id` and rated only when their scope is `in` or null; decisions follow `decisionOf` (later timestamp wins, tie is accepted). The accept rate is `accepted / (accepted + dismissed)`, null at 0 decisions, and `low_sample` below 5 decisions. Costs are estimates (`cost_basis: 'estimate'`); a run without cost is counted separately and never as 0.
+
 ## CI export
 
 Exports a tuned agent to a repository's GitHub Actions and pulls the results back (SPEC-05). Module: `src/modules/ci/`; GitHub Actions reads: `src/adapters/github-actions/octokit.ts`.

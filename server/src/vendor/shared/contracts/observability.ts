@@ -139,7 +139,7 @@ export const AgentStats = z.object({
   agent_name: z.string(),
   runs: z.number().int(),
   findings_total: z.number().int(),
-  /** accept-rate is the headline quality signal. 0..1 over acted findings. */
+  /** accept-rate is the headline quality signal. 0..1 over acted findings (rated findings of counted runs only). */
   accepted: z.number().int(),
   dismissed: z.number().int(),
   pending: z.number().int(),
@@ -154,8 +154,26 @@ export const AgentStats = z.object({
     WARNING: z.number().int(),
     SUGGESTION: z.number().int(),
   }),
-  /** recent runs for a small trend chart (oldest→newest). */
+  /** One point per UTC day of the period (label `YYYY-MM-DD`, value = counted runs that day), oldest→newest. */
   trend: z.array(StatPoint),
+  /** Applied period `[period_from, period_to)` as UTC ISO-8601 instants. */
+  period_from: z.string(),
+  period_to: z.string(),
+  /** Non-done runs of this agent in the period; counted, never aggregated. */
+  runs_excluded: z.number().int(),
+  /** Counted runs with / without a recorded cost (a cost of 0 is a cost). */
+  runs_with_cost: z.number().int(),
+  runs_without_cost: z.number().int(),
+  /** accepted + dismissed: the accept-rate denominator. */
+  decisions: z.number().int(),
+  /** decisions < 5: the rate is a weak signal. */
+  low_sample: z.boolean(),
+  /** Latest counted run in the period; null when none. */
+  last_run_at: z.string().nullable(),
+  /** Latest done run regardless of period; null = the agent never completed a run. */
+  last_run_at_all_time: z.string().nullable(),
+  /** Every cost in this object is a DevDigest estimate, not billing data. */
+  cost_basis: z.literal('estimate'),
 });
 export type AgentStats = z.infer<typeof AgentStats>;
 

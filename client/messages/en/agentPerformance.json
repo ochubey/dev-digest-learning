@@ -1,32 +1,102 @@
 {
   "title": "Agent Performance",
-  "subtitle": "Accept-rate is the headline quality signal · cost shown as a breakdown",
+  "subtitle": "Which agents run, how often their findings are accepted, and what they cost (estimates)",
+  "breadcrumbLab": "Skills Lab",
   "loadError": "Could not load agent performance.",
   "summary": {
     "totalRuns": "Total runs",
-    "avgAcceptRate": "Avg accept-rate",
+    "avgAcceptRate": "Avg accept rate",
     "totalCost": "Total cost",
-    "mostActive": "Most active"
+    "mostActive": "Most-active agent",
+    "decisionsOf": "{accepted} of {decisions} decisions",
+    "withoutCost": "{count, plural, one {# run without cost not included} other {# runs without cost not included}}",
+    "runCount": "{count, plural, one {# run} other {# runs}}"
+  },
+  "detail": {
+    "accepted": "Accepted",
+    "dismissed": "Dismissed",
+    "pending": "Pending",
+    "excluded": "Excluded runs",
+    "withCost": "Runs with cost",
+    "withoutCost": "Runs without cost",
+    "totalCost": "Total cost",
+    "critical": "Critical",
+    "warning": "Warning",
+    "suggestion": "Suggestion",
+    "bySeverity": "Findings by severity"
   },
   "costByAgent": "Cost by agent",
   "costByModel": "Cost by model",
   "noCost": "No cost recorded yet.",
+  "breakdown": {
+    "total": "Total"
+  },
   "sort": {
-    "acceptRate": "accept-rate",
+    "agent": "agent",
     "runs": "runs",
-    "cost": "cost"
+    "cost": "avg cost",
+    "duration": "avg duration",
+    "acceptRate": "accept rate",
+    "lastRun": "last run",
+    "asc": "ascending",
+    "desc": "descending",
+    "status": "Sorted by {column}, {direction}"
   },
   "table": {
     "agent": "Agent",
-    "accept": "Accept",
     "runs": "Runs",
-    "findings": "Findings",
-    "cost": "Cost",
-    "trend": "Trend"
+    "avgCost": "Avg cost",
+    "avgDuration": "Avg duration",
+    "acceptRate": "Accept rate",
+    "lastRun": "Last run",
+    "view": "View",
+    "details": "Details for {agent}",
+    "viewStats": "View stats for {agent}"
+  },
+  "scope": {
+    "counted": "{count, plural, one {# run counted in this period} other {# runs counted in this period}}",
+    "excluded": "{count, plural, one {# failed, cancelled or running run not counted} other {# failed, cancelled or running runs not counted}}"
   },
   "empty": {
-    "title": "No agent runs yet",
-    "body": "Run a review (manually) to populate per-agent performance."
+    "noRunsTitle": "No agent runs in this period",
+    "noRunsHint": "Choose a longer period or run a review.",
+    "noAgentsTitle": "No agents yet",
+    "noAgentsHint": "Create an agent, then run a review to see its performance here.",
+    "noAgentsCta": "Go to Agents"
   },
-  "perAgent": "Per-agent"
+  "perAgent": "Per-agent",
+  "loading": "Loading agent performance",
+  "period": {
+    "label": "Period",
+    "options": {
+      "1d": "1 day",
+      "30d": "30 days",
+      "custom": "Custom"
+    },
+    "start": "Start date",
+    "end": "End date",
+    "utcHint": "Dates are UTC.",
+    "customWindow": "Custom window (not whole UTC days)",
+    "apply": "Apply",
+    "reason": {
+      "required": "Choose a start and an end date.",
+      "order": "The start date must not be after the end date.",
+      "tooLong": "The range cannot be longer than 366 days."
+    },
+    "applied": "Period (UTC): {range}"
+  },
+  "cost": {
+    "estimate": "Estimate",
+    "legend": "DevDigest estimate: the provider-reported cost when the provider returns one (OpenRouter), otherwise tokens × the DevDigest price book. Unknown models and failed runs have no cost. No reconciled billing data exists in DevDigest.",
+    "noneRecorded": "No cost recorded"
+  },
+  "rate": {
+    "na": "n/a · 0 decisions",
+    "lowSample": "low sample",
+    "fraction": "{accepted}/{decisions}"
+  },
+  "lastRun": {
+    "noneInPeriod": "No runs in period · last {date}",
+    "never": "Never run"
+  }
 }

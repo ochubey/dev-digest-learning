@@ -6,4 +6,5 @@ One spec per feature or cohesive behavior change, written by `spec-creator`, nam
 - Status: `draft` -> `approved` (human) -> `implemented`.
 - Plans live in `docs/plans/`.
 - `eval-pipeline.md` is a symlink to `03-eval-pipeline.md`: the L06 homework checklist names `specs/eval-pipeline.md`; the numbered file stays the source of truth.
+- `06-agent-performance-dashboard.md` (SPEC-06): the Agent Performance dashboard, `GET /agent-performance`, `GET /agents/:id/stats` and the agent Stats tab. Plan: `docs/plans/agent-performance-dashboard.md`.
 - `multi-agent-review.md` and `export-to-ci.md` are symlinks to `04-multi-agent-review.md` and `05-export-to-ci.md`: the L07 lab names them without numbers; the numbered files stay the source of truth.

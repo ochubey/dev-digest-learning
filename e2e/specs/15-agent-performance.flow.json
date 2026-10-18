@@ -1,0 +1,137 @@
+{
+  "name": "Agent Performance dashboard: cards, table row equals the agent's Stats tab, empty custom range",
+  "description": "From /agents click the sidebar 'Agent Performance' item: the four summary cards and the per-agent table render (sorted by Runs descending). The Security Reviewer row's Runs, Avg cost and Avg duration texts are read and kept in sessionStorage, 'View' opens /agents/<id>?tab=stats&from=..&to=.. and the Stats tab must show the same three values for the same window (values are compared with each other, not with absolute counts, because the seed has a single done run with no cost). Then a custom range in 2001 shows the empty state 'No agent runs in this period' with the applied UTC period and no table. Read-only: only GET requests, no model call. Needs the fixture seed (PROJECT_DOCS_SOURCE=fixture) so the Security Reviewer has its one seeded done run in the last 30 days (see e2e/README.md).",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/agents"
+      ],
+      "label": "load the agents page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Security Reviewer"
+      ],
+      "label": "app shell rendered"
+    },
+    {
+      "cmd": [
+        "eval",
+        "[...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/agent-performance' && /Agent Performance/.test(a.textContent)).click()"
+      ],
+      "label": "click 'Agent Performance' in the sidebar"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/agent-performance"
+      ],
+      "label": "dashboard route reached"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "(() => { const h = [...document.querySelectorAll('article h3')].map((x) => x.textContent.trim()); return ['Total runs', 'Total cost', 'Avg accept rate', 'Most-active agent'].every((l) => h.some((x) => x.startsWith(l))); })()"
+      ],
+      "label": "the four summary cards render"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "!!([...document.querySelectorAll('[data-testid=\"agent-name\"]')].find((e) => e.textContent.trim() === 'Security Reviewer').closest('tr'))"
+      ],
+      "label": "the Security Reviewer row renders in the table"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "document.querySelector('table [aria-sort=\"descending\"]')?.textContent.includes('Runs')"
+      ],
+      "label": "the table is sorted by Runs descending by default"
+    },
+    {
+      "cmd": [
+        "eval",
+        "(() => { const c = ([...document.querySelectorAll('[data-testid=\"agent-name\"]')].find((e) => e.textContent.trim() === 'Security Reviewer').closest('tr')).cells; sessionStorage.setItem('ap-row', JSON.stringify([c[1].textContent.trim(), c[2].textContent.trim(), c[3].textContent.trim()])); return sessionStorage.getItem('ap-row'); })()"
+      ],
+      "label": "remember the row's runs, avg cost and avg duration texts"
+    },
+    {
+      "cmd": [
+        "eval",
+        "([...document.querySelectorAll('[data-testid=\"agent-name\"]')].find((e) => e.textContent.trim() === 'Security Reviewer').closest('tr')).querySelector('a[href*=\"tab=stats\"]').click()"
+      ],
+      "label": "click View on the Security Reviewer row"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=stats"
+      ],
+      "label": "the agent page opens on the Stats tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "from="
+      ],
+      "label": "the dashboard window travels in the URL"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "!!document.querySelector('[data-testid=\"agent-stats-tab\"]')"
+      ],
+      "label": "the Stats tab renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "(() => { const [runs, cost, dur] = JSON.parse(sessionStorage.getItem('ap-row') || '[]'); const tab = document.querySelector('[data-testid=\"agent-stats-tab\"]'); if (!tab || runs === undefined) return false; if (runs === '0') return tab.textContent.includes('No runs in this period'); const val = (label) => { const dt = [...tab.querySelectorAll('dt')].find((d) => d.textContent.trim().startsWith(label)); return dt ? dt.nextElementSibling.textContent.trim() : null; }; return val('RUNS') === runs && val('AVG COST/RUN') === cost && val('AVG DURATION') === dur; })()"
+      ],
+      "label": "the Stats tab shows the same runs, avg cost and avg duration as the dashboard row"
+    },
+    {
+      "cmd": [
+        "open",
+        "{BASE}/agent-performance?range=custom&start=2001-01-01&end=2001-01-02"
+      ],
+      "label": "open a custom range that has no runs"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "No agent runs in this period"
+      ],
+      "label": "empty state is shown"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "document.body.textContent.includes('Period (UTC): 2001-01-01 00:00 UTC – 2001-01-03 00:00 UTC')"
+      ],
+      "label": "the applied period is shown in UTC"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "!document.querySelector('table') && ![...document.querySelectorAll('article h3')].length"
+      ],
+      "label": "no cards or table in the empty state"
+    }
+  ]
+}
