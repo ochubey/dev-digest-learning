@@ -4,6 +4,7 @@ import {
   parsePeriodParams,
   parseWindow,
   presetPeriod,
+  selectionForWindow,
   toSearchParams,
   validateCustom,
 } from "./period";
@@ -90,5 +91,25 @@ describe("parseWindow (Stats tab from/to)", () => {
     expect(parseWindow(null, "2026-10-01T00:00:00.000Z")).toBeNull();
     expect(parseWindow("x", "y")).toBeNull();
     expect(parseWindow("2026-10-01T00:00:00.000Z", "2026-09-01T00:00:00.000Z")).toBeNull();
+  });
+});
+
+describe("selectionForWindow (AC-68)", () => {
+  it("a window of exactly 1 or 30 days that is not midnight-aligned is that preset", () => {
+    expect(selectionForWindow(presetPeriod("1d", NOW))).toEqual({ range: "1d" });
+    expect(selectionForWindow(presetPeriod("30d", NOW))).toEqual({ range: "30d" });
+  });
+  it("a UTC-midnight aligned window is Custom with its dates", () => {
+    expect(selectionForWindow({ from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z" })).toEqual({
+      range: "custom",
+      start: "2026-09-01",
+      end: "2026-09-30",
+    });
+  });
+  it("any other window is an opaque Custom window without dates", () => {
+    expect(selectionForWindow({ from: "2026-09-01T03:00:00.000Z", to: "2026-09-05T07:30:00.000Z" })).toEqual({
+      range: "custom",
+      opaque: true,
+    });
   });
 });

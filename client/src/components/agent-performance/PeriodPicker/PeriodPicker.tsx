@@ -50,7 +50,12 @@ export function PeriodPicker({ value, onApply, now = () => new Date() }: PeriodP
           </label>
         ))}
       </div>
-      {range === "custom" && (
+      {range === "custom" && value.opaque && value.range === "custom" && (
+        <p style={s.hint} data-testid="period-custom-window">
+          {t("customWindow")}
+        </p>
+      )}
+      {range === "custom" && !(value.opaque && value.range === "custom") && (
         <>
           <div style={s.dates}>
             <label style={s.dateField}>

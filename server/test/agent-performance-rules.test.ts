@@ -234,3 +234,79 @@ describe('normalizeModel / costByModel', () => {
     expect(out.map((x) => x.model)).toEqual(['a', 'b']);
   });
 });
+
+describe('totals are sums of the parts (AC-24, randomized, seeded)', () => {
+  /** mulberry32: small deterministic PRNG so a failure is reproducible from the case index. */
+  const prng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const MODELS = ['m/a', ' m/a ', 'm/b', '', '  ', 'x/c'];
+
+  for (let c = 0; c < 200; c++) {
+    it(`case ${c}`, () => {
+      const rnd = prng(1000 + c);
+      const int = (max: number) => Math.floor(rnd() * (max + 1));
+      const nAgents = int(6);
+      const agents: AgentStats[] = [];
+      const modelRows: { model: string | null; cost: number | null; withCost: number }[] = [];
+      for (let i = 0; i < nAgents; i++) {
+        const counted = int(8);
+        const withCost = counted === 0 ? 0 : int(counted);
+        const total = withCost === 0 ? null : rnd() * 5 * (rnd() < 0.2 ? 1e-6 : 1);
+        const findings: FindingAggRow[] = (['accepted', 'dismissed', 'pending'] as const)
+          .map((d) => ({ ...fnd(d, int(7)), agentId: `a${i}` }));
+        agents.push(
+          stats({
+            id: `a${i}`,
+            name: `Agent ${i}`,
+            run: runRow({ agentId: `a${i}`, counted, excluded: int(3), withCost, totalCost: total, durationSum: counted * 1000, durationCount: counted }),
+            findings,
+          }),
+        );
+        // Split this agent's cost over 1..3 model buckets; the parts add up to its total.
+        if (total !== null) {
+          const k = 1 + int(2);
+          let left = total;
+          let runsLeft = withCost;
+          for (let j = 0; j < k; j++) {
+            const last = j === k - 1 || runsLeft <= 1;
+            const part = last ? left : left * rnd();
+            const runsPart = last ? runsLeft : Math.max(1, int(runsLeft - 1));
+            modelRows.push({ model: MODELS[int(MODELS.length - 1)]!, cost: part, withCost: runsPart });
+            left -= part;
+            runsLeft -= runsPart;
+            if (last) break;
+          }
+        }
+      }
+      const deleted = int(4);
+      const totals = buildTotals(agents, deleted);
+      const sum = (f: (a: AgentStats) => number) => agents.reduce((s, a) => s + f(a), 0);
+
+      expect(totals.runs).toBe(sum((a) => a.runs));
+      expect(totals.runs_excluded).toBe(sum((a) => a.runs_excluded));
+      expect(totals.runs_with_cost).toBe(sum((a) => a.runs_with_cost));
+      expect(totals.runs_without_cost).toBe(sum((a) => a.runs_without_cost));
+      expect(totals.accepted).toBe(sum((a) => a.accepted));
+      expect(totals.dismissed).toBe(sum((a) => a.dismissed));
+      expect(totals.decisions).toBe(totals.accepted + totals.dismissed);
+      expect(totals.deleted_agent_runs).toBe(deleted);
+
+      const perAgentCost = agents.reduce((s, a) => s + (a.total_cost_usd ?? 0), 0);
+      const byAgent = costByAgent(agents);
+      const byModel = costByModel(modelRows);
+      if (totals.total_cost_usd === null) {
+        expect(agents.every((a) => a.total_cost_usd === null)).toBe(true);
+        expect(byAgent).toEqual([]);
+        expect(byModel).toEqual([]);
+      } else {
+        expect(Math.abs(totals.total_cost_usd - perAgentCost)).toBeLessThanOrEqual(1e-9);
+        expect(Math.abs(byAgent.reduce((s, x) => s + x.cost_usd, 0) - totals.total_cost_usd)).toBeLessThanOrEqual(1e-9);
+        expect(Math.abs(byModel.reduce((s, x) => s + x.cost_usd, 0) - totals.total_cost_usd)).toBeLessThanOrEqual(1e-9);
+      }
+    });
+  }
+});

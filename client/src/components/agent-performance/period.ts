@@ -14,6 +14,8 @@ export interface PeriodSelection {
   range: PeriodRange;
   start?: string;
   end?: string;
+  /** Custom window that has no dates to show (not midnight-aligned, not a preset length). */
+  opaque?: boolean;
 }
 
 export type CustomInvalidReason = "required" | "order" | "tooLong";
@@ -86,12 +88,18 @@ export function parseWindow(from: string | null | undefined, to: string | null |
   return { from, to };
 }
 
-/** Picker selection for an arbitrary window: UTC-midnight aligned windows map back to dates. */
+/**
+ * Picker selection for an arbitrary window: UTC-midnight aligned windows map back to
+ * dates, an exact 1 or 30 day window to that preset, anything else is an opaque Custom.
+ */
 export function selectionForWindow(p: Period): PeriodSelection {
   const f = Date.parse(p.from);
   const t = Date.parse(p.to);
   if (f % DAY_MS === 0 && t % DAY_MS === 0) {
     return { range: "custom", start: new Date(f).toISOString().slice(0, 10), end: new Date(t - DAY_MS).toISOString().slice(0, 10) };
   }
-  return { range: "custom" };
+  for (const range of ["1d", "30d"] as const) {
+    if (t - f === PRESET_DAYS[range] * DAY_MS) return { range };
+  }
+  return { range: "custom", opaque: true };
 }

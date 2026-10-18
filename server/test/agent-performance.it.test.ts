@@ -156,6 +156,13 @@ d('agent performance (DB)', () => {
     const rv10 = await mkReview(ws1, pr1, beta, r10);
     await mkFinding(rv10, { acc: '2026-09-16T00:00:00.000Z' }, beta);
     await mkFinding(rv10, { acc: '2026-09-16T00:00:00.000Z' }, beta);
+    // Sub-millisecond difference: accepted 0.5 ms and dismissed 0.9 ms after the same millisecond.
+    // JS dates (and decisionOf) see a tie -> accepted; the SQL CASE must compare at ms precision too.
+    await mkFinding(rv10, { acc: '2026-09-16T00:00:00.000Z', dis: '2026-09-16T00:00:00.000Z' }, beta);
+    await db.execute(
+      sql`update findings set accepted_at = '2026-09-16 00:00:00.000500+00', dismissed_at = '2026-09-16 00:00:00.000900+00'
+          where review_id = ${rv10} and dismissed_at is not null`,
+    );
 
     currentWs = ws1;
     app = await buildApp({
@@ -216,6 +223,7 @@ d('agent performance (DB)', () => {
     expect(a.findings_by_severity).toEqual({ CRITICAL: 1, WARNING: 4, SUGGESTION: 1 });
     const b = await stats(beta);
     expect({ accepted: b.accepted, dismissed: b.dismissed, pending: b.pending }).toEqual(expectedByAgent.get(beta));
+    expect(b.accepted).toBe(3); // includes the sub-millisecond row, a tie at ms precision
     expect(b.low_sample).toBe(true);
   });
 
@@ -242,9 +250,9 @@ d('agent performance (DB)', () => {
     expect(dash.agents).toHaveLength(4); // every agent of the workspace, none of the other one
     expect(dash.totals).toMatchObject({
       runs: 6, runs_excluded: 4, deleted_agent_runs: 1, runs_with_cost: 4, runs_without_cost: 2,
-      accepted: 5, dismissed: 2, decisions: 7, low_sample: false,
+      accepted: 6, dismissed: 2, decisions: 8, low_sample: false,
     });
-    expect(dash.totals.accept_rate).toBeCloseTo(5 / 7, 9);
+    expect(dash.totals.accept_rate).toBeCloseTo(6 / 8, 9);
     expect(dash.most_active).toEqual({ agent_id: alpha, agent_name: 'Alpha', runs: 3 }); // 3 vs 3, name tie-break
     expect(dash.cost_by_agent.map((c) => c.agent_name)).toEqual(['Beta', 'Alpha']);
     expect(dash.cost_by_model).toEqual([

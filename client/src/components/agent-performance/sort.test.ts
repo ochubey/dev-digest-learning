@@ -22,6 +22,18 @@ describe("default sort", () => {
   });
 });
 
+describe("name tie-break equals the server's Most-active rule", () => {
+  it("lowercases, then compares code units, then id (accents and punctuation)", () => {
+    const xs = [mk("Éclair", { runs: 3 }), mk("eclair", { runs: 3 }), mk("_x", { runs: 3 }), mk("a-b", { runs: 3 }), mk("a b", { runs: 3 }), mk("Zed", { runs: 3 })];
+    // code-unit order of the lowercased names: "_x" < "a b" < "a-b" < "eclair" < "zed" < "éclair"
+    expect(names(sortAgents(xs, DEFAULT_SORT))).toEqual(["_x", "a b", "a-b", "eclair", "Zed", "Éclair"]);
+  });
+  it("same lowercase name falls back to id", () => {
+    const xs = [mk("Dup", { agent_id: "2", runs: 1 }), mk("dup", { agent_id: "1", runs: 1 })];
+    expect(sortAgents(xs, DEFAULT_SORT).map((a) => a.agent_id)).toEqual(["1", "2"]);
+  });
+});
+
 describe("nextSort", () => {
   it("toggles direction on the same key and starts agent asc, others desc", () => {
     expect(nextSort(DEFAULT_SORT, "runs")).toEqual({ key: "runs", dir: "asc" });

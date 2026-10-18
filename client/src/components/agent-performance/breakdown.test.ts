@@ -24,6 +24,17 @@ describe("buildBreakdown", () => {
   });
   it("returns nothing when there is no total", () => {
     expect(buildBreakdown([{ key: "a", label: "A", cost_usd: 1 }], null)).toEqual([]);
+    expect(buildBreakdown([], null)).toEqual([]);
+  });
+  it("a real total of 0 lists the entries with a 0 share (AC-57)", () => {
+    const items = buildBreakdown(
+      [
+        { key: "b", label: "B", cost_usd: 0 },
+        { key: "a", label: "A", cost_usd: 0 },
+      ],
+      0,
+    );
+    expect(items.map((i) => [i.label, i.share])).toEqual([["A", 0], ["B", 0]]);
     expect(buildBreakdown([], 0)).toEqual([]);
   });
 });

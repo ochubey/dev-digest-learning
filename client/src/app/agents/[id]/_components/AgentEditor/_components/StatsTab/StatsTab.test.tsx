@@ -102,6 +102,50 @@ describe("StatsTab requests (AC-67, AC-73)", () => {
   });
 });
 
+describe("StatsTab picker selection (AC-68)", () => {
+  const checked = (name: string) => expect(screen.getByRole("radio", { name })).toBeChecked();
+
+  it("keeps 1 day / 30 days selected after clicking the preset", async () => {
+    fetchMock.mockReturnValue(reply(SECURITY));
+    renderTab();
+    await screen.findByText("60%");
+    fireEvent.click(screen.getByRole("radio", { name: "1 day" }));
+    checked("1 day");
+    fireEvent.click(screen.getByRole("radio", { name: "30 days" }));
+    checked("30 days");
+    expect(screen.queryByText("Choose a start and an end date.")).toBeNull();
+  });
+
+  it("a View link window that is not UTC midnights shows a read-only custom label, never empty inputs", async () => {
+    search = "tab=stats&from=2026-09-01T03:00:00.000Z&to=2026-09-05T07:30:00.000Z";
+    fetchMock.mockReturnValue(reply(SECURITY));
+    renderTab();
+    await screen.findByText("60%");
+    checked("Custom");
+    expect(screen.getByTestId("period-custom-window")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Start date")).toBeNull();
+    expect(screen.queryByText("Choose a start and an end date.")).toBeNull();
+  });
+
+  it("a View link window of exactly 30 days shows the 30 days preset", async () => {
+    search = "tab=stats&from=2026-09-18T12:00:00.000Z&to=2026-10-18T12:00:00.000Z";
+    fetchMock.mockReturnValue(reply(SECURITY));
+    renderTab();
+    await screen.findByText("60%");
+    checked("30 days");
+  });
+
+  it("a midnight-aligned custom window shows Custom with its UTC dates filled", async () => {
+    search = "tab=stats&from=2026-09-01T00:00:00.000Z&to=2026-10-01T00:00:00.000Z";
+    fetchMock.mockReturnValue(reply(SECURITY));
+    renderTab();
+    await screen.findByText("60%");
+    checked("Custom");
+    expect(screen.getByLabelText("Start date")).toHaveValue("2026-09-01");
+    expect(screen.getByLabelText("End date")).toHaveValue("2026-09-30");
+  });
+});
+
 describe("StatsTab metrics (AC-69)", () => {
   it("shows the same texts as the dashboard row for the same agent", async () => {
     fetchMock.mockReturnValue(reply(SECURITY));

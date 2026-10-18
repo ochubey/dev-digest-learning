@@ -16,10 +16,13 @@ export function nextSort(cur: SortState, key: SortKey): SortState {
   return { key, dir: key === "agent" ? "asc" : "desc" };
 }
 
-const byName = (a: AgentStats, b: AgentStats) =>
-  a.agent_name.localeCompare(b.agent_name, "en", { sensitivity: "base" }) ||
-  (a.agent_name < b.agent_name ? -1 : a.agent_name > b.agent_name ? 1 : 0) ||
-  (a.agent_id < b.agent_id ? -1 : a.agent_id > b.agent_id ? 1 : 0);
+/** Must equal `byNameThenId` in server/src/modules/agent-performance/rules.ts: lowercase, code units, id. */
+const byName = (a: AgentStats, b: AgentStats) => {
+  const x = a.agent_name.toLowerCase();
+  const y = b.agent_name.toLowerCase();
+  if (x !== y) return x < y ? -1 : 1;
+  return a.agent_id < b.agent_id ? -1 : a.agent_id > b.agent_id ? 1 : 0;
+};
 
 const sign = (dir: SortDir) => (dir === "asc" ? 1 : -1);
 

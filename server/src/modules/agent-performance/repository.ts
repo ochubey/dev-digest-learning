@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lt, sql, type SQL } from 'drizzle-orm';
-import type { Db } from '../../db/client.js';
+import type { DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { Period } from './period.js';
 import type { DayRow, FindingAggRow, ModelAggRow, RunAggRow } from './rules.js';
@@ -13,7 +13,7 @@ import type { DayRow, FindingAggRow, ModelAggRow, RunAggRow } from './rules.js';
  * never appear except in `deletedAgentRuns`.
  */
 export class AgentPerformanceRepository {
-  constructor(private db: Db) {}
+  constructor(private db: DbOrTx) {}
 
   /** Per-agent run aggregates for the period. Counted = `status = 'done'`; excluded = anything else. */
   async runAggregates(workspaceId: string, period: Period, agentIds: string[] | null): Promise<RunAggRow[]> {
@@ -79,14 +79,16 @@ export class AgentPerformanceRepository {
   /**
    * Rated findings of counted runs: finding -> review -> run (`reviews.run_id = agent_runs.id`),
    * scope `in` or null, attributed to `agent_runs.agent_id`. The decision CASE mirrors
-   * `decisionOf` in rules.ts (later timestamp wins, a tie is accepted).
+   * `decisionOf` in rules.ts (later timestamp wins, a tie is accepted). The timestamps are compared at
+   * millisecond precision (date_trunc) because JS dates have no finer resolution.
    */
   async findingAggregates(workspaceId: string, period: Period, agentIds: string[] | null): Promise<FindingAggRow[]> {
     const decision = sql<FindingAggRow['decision']>`case
       when ${t.findings.acceptedAt} is not null and ${t.findings.dismissedAt} is null then 'accepted'
       when ${t.findings.dismissedAt} is not null and ${t.findings.acceptedAt} is null then 'dismissed'
       when ${t.findings.acceptedAt} is not null and ${t.findings.dismissedAt} is not null
-        then case when ${t.findings.acceptedAt} >= ${t.findings.dismissedAt} then 'accepted' else 'dismissed' end
+        then case when date_trunc('milliseconds', ${t.findings.acceptedAt}) >= date_trunc('milliseconds', ${t.findings.dismissedAt})
+          then 'accepted' else 'dismissed' end
       else 'pending' end`;
     const rows = await this.db
       .select({
@@ -106,6 +108,8 @@ export class AgentPerformanceRepository {
           sql`(${t.findings.scope} = 'in' or ${t.findings.scope} is null)`,
         ),
       )
+      // `decision` is both selected and grouped: Postgres only accepts that when both render
+      // identical text, so the CASE must stay free of bound parameters (a `$n` would differ).
       .groupBy(t.agentRuns.agentId, t.findings.severity, decision);
     return rows.map((r) => ({ agentId: r.agentId as string, severity: r.severity, decision: r.decision, n: Number(r.n) }));
   }
@@ -117,6 +121,8 @@ export class AgentPerformanceRepository {
       .select({ agentId: t.agentRuns.agentId, day, n: sql<number>`count(*)::int` })
       .from(t.agentRuns)
       .where(and(this.runScope(workspaceId, period, agentIds), eq(t.agentRuns.status, 'done')))
+      // Same rule as the decision CASE: `day` is selected and grouped, so the to_char
+      // expression must stay free of bound parameters to render identically in both.
       .groupBy(t.agentRuns.agentId, day);
     const out = new Map<string, DayRow[]>();
     for (const r of rows) {

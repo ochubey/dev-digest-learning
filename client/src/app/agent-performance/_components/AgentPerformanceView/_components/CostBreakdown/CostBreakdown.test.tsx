@@ -40,6 +40,16 @@ describe("CostBreakdown (AC-55..AC-57)", () => {
     expect(within(sec).getAllByRole("listitem")[0]).toHaveTextContent("33%");
   });
 
+  it("a real total of 0 lists the entries at 0% and the footer $0.00 (AC-57)", () => {
+    const zero = [{ agent_id: "a1", agent_name: "Free Bot", cost_usd: 0, runs_with_cost: 2 }];
+    renderWithIntl(<CostBreakdown costByAgent={zero} costByModel={[{ model: "m/free", cost_usd: 0, runs_with_cost: 2 }]} total={0} />);
+    const sec = screen.getByRole("region", { name: /Cost by agent/ });
+    expect(within(sec).getByRole("listitem")).toHaveTextContent("Free Bot");
+    expect(within(sec).getByRole("listitem")).toHaveTextContent("0%");
+    expect(within(sec).getByText("Total").parentElement).toHaveTextContent("$0.00");
+    expect(screen.queryByText("No cost recorded yet.")).toBeNull();
+  });
+
   it("null total: both breakdowns say No cost recorded yet. and list nothing", () => {
     renderWithIntl(<CostBreakdown costByAgent={[]} costByModel={[]} total={null} />);
     expect(screen.getAllByText("No cost recorded yet.")).toHaveLength(2);

@@ -36,9 +36,15 @@ export function StatsTab({ agent }: { agent: Agent }) {
   const fallback = React.useRef<Period | null>(null);
   if (fromUrl === null && fallback.current === null) fallback.current = presetPeriod("30d", new Date());
   const period = fromUrl ?? (fallback.current as Period);
-  const selection: PeriodSelection = fromUrl ? selectionForWindow(fromUrl) : { range: "30d" };
+  // The picker choice is remembered with the window it applied: a preset click must not
+  // flip to Custom just because the resulting instants are not UTC midnights (AC-68).
+  const [chosen, setChosen] = React.useState<{ sel: PeriodSelection; window: Period } | null>(null);
+  const sameWindow = chosen !== null && fromUrl !== null && chosen.window.from === fromUrl.from && chosen.window.to === fromUrl.to;
+  const selection: PeriodSelection =
+    chosen && (fromUrl === null || sameWindow) ? chosen.sel : fromUrl ? selectionForWindow(fromUrl) : { range: "30d" };
 
-  const apply = (_sel: PeriodSelection, next: Period) => {
+  const apply = (sel: PeriodSelection, next: Period) => {
+    setChosen({ sel, window: next });
     const sp = new URLSearchParams(search?.toString() ?? "");
     sp.set("tab", "stats");
     sp.set("from", next.from);

@@ -32,6 +32,7 @@ const QS = `from=${encodeURIComponent(FROM)}&to=${encodeURIComponent(TO)}`;
 
 let calls: { method: string; ws: unknown; args: unknown[] }[];
 let writes: string[];
+let txConfigs: unknown[];
 let closeApp: (() => Promise<void>) | null = null;
 
 const runRows: RunAggRow[] = [
@@ -49,6 +50,7 @@ const agentRows = [
 beforeEach(() => {
   calls = [];
   writes = [];
+  txConfigs = [];
   const spy = (method: keyof AgentPerformanceRepository, impl: (ws: string, ...a: any[]) => unknown) =>
     vi.spyOn(AgentPerformanceRepository.prototype, method as never).mockImplementation((async (ws: string, ...args: unknown[]) => {
       calls.push({ method: method as string, ws, args });
@@ -90,7 +92,13 @@ const boom = (what: string) =>
 async function setup(extra: Record<string, unknown> = {}) {
   const app = await buildApp({
     config: loadConfig(baseEnv),
-    db: {} as Db,
+    // The service reads inside one transaction; the fake runs the callback and records its config.
+    db: {
+      transaction: async (fn: (tx: unknown) => unknown, config?: unknown) => {
+        txConfigs.push(config);
+        return fn({});
+      },
+    } as unknown as Db,
     overrides: { auth: fakeAuth as never, ...extra },
   });
   closeApp = () => app.close();
@@ -227,6 +235,18 @@ describe('period handling (both endpoints)', () => {
     const period = run.args[0] as { from: Date; to: Date };
     expect(period.from.toISOString()).toBe(FROM);
     expect(period.to.toISOString()).toBe(TO);
+  });
+});
+
+describe('snapshot consistency', () => {
+  it('both endpoints read inside one read-only repeatable-read transaction', async () => {
+    const app = await setup();
+    await app.inject({ method: 'GET', url: `/agent-performance?${QS}` });
+    await app.inject({ method: 'GET', url: `/agents/${A1}/stats?${QS}` });
+    expect(txConfigs).toEqual([
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    ]);
   });
 });
 

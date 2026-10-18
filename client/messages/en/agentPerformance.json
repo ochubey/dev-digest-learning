@@ -76,6 +76,7 @@
     "start": "Start date",
     "end": "End date",
     "utcHint": "Dates are UTC.",
+    "customWindow": "Custom window (not whole UTC days)",
     "apply": "Apply",
     "reason": {
       "required": "Choose a start and an end date.",

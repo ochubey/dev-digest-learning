@@ -140,6 +140,42 @@ describe("AgentTable sorting (AC-46..49)", () => {
   });
 });
 
+/**
+ * jsdom does not turn Enter/Space on a <button> into a click, so mirror the browser: Enter
+ * activates on keydown, Space on keyup, unless the page prevented the default. This also
+ * proves the controls are native buttons whose handler is the click one.
+ */
+function press(el: HTMLElement, key: "Enter" | " ") {
+  expect(el.tagName).toBe("BUTTON");
+  expect(el).toHaveAttribute("type", "button");
+  const down = fireEvent.keyDown(el, { key });
+  if (key === "Enter" && down) fireEvent.click(el);
+  if (key === " ") {
+    const up = fireEvent.keyUp(el, { key });
+    if (down && up) fireEvent.click(el);
+  }
+}
+
+describe("AgentTable keyboard activation (AC-47)", () => {
+  it.each(["Enter", " "] as const)("sort header buttons activate with %j", (key) => {
+    mount();
+    press(sortBtn("Runs"), key);
+    expect(header("Runs")).toHaveAttribute("aria-sort", "ascending");
+    press(sortBtn("Agent"), key);
+    expect(header("Agent")).toHaveAttribute("aria-sort", "ascending");
+    expect(order()).toEqual(["Docs Agent", "Never Run", "Perf Bot", "Security Reviewer"]);
+  });
+
+  it.each(["Enter", " "] as const)("the row expand button toggles with %j", (key) => {
+    mount();
+    const btn = screen.getByRole("button", { name: /Security Reviewer/ });
+    press(btn, key);
+    expect(btn).toHaveAttribute("aria-expanded", "true");
+    press(btn, key);
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
 describe("AgentTable expand and View (AC-52..54)", () => {
   it("expand button: aria-expanded, name contains the agent, details from loaded data, no request", () => {
     mount();

@@ -23,27 +23,38 @@ interface Aggregate {
  * nothing that calls a model or starts a review.
  */
 export class AgentPerformanceService {
-  private repo: AgentPerformanceRepository;
+  constructor(private container: Container) {}
 
-  constructor(private container: Container) {
-    this.repo = new AgentPerformanceRepository(container.db);
+  /**
+   * The aggregate queries run on separate statements; at READ COMMITTED a run or finding
+   * written between them would make the totals disagree with the per-agent rows. One
+   * read-only REPEATABLE READ transaction gives all of them the same snapshot, and
+   * `read only` makes the database refuse any write from this module.
+   */
+  private snapshot<T>(fn: (repo: AgentPerformanceRepository) => Promise<T>): Promise<T> {
+    return this.container.db.transaction((tx) => fn(new AgentPerformanceRepository(tx)), {
+      isolationLevel: 'repeatable read',
+      accessMode: 'read only',
+    });
   }
 
   /** `AgentStats` of one agent; 404 when it is not in the workspace. */
   async agentStats(workspaceId: string, agentId: string, period: Period): Promise<AgentStats> {
     const agent = await this.container.agentsRepo.getById(workspaceId, agentId);
     if (!agent) throw new NotFoundError('Agent not found');
-    const { agents } = await this.aggregate(workspaceId, period, [{ id: agent.id, name: agent.name }]);
+    const { agents } = await this.snapshot((repo) => this.aggregate(repo, workspaceId, period, [{ id: agent.id, name: agent.name }]));
     return agents[0]!;
   }
 
   /** Workspace-wide dashboard: one entry per agent of the workspace, including agents with no runs. */
   async dashboard(workspaceId: string, period: Period): Promise<AgentPerformance> {
     const rows = await this.container.agentsRepo.list(workspaceId);
-    const [{ agents, models }, deleted] = await Promise.all([
-      this.aggregate(workspaceId, period, rows.map((a) => ({ id: a.id, name: a.name }))),
-      this.repo.deletedAgentRuns(workspaceId, period),
-    ]);
+    const [{ agents, models }, deleted] = await this.snapshot((repo) =>
+      Promise.all([
+        this.aggregate(repo, workspaceId, period, rows.map((a) => ({ id: a.id, name: a.name }))),
+        repo.deletedAgentRuns(workspaceId, period),
+      ]),
+    );
     return {
       period: { from: period.from.toISOString(), to: period.to.toISOString() },
       cost_basis: COST_BASIS,
@@ -56,6 +67,7 @@ export class AgentPerformanceService {
   }
 
   private async aggregate(
+    repo: AgentPerformanceRepository,
     workspaceId: string,
     period: Period,
     list: { id: string; name: string }[],
@@ -64,11 +76,11 @@ export class AgentPerformanceService {
     const ids = list.map((a) => a.id);
     // A fixed number of grouped queries, whatever the number of agents.
     const [runs, findings, days, allTime, models] = await Promise.all([
-      this.repo.runAggregates(workspaceId, period, ids),
-      this.repo.findingAggregates(workspaceId, period, ids),
-      this.repo.dayCounts(workspaceId, period, ids),
-      this.repo.lastDoneAllTime(workspaceId, ids),
-      this.repo.modelAggregates(workspaceId, period, ids),
+      repo.runAggregates(workspaceId, period, ids),
+      repo.findingAggregates(workspaceId, period, ids),
+      repo.dayCounts(workspaceId, period, ids),
+      repo.lastDoneAllTime(workspaceId, ids),
+      repo.modelAggregates(workspaceId, period, ids),
     ]);
     const runByAgent = new Map(runs.map((r) => [r.agentId, r]));
     const agents = list.map((agent) =>
