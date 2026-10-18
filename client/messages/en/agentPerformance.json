@@ -28,5 +28,38 @@
     "title": "No agent runs yet",
     "body": "Run a review (manually) to populate per-agent performance."
   },
-  "perAgent": "Per-agent"
+  "perAgent": "Per-agent",
+  "loading": "Loading agent performance",
+  "period": {
+    "label": "Period",
+    "options": {
+      "1d": "1 day",
+      "30d": "30 days",
+      "custom": "Custom"
+    },
+    "start": "Start date",
+    "end": "End date",
+    "utcHint": "Dates are UTC.",
+    "apply": "Apply",
+    "reason": {
+      "required": "Choose a start and an end date.",
+      "order": "The start date must not be after the end date.",
+      "tooLong": "The range cannot be longer than 366 days."
+    },
+    "applied": "Period (UTC): {range}"
+  },
+  "cost": {
+    "estimate": "Estimate",
+    "legend": "DevDigest estimate: the provider-reported cost when the provider returns one (OpenRouter), otherwise tokens × the DevDigest price book. Unknown models and failed runs have no cost. No reconciled billing data exists in DevDigest.",
+    "noneRecorded": "No cost recorded"
+  },
+  "rate": {
+    "na": "n/a · 0 decisions",
+    "lowSample": "low sample",
+    "fraction": "{accepted}/{decisions}"
+  },
+  "lastRun": {
+    "noneInPeriod": "No runs in period · last {date}",
+    "never": "Never run"
+  }
 }

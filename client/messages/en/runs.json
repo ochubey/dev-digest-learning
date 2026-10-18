@@ -112,7 +112,18 @@
     "findingsBySeverity": "Findings by severity",
     "findingsTrend": "FINDINGS TREND",
     "costAndLatency": "Cost & latency",
-    "moreRunsNeeded": "more runs needed"
+    "moreRunsNeeded": "more runs needed",
+    "noRunsInPeriod": "No runs in this period",
+    "noRunsHint": "Choose a longer period, or run this agent on a PR.",
+    "loadError": "Could not load the stats for this agent.",
+    "appliedPeriod": "Period (UTC): {range}",
+    "countedRuns": "{count, plural, one {# run counted in this period} other {# runs counted in this period}}",
+    "excludedRuns": "{count, plural, one {# failed, cancelled or running run not counted} other {# failed, cancelled or running runs not counted}}",
+    "runsWithoutCost": "{count, plural, one {# run without cost not included} other {# runs without cost not included}}",
+    "noCost": "No cost recorded",
+    "avgDuration": "AVG DURATION",
+    "lastRun": "LAST RUN",
+    "decisionCounts": "{accepted} accepted · {dismissed} dismissed · {pending} pending"
   },
   "severity": {
     "critical": "Critical",

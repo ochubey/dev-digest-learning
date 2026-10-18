@@ -13,6 +13,10 @@ vi.mock("./_components/CiTab", () => ({
   CiTab: () => <div data-testid="agent-ci-tab" />,
 }));
 
+vi.mock("./_components/StatsTab", () => ({
+  StatsTab: () => <div data-testid="agent-stats-tab" />,
+}));
+
 vi.mock("./_components/EvalsTab", () => ({
   EvalsTab: () => <div data-testid="agent-evals-tab" />,
 }));
@@ -81,5 +85,12 @@ describe("A2 Agent Editor (smoke)", () => {
     renderWithIntl(<AgentEditor agent={AGENT} tab="ci" onTab={() => {}} />);
     expect(screen.getByText("CI")).toBeInTheDocument();
     expect(screen.getByTestId("agent-ci-tab")).toBeInTheDocument();
+  });
+
+  it('?tab=stats is a valid deep link and renders the Stats tab (AC-66)', () => {
+    expect(TABS.map((tb) => tb.key)).toContain("stats");
+    renderWithIntl(<AgentEditor agent={AGENT} tab="stats" onTab={() => {}} />);
+    expect(screen.getByText("Stats")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-stats-tab")).toBeInTheDocument();
   });
 });

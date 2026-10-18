@@ -14,3 +14,4 @@ export * from "./brief";
 export * from "./project-context";
 export * from "./evals";
 export * from "./multi-agent";
+export * from "./agent-performance";
