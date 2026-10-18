@@ -24,7 +24,7 @@ export class AgentPerformanceRepository {
         counted: sql<number>`(count(*) filter (where ${done}))::int`,
         excluded: sql<number>`(count(*) filter (where ${t.agentRuns.status} is distinct from 'done'))::int`,
         withCost: sql<number>`(count(${t.agentRuns.costUsd}) filter (where ${done}))::int`,
-        totalCost: sql<number | null>`(sum(${t.agentRuns.costUsd}) filter (where ${done}))::float8`,
+        totalCost: sql<number | null>`(sum((${t.agentRuns.costUsd})::numeric) filter (where ${done}))::float8`,
         durationSum: sql<number | null>`(sum(${t.agentRuns.durationMs}) filter (where ${done}))::float8`,
         durationCount: sql<number>`(count(${t.agentRuns.durationMs}) filter (where ${done}))::int`,
         lastRanAt: sql<Date | null>`max(${t.agentRuns.ranAt}) filter (where ${done})`.mapWith(t.agentRuns.ranAt),
@@ -139,7 +139,7 @@ export class AgentPerformanceRepository {
     const rows = await this.db
       .select({
         model: t.agentRuns.model,
-        cost: sql<number | null>`sum(${t.agentRuns.costUsd})::float8`,
+        cost: sql<number | null>`sum((${t.agentRuns.costUsd})::numeric)::float8`,
         withCost: sql<number>`count(${t.agentRuns.costUsd})::int`,
       })
       .from(t.agentRuns)

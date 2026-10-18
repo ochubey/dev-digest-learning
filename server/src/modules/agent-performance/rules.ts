@@ -58,6 +58,13 @@ export function isRatedScope(scope: string | null): boolean {
   return scope === 'in' || scope === null;
 }
 
+/**
+ * Money derived in TypeScript goes through here: 9 decimal places drops float noise
+ * (2.0100000000000002 -> 2.01) so a single-agent and a grouped computation of the same
+ * data print the same number. One rounding path for every cost quantity.
+ */
+export const roundMoney = (n: number): number => Math.round(n * 1e9) / 1e9;
+
 export const rate = (n: number, d: number): number | null => (d === 0 ? null : n / d);
 
 const SEVERITIES = ['CRITICAL', 'WARNING', 'SUGGESTION'] as const;
@@ -74,7 +81,7 @@ export interface AgentStatsInput {
 export function buildAgentStats(i: AgentStatsInput): AgentStats {
   const runs = i.run?.counted ?? 0;
   const withCost = i.run?.withCost ?? 0;
-  const totalCost = withCost > 0 ? (i.run?.totalCost ?? 0) : null;
+  const totalCost = withCost > 0 ? roundMoney(i.run?.totalCost ?? 0) : null;
   const durCount = i.run?.durationCount ?? 0;
 
   const byDecision = { accepted: 0, dismissed: 0, pending: 0 };
@@ -99,7 +106,7 @@ export function buildAgentStats(i: AgentStatsInput): AgentStats {
     dismiss_rate: rate(dismissed, decisions),
     avg_findings_per_run: runs === 0 ? null : findingsTotal / runs,
     total_cost_usd: totalCost,
-    avg_cost_usd: totalCost === null ? null : totalCost / withCost,
+    avg_cost_usd: totalCost === null ? null : roundMoney(totalCost / withCost),
     avg_latency_ms: durCount === 0 ? null : Math.round((i.run?.durationSum ?? 0) / durCount),
     findings_by_severity: bySeverity,
     trend: buildTrend(i.period, i.days),
@@ -141,7 +148,7 @@ export function buildTotals(agents: AgentStats[], deletedAgentRuns: number): Age
     runs: sum((a) => a.runs),
     runs_excluded: sum((a) => a.runs_excluded),
     deleted_agent_runs: deletedAgentRuns,
-    total_cost_usd: costs.length === 0 ? null : costs.reduce((s, c) => s + c, 0),
+    total_cost_usd: costs.length === 0 ? null : roundMoney(costs.reduce((s, c) => s + c, 0)),
     runs_with_cost: sum((a) => a.runs_with_cost),
     runs_without_cost: sum((a) => a.runs_without_cost),
     accepted,
@@ -194,5 +201,7 @@ export function costByModel(rows: ModelAggRow[]): CostByModel[] {
     g.runs_with_cost += r.withCost;
     groups.set(key, g);
   }
-  return [...groups.values()].sort((a, b) => b.cost_usd - a.cost_usd || (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+  return [...groups.values()]
+    .map((g) => ({ ...g, cost_usd: roundMoney(g.cost_usd) }))
+    .sort((a, b) => b.cost_usd - a.cost_usd || (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
 }

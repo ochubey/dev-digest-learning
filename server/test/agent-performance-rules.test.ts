@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { AgentStats } from '@devdigest/shared';
 import {
   decisionOf, isRatedScope, rate, buildAgentStats, buildTrend, buildTotals, mostActive,
-  costByAgent, normalizeModel, costByModel,
+  costByAgent, normalizeModel, costByModel, roundMoney,
   type RunAggRow, type FindingAggRow,
 } from '../src/modules/agent-performance/rules.js';
 import { resolvePeriod } from '../src/modules/agent-performance/period.js';
@@ -303,10 +303,73 @@ describe('totals are sums of the parts (AC-24, randomized, seeded)', () => {
         expect(byAgent).toEqual([]);
         expect(byModel).toEqual([]);
       } else {
-        expect(Math.abs(totals.total_cost_usd - perAgentCost)).toBeLessThanOrEqual(1e-9);
-        expect(Math.abs(byAgent.reduce((s, x) => s + x.cost_usd, 0) - totals.total_cost_usd)).toBeLessThanOrEqual(1e-9);
-        expect(Math.abs(byModel.reduce((s, x) => s + x.cost_usd, 0) - totals.total_cost_usd)).toBeLessThanOrEqual(1e-9);
+        expect(Math.abs(totals.total_cost_usd - perAgentCost)).toBeLessThanOrEqual(1e-8);
+        expect(Math.abs(byAgent.reduce((s, x) => s + x.cost_usd, 0) - totals.total_cost_usd)).toBeLessThanOrEqual(1e-8);
+        expect(Math.abs(byModel.reduce((s, x) => s + x.cost_usd, 0) - totals.total_cost_usd)).toBeLessThanOrEqual(1e-8);
       }
+    });
+  }
+});
+
+describe('money is order-independent (AC-20, shuffled, seeded)', () => {
+  const prng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const shuffle = <T,>(xs: T[], rnd: () => number): T[] => {
+    const a = [...xs];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [a[i], a[j]] = [a[j]!, a[i]!];
+    }
+    return a;
+  };
+
+  it('roundMoney removes float noise and keeps real values', () => {
+    expect(roundMoney(2.0100000000000002)).toBe(2.01);
+    expect(roundMoney(6.029999999999999)).toBe(6.03);
+    expect(roundMoney(0)).toBe(0);
+    expect(roundMoney(0.000000001)).toBe(0.000000001);
+  });
+
+  for (let c = 0; c < 200; c++) {
+    it(`case ${c}`, () => {
+      const rnd = prng(5000 + c);
+      const n = 1 + Math.floor(rnd() * 12);
+      // Costs with up to 6 decimals, like real per-run costs.
+      const costs = Array.from({ length: n }, () => Math.round(rnd() * 3 * 1e6) / 1e6);
+      const sumIn = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+      const statsFor = (xs: number[]) =>
+        stats({ run: runRow({ counted: xs.length, withCost: xs.length, totalCost: sumIn(xs) }) });
+
+      const base = statsFor(costs);
+      const other = statsFor(shuffle(costs, rnd));
+      expect(other.total_cost_usd).toBe(base.total_cost_usd);
+      expect(other.avg_cost_usd).toBe(base.avg_cost_usd);
+
+      // Breakdowns: split the costs over agents and models in two different orders.
+      const MODELS = ['m/a', 'm/b', ' m/a ', ''];
+      const items = costs.map((cost, i) => ({ cost, agent: `a${i % 3}`, model: MODELS[i % MODELS.length]! }));
+      const build = (list: typeof items) => {
+        const byAgent = new Map<string, number[]>();
+        const byModel = new Map<string, number[]>();
+        for (const it of list) {
+          byAgent.set(it.agent, [...(byAgent.get(it.agent) ?? []), it.cost]);
+          byModel.set(it.model, [...(byModel.get(it.model) ?? []), it.cost]);
+        }
+        const agents = [...byAgent].map(([id, xs]) => ({
+          ...stats({ id, name: id, run: runRow({ agentId: id, counted: xs.length, withCost: xs.length, totalCost: sumIn(xs) }) }),
+        }));
+        const models = [...byModel].map(([model, xs]) => ({ model, cost: sumIn(xs), withCost: xs.length }));
+        return { totals: buildTotals(agents, 0), byAgent: costByAgent(agents), byModel: costByModel(models) };
+      };
+      const x = build(items);
+      const y = build(shuffle(items, rnd));
+      expect(y.totals.total_cost_usd).toBe(x.totals.total_cost_usd);
+      expect(y.byAgent).toEqual(x.byAgent);
+      expect(y.byModel).toEqual(x.byModel);
     });
   }
 });

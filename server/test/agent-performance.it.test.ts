@@ -291,7 +291,10 @@ d('agent performance (DB)', () => {
       const dash = await dashboard(from, to);
       expect(dash.agents).toHaveLength(4);
       for (const entry of dash.agents) {
-        expect(await stats(entry.agent_id, from, to)).toEqual(entry);
+        const single = await stats(entry.agent_id, from, to);
+        expect(single).toEqual(entry);
+        // Bit-identical numbers (no float noise), compared after a JSON round trip.
+        expect(JSON.parse(JSON.stringify(single))).toStrictEqual(JSON.parse(JSON.stringify(entry)));
       }
     }
   });
